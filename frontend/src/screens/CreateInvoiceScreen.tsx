@@ -9,6 +9,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 
 const API_BASE_URL = 'http://192.168.219.107:3000';
@@ -20,7 +21,7 @@ interface ExpenseItem {
 }
 
 const CreateInvoiceScreen = ({ navigation }: any) => {
-  const [mode, setMode] = useState<'variable' | 'fixed'>('variable');
+  const [mode, setMode] = useState<'variable' | 'fixed'>('fixed');
   const [items, setItems] = useState<ExpenseItem[]>([
     { id: '1', label: '수도광열비', amount: '' },
     { id: '2', label: '건물 청소비', amount: '' },
@@ -28,6 +29,8 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
   ]);
   const [fixedAmountPerUnit, setFixedAmountPerUnit] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isAutoIssue, setIsAutoIssue] = useState(false);
+  const [autoIssueDay, setAutoIssueDay] = useState('');
 
   const totalAmount = useMemo(() => {
     if (mode === 'variable') {
@@ -87,6 +90,22 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
 
     try {
       setLoading(true);
+
+      if (mode === 'fixed' && isAutoIssue) {
+        if (!autoIssueDay) {
+          Alert.alert('알림', '발행 날짜를 입력해주세요.');
+          return;
+        }
+        // Mocking API call for auto-issue
+        setTimeout(() => {
+          setLoading(false);
+          Alert.alert('설정 완료', `매달 ${autoIssueDay}일에 관리비 청구서가 자동으로 발행됩니다.`, [
+            { text: '확인', onPress: () => navigation.goBack() },
+          ]);
+        }, 800);
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/v1/billing/calculate`, {
         method: 'POST',
         headers: {
@@ -118,19 +137,19 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tab, mode === 'variable' && styles.activeTab]}
-          onPress={() => setMode('variable')}
-        >
-          <Text style={[styles.tabText, mode === 'variable' && styles.activeTabText]}>
-            변동비 1/N 정산
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={[styles.tab, mode === 'fixed' && styles.activeTab]}
           onPress={() => setMode('fixed')}
         >
           <Text style={[styles.tabText, mode === 'fixed' && styles.activeTabText]}>
             고정 관리비 부과
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, mode === 'variable' && styles.activeTab]}
+          onPress={() => setMode('variable')}
+        >
+          <Text style={[styles.tabText, mode === 'variable' && styles.activeTabText]}>
+            변동비 1/N 정산
           </Text>
         </TouchableOpacity>
       </View>
@@ -198,6 +217,32 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
               onChangeText={setFixedAmountPerUnit}
             />
             <Text style={styles.infoText}>* 총 10세대에 대해 자동으로 계산됩니다.</Text>
+
+            <View style={styles.autoIssueCard}>
+              <View style={styles.autoIssueHeader}>
+                <Text style={styles.autoIssueTitle}>자동 발행 설정</Text>
+                <Switch
+                  value={isAutoIssue}
+                  onValueChange={setIsAutoIssue}
+                  trackColor={{ false: '#D1D1D6', true: '#34C759' }}
+                />
+              </View>
+              <Text style={styles.autoIssueDesc}>매달 정해진 날짜에 청구서를 자동 발행합니다.</Text>
+              
+              {isAutoIssue && (
+                <View style={styles.autoIssueInputRow}>
+                  <Text style={styles.autoIssueLabel}>매달 발행할 날짜 (예: 25)</Text>
+                  <TextInput
+                    style={styles.dayInput}
+                    placeholder="25"
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={autoIssueDay}
+                    onChangeText={setAutoIssueDay}
+                  />
+                </View>
+              )}
+            </View>
           </View>
         )}
 
@@ -215,7 +260,11 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.primaryButtonText}>
-              {mode === 'variable' ? '1/N 청구서 발행하기' : '고정 관리비 발행하기'}
+              {mode === 'variable' 
+                ? '1/N 청구서 발행하기' 
+                : isAutoIssue && autoIssueDay
+                  ? `매달 ${autoIssueDay}일에 자동 발행 시작하기`
+                  : '고정 관리비 단건 발행하기'}
             </Text>
           )}
         </TouchableOpacity>
@@ -371,6 +420,54 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: '#8E8E93',
     fontSize: 13,
+  },
+  autoIssueCard: {
+    marginTop: 24,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  autoIssueHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  autoIssueTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+  },
+  autoIssueDesc: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 16,
+  },
+  autoIssueInputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#EEE',
+  },
+  autoIssueLabel: {
+    fontSize: 14,
+    color: '#444',
+    fontWeight: '500',
+  },
+  dayInput: {
+    width: 60,
+    height: 40,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#D1D1D6',
+    borderRadius: 8,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   totalSection: {
     flexDirection: 'row',

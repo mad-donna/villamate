@@ -17,7 +17,6 @@
 docs/PRODUCT_CONTEXT.md
 
 ---
-## Progress Status (2026-02-21)
-- **MVP Alignment**: Focus on "Freeing representatives from manual billing" (Task 1 & 2) achieved in core logic.
-- **Transparency**: Database schema supports audit trails through itemized invoices.
-- **Next Focus**: Transitioning to Open Banking PoC (Task 3) to enable real-time transparency for all residents.
+## Progress Status (2026-02-22)
+- **자동 발행 기능 확정**: 동대표의 운영 리스크를 줄이기 위한 '고정 관리비 자동 발행' 기능 기획 및 UI 반영.
+- **입주민 경험(Resident View) 확장**: 입주민이 자신의 관리비를 확인하고 카카오/토스페이로 즉시 납부할 수 있는 UX 흐름 구축 (Phase 3B).

@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/LoginScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import CreateInvoiceScreen from '../screens/CreateInvoiceScreen';
+import ResidentDashboardScreen from '../screens/ResidentDashboardScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 const Stack = createNativeStackNavigator();
@@ -19,6 +20,11 @@ const AppNavigator = () => {
         name="Main" 
         component={MainTabNavigator} 
         options={{ headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="ResidentDashboard" 
+        component={ResidentDashboardScreen} 
+        options={{ title: '마이 홈' }} 
       />
       <Stack.Screen 
         name="Onboarding" 

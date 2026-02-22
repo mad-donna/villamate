@@ -17,7 +17,6 @@
 docs/PRODUCT_CONTEXT.md
 
 ---
-## Progress Status (2026-02-21)
-- **Security**: `.env.example` provided; credentials isolated from source control.
-- **Data Integrity**: Enum types used for `UserRole`, `InvoiceStatus` to prevent invalid states.
-- **Open Banking Compliance**: Strategy for 'Read-only' access established to mitigate financial risks.
+## Progress Status (2026-02-22)
+- **자동 발행 운영 리스크 분석**: 자동 발행 3일 전 사전 알림(Push) 필요성 및 중복 발행 방지를 위한 멱등성(Idempotency) 로직 제안.
+- **결제 규제 대응**: 입주민 결제 시 명확한 상세 내역 고지 의무 준수를 위한 영수증 UI 반영.

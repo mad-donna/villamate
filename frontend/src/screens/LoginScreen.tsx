@@ -9,10 +9,17 @@ const LoginScreen = ({ navigation }: any) => {
         <Text style={styles.subtitle}>스마트한 빌라 관리 파트너</Text>
         
         <TouchableOpacity 
-          style={styles.kakaoButton}
+          style={[styles.loginButton, { backgroundColor: '#007AFF' }]}
           onPress={() => navigation.navigate('Main')}
         >
-          <Text style={styles.kakaoButtonText}>카카오 로그인 시작하기</Text>
+          <Text style={styles.loginButtonText}>동대표로 시작하기</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.loginButton, { backgroundColor: '#FEE500', marginTop: 12 }]}
+          onPress={() => navigation.navigate('ResidentDashboard')}
+        >
+          <Text style={[styles.loginButtonText, { color: '#191919' }]}>입주민으로 시작하기</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -41,18 +48,21 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 50,
   },
-  kakaoButton: {
+  loginButton: {
     width: '100%',
-    height: 50,
-    backgroundColor: '#FEE500',
+    height: 55,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  kakaoButtonText: {
+  loginButtonText: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#191919',
+    fontWeight: '700',
+    color: '#FFF',
   },
 });
 

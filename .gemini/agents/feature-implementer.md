@@ -16,10 +16,7 @@
 ## 참고 문서
 docs/PRODUCT_CONTEXT.md
 ---
-## Progress Status (2026-02-21)
-- **Billing Management (Task 2)**:
-  - `POST /api/v1/billing/calculate`: Core logic for 1/N settlement implemented. Supports fixed amount/ratio exceptions.
-  - `GET /api/v1/billing/unpaid`: Filtered list of unpaid invoices with unit details.
-- **Notification Service**:
-  - `POST /api/v1/notifications/remind`: Mock logic to send automated reminders (Alimtalk/Push simulation) for unpaid units.
-- **Verification**: Unit tests for `BillingService` settlement logic passed (2/2).
+## Progress Status (2026-02-22)
+- **동대표 화면 고도화**: `CreateInvoiceScreen`의 탭 순서 변경 및 자동 발행(Auto-issue) 설정 UI(Switch, Day Input) 구현.
+- **입주민 대시보드 구현**: `ResidentDashboardScreen` 개발. 관리비 조회, 항목별 상세 내역(Mock Receipt), 가상 결제 로직(Amount Reset) 포함.
+- **로그인 분기 처리**: `LoginScreen`에서 동대표/입주민 선택 버튼 구현 및 내비게이션 연결.

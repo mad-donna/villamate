@@ -18,12 +18,6 @@
 docs/PRODUCT_CONTEXT.md
 
 ---
-## Progress Status (2026-02-21)
-- **Infrastructure**: NestJS + TypeORM + PostgreSQL integration established.
-- **Config Management**: `@nestjs/config` and `.env` setup completed.
-- **Domain Modeling (Task 1)**: 
-  - `Building`: Base entity for managed properties.
-  - `Unit`: Connected to Building, supports multiple residents.
-  - `User`: Role-based (Resident/Representative).
-  - `Invoice`: Monthly billing status (Paid/Unpaid), supports itemized breakdowns.
-- **Module Structure**: Modular architecture applied (`building`, `unit`, `user`, `billing`, `notification`).
+## Progress Status (2026-02-22)
+- **멀티 엔트리 포인트 설계**: 동대표(Admin)와 입주민(Resident)의 역할에 따른 진입점 분리 및 내비게이션 구조 업데이트.
+- **입주민 대시보드 구조**: 관리비 상세 내역 조회 및 결제 상태 관리를 위한 프론트엔드 상태 스키마 정의.
