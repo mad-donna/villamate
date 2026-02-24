@@ -19,4 +19,15 @@ docs/PRODUCT_CONTEXT.md
 ---
 ## Progress Status (2026-02-22)
 - **자동 발행 운영 리스크 분석**: 자동 발행 3일 전 사전 알림(Push) 필요성 및 중복 발행 방지를 위한 멱등성(Idempotency) 로직 제안.
-- **결제 규제 대응**: 입주민 결제 시 명확한 상세 내역 고지 의무 준수를 위한 영수증 UI 반영.
+- **Expo SDK 호환성 이슈 해결**: Native module(`iamport-react-native`, `@actbase/react-daum-postcode`) 간의 global object 충돌('property is not configurable')을 식별하고, WebView 기반 순수 JS SDK로 전환하여 운영 안정성 확보.
+- **금융 투명성 강화**: 고유번호증 발급 가이드 툴팁 제공으로 임의단체의 법인화 유도 및 투명한 관리 인프라 조성 지원.
+- **개인정보 취급 리스크**: 초대 코드와 호실 정보의 결합을 통한 빌라 매핑 시 개인정보 오남용 방지를 위한 입력 데이터 최소화 전략 수립.
+
+## Progress Status (2026-02-23)
+- **개인정보 취급 보안**: 휴대폰 번호 기반 로그인의 취약성(OTP 부재) 인지 및 향후 보안 강화 필요성 기록.
+- **데이터베이스 마이그레이션**: SQLite에서 Supabase PostgreSQL로의 전환 및 Prisma 7 환경 설정 안정성 확인.
+- **네트워크 설정**: 로컬 개발 환경에서의 API 통신을 위한 로컬 IP 설정 및 기기간 연결 확인.
+- **계정 충돌(Account Collision) 리스크 완화**: 소셜 로그인 시 동일 이메일의 중복 가입 시도(예: 구글 가입 후 카카오로 동일 이메일 시도)를 식별하고, 409 Conflict 응답을 통해 계정 보안을 유지하는 로직 도입.
+- **OAuth 보안 위협 식별**: 액세스 토큰과 사용자 식별 정보(providerId)의 안전한 처리 및 소셜 가입 후 필수 개인정보(휴대폰 번호) 누락 방지를 위한 프로필 설정 단계 강제 적용.
+- **Deprecated Proxy 대안 마련**: 보안 및 운영 안정성이 저하된 Expo Auth Proxy를 대체하는 자체 Backend Proxy 브릿지를 구축하여 외부 인증 서비스와의 안전한 연결 경로 확보.
+- **세션 수명 관리**: `AsyncStorage.clear()`를 통한 명시적 로그아웃 기능 추가로 공용 기기나 사용자 교체 시의 보안 리스크 감소.

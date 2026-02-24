@@ -1,29 +1,96 @@
-import React from 'react';
-import { StyleSheet, Text, View, SafeAreaView, FlatList, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  SafeAreaView,
+  FlatList,
+  TouchableOpacity,
+  Share,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const residents = [
-  { id: '1', name: '김철수', unit: '101호' },
-  { id: '2', name: '이영희', unit: '202호' },
-];
+const API_BASE_URL = 'http://192.168.219.112:3000';
 
 const ResidentManagementScreen = () => {
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [residents, setResidents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchVillaData = async () => {
+      try {
+        const userId = await AsyncStorage.getItem('userId');
+        if (!userId) return;
+
+        const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
+        const villas = await response.json();
+
+        if (Array.isArray(villas) && villas.length > 0) {
+          const villa = villas[0];
+          setInviteCode(villa.inviteCode);
+          setResidents(villa.residents || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch villa data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVillaData();
+  }, []);
+
+  const handleInvite = async () => {
+    if (!inviteCode) {
+      Alert.alert('오류', '초대 코드를 불러올 수 없습니다.');
+      return;
+    }
+
+    const message = `우리 빌라 초대 코드: [${inviteCode}]\n앱을 설치하고 이 코드를 입력해 주세요!`;
+    try {
+      await Share.share({ message });
+    } catch (error: any) {
+      Alert.alert(error.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>입주민 관리</Text>
+
+        {inviteCode && (
+          <View style={styles.codeBox}>
+            <Text style={styles.codeLabel}>우리 빌라 초대 코드</Text>
+            <Text style={styles.codeValue}>{inviteCode}</Text>
+          </View>
+        )}
+
         <FlatList
           data={residents}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
             <View style={styles.residentItem}>
-              <Text style={styles.residentName}>{item.name}</Text>
-              <Text style={styles.residentUnit}>{item.unit}</Text>
+              <Text style={styles.residentName}>{item.user?.name || '입주민'}</Text>
+              <Text style={styles.residentUnit}>{item.roomNumber}</Text>
             </View>
           )}
           ListEmptyComponent={<Text style={styles.emptyText}>등록된 입주민이 없습니다.</Text>}
         />
-        <TouchableOpacity style={styles.inviteButton}>
-          <Text style={styles.inviteButtonText}>입주민 초대하기</Text>
+
+        <TouchableOpacity style={styles.inviteButton} onPress={handleInvite}>
+          <Text style={styles.inviteButtonText}>초대 코드 공유하기</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -35,6 +102,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F7F7F7',
   },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   content: {
     flex: 1,
     padding: 20,
@@ -44,6 +116,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
     color: '#333',
+  },
+  codeBox: {
+    backgroundColor: '#EEF4FF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#C7D9FF',
+  },
+  codeLabel: {
+    fontSize: 13,
+    color: '#5E7BAA',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  codeValue: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#007AFF',
+    letterSpacing: 4,
   },
   residentItem: {
     backgroundColor: '#fff',

@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id              String           @id @default(uuid())
+  role            String           @default("RESIDENT")
+  provider        String           @default("LOCAL") // 'KAKAO', 'GOOGLE', 'NAVER', 'LOCAL'
+  providerId      String?          @unique
+  email           String?          @unique
+  name            String
+  phone           String?          @unique
+  profileImage    String?
+  status          String           @default("ACTIVE")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  villasManaged   Villa[]          @relation("VillaAdmin")
+  residentRecords ResidentRecord[]
+  invoicePayments InvoicePayment[]
+}
+
+model Villa {
+  id              Int                 @id @default(autoincrement())
+  name            String
+  address         String
+  totalUnits      Int
+  adminId         String
+  admin           User                @relation("VillaAdmin", fields: [adminId], references: [id])
+  accountNumber   String
+  bankName        String
+  inviteCode      String?             @unique
+  autoBillingDay  Int?
+  createdAt       DateTime            @default(now())
+  residents       ResidentRecord[]
+  transactions    LedgerTransaction[]
+  invoices        Invoice[]
+}
+
+enum InvoiceType {
+  FIXED
+  VARIABLE
+}
+
+model Invoice {
+  id                String           @id @default(uuid())
+  title             String
+  type              InvoiceType      @default(FIXED)
+  totalAmount       Int
+  amountPerResident Int
+  items             Json?
+  dueDate           DateTime
+  createdAt         DateTime         @default(now())
+  villaId           Int
+  villa             Villa            @relation(fields: [villaId], references: [id])
+  payments          InvoicePayment[]
+}
+
+model InvoicePayment {
+  id         String   @id @default(uuid())
+  invoiceId  String
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id])
+  residentId String
+  resident   User     @relation(fields: [residentId], references: [id])
+  amount     Int
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+}
+
+model ResidentRecord {
+  id         Int      @id @default(autoincrement())
+  villaId    Int
+  villa      Villa    @relation(fields: [villaId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  roomNumber String
+  joinedAt   DateTime @default(now())
+}
+
+model LedgerTransaction {
+  id          Int      @id @default(autoincrement())
+  villaId     Int
+  villa       Villa    @relation(fields: [villaId], references: [id])
+  date        DateTime @default(now())
+  description String
+  amount      Int
+  type        String   // 'INCOME' or 'EXPENSE'
+  hasReceipt  Boolean  @default(false)
+  receiptUrl  String?
+}

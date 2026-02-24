@@ -19,4 +19,19 @@ docs/PRODUCT_CONTEXT.md
 ## Progress Status (2026-02-22)
 - **동대표 화면 고도화**: `CreateInvoiceScreen`의 탭 순서 변경 및 자동 발행(Auto-issue) 설정 UI(Switch, Day Input) 구현.
 - **입주민 대시보드 구현**: `ResidentDashboardScreen` 개발. 관리비 조회, 항목별 상세 내역(Mock Receipt), 가상 결제 로직(Amount Reset) 포함.
-- **로그인 분기 처리**: `LoginScreen`에서 동대표/입주민 선택 버튼 구현 및 내비게이션 연결.
+- **PaymentScreen 구현**: WebView 기반 PortOne(Iamport) 연동 및 테스트 결제 환경 구축.
+- **LedgerScreen 구현**: 입출금 내역 표시(FlatList) 및 영수증 모달(Receipt Modal) UI 완성.
+- **ResidentJoinScreen 구현**: 입주민 전용 초대 코드 및 호실 입력 폼 구축.
+- **OnboardingScreen UX 고도화**: Daum Postcode API 연동(WebView), 은행 선택 모달(BottomSheet), 고유번호증 정보 팁 UI 구현.
+- **초대 기능 통합**: ResidentManagementScreen에 랜덤 6자리 초대 코드 생성 및 공유(Share API) 기능 연동.
+
+## Progress Status (2026-02-23)
+- **Backend & Database 초기화**: Express 서버 구축 및 Prisma 7을 이용한 Supabase PostgreSQL 연동.
+- **인증 및 온보딩 연동**: 휴대폰 번호 기반 로그인 및 빌라 등록 API 연동 완료.
+- **Admin Dashboard 실데이터 연결**: 등록된 빌라 정보를 백엔드에서 조회하여 화면에 표시하는 로직 구현.
+- **앱 리브랜딩**: 앱 이름을 '빌라매니저'에서 '빌라메이트(Villamate)'로 전면 변경 및 관련 UI/설정 업데이트.
+- **로그인 UI 전면 개편**: 현대적인 소셜 로그인 버튼(카카오, 네이버, 구글, 이메일) 도입 및 테스트용 로그인 기능을 모달 방식의 Bottom Sheet로 분리.
+- **자동 로그인 및 스마트 라우팅**: 사용자 역할 및 빌라 등록 여부에 따른 최적의 진입 화면(Dashboard, Onboarding, ResidentJoin) 자동 연결 로직 구현.
+- **카카오 소셜 로그인 구현**: `expo-auth-session`과 자체 Auth Proxy를 결합한 실결 인증 흐름 구현 및 사용자 프로필 연동.
+- **프로필 설정 화면(ProfileSetupScreen)**: 소셜 로그인 후 누락된 필수 정보(이름, 휴대폰 번호, 역할)를 수집하는 단계 추가.
+- **로그아웃 기능 통합**: 세션 관리를 위한 `AsyncStorage` 초기화 및 로그인 화면 복귀 로직을 빌라 등록 및 프로필 화면에 적용.

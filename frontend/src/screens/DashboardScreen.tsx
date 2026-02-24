@@ -1,105 +1,148 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, ScrollView, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  SafeAreaView,
+  ScrollView,
+  FlatList,
+  ActivityIndicator,
+  Alert,
+  TouchableOpacity
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
-// TODO: Update this to your PC's local IP (e.g., 192.168.x.x) if testing on a physical device.
-const API_BASE_URL = 'http://192.168.219.107:3000';
+const API_BASE_URL = 'http://192.168.219.112:3000';
 
-interface UnpaidInvoice {
+interface Villa {
   id: number;
-  amount: number;
-  billingMonth: string;
-  dueDate: string;
+  name: string;
+  address: string;
+  totalUnits: number;
+  accountNumber: string;
+  bankName: string;
+  _count?: {
+    residents: number;
+  };
 }
 
-const DashboardScreen = ({ route, navigation }: any) => {
-  const [isRegistered, setIsRegistered] = useState(false);
+const DashboardScreen = ({ navigation }: any) => {
+  const [villaData, setVillaData] = useState<Villa | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [unpaidInvoices, setUnpaidInvoices] = useState<UnpaidInvoice[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [residents, setResidents] = useState<any[]>([]);
+  const [villaInfo, setVillaInfo] = useState<any>(null);
+  const [loadingResidents, setLoadingResidents] = useState(false);
 
-  useEffect(() => {
-    if (route.params?.registered) {
-      setIsRegistered(true);
-    }
-  }, [route.params?.registered]);
-
-  useEffect(() => {
-    if (isRegistered) {
-      fetchUnpaidInvoices();
-    } else {
-      setLoading(false);
-    }
-  }, [isRegistered]);
-
-  const fetchUnpaidInvoices = async () => {
+  const fetchVillaData = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/v1/billing/unpaid`);
+      let userId = await AsyncStorage.getItem('userId');
+      
+      // 폴백: userId 키가 없으면 user 객체에서 시도
+      if (!userId) {
+        const userStr = await AsyncStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          userId = user.id;
+          if (userId) await AsyncStorage.setItem('userId', userId);
+        }
+      }
+
+      if (!userId) {
+        setVillaData(null);
+        return;
+      }
+
+      console.log(`Fetching villas for adminId: ${userId}`);
+      const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
       
       if (!response.ok) {
-        throw new Error('데이터를 불러오는데 실패했습니다.');
+        throw new Error(`Server returned ${response.status}`);
       }
-      
-      const data = await response.json();
-      setUnpaidInvoices(data);
+
+      const villas = await response.json();
+      console.log('Villas received:', villas);
+
+      if (Array.isArray(villas) && villas.length > 0) {
+        setVillaData(villas[0]);
+      } else {
+        setVillaData(null);
+      }
     } catch (err) {
-      setError('서버 연결에 실패했습니다. 네트워크 상태를 확인해주세요.');
-      console.error(err);
+      console.error('Fetch villa error:', err);
+      // 네트워크 오류 시 사용자에게 알림 (개발 중에는 주석 해제하여 확인 가능)
+      // Alert.alert('연결 오류', '서버 주소와 실행 상태를 확인해주세요.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleSendReminders = async () => {
-    try {
-      setActionLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/v1/notifications/remind`, {
-        method: 'POST',
-      });
-      const result = await response.json();
-      Alert.alert('알림톡 발송', result.message || '알림톡 발송 요청이 완료되었습니다.');
-    } catch (err) {
-      Alert.alert('오류', '알림톡 발송에 실패했습니다.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      fetchVillaData();
+    }, [fetchVillaData])
+  );
 
-  const handleSettle = async () => {
-    if (unpaidInvoices.length === 0) {
-      Alert.alert('알림', '정산할 미납 내역이 없습니다.');
-      return;
-    }
+  // Fetch the resident list whenever the villa is loaded
+  useEffect(() => {
+    const fetchResidents = async () => {
+      try {
+        setLoadingResidents(true);
 
-    try {
-      setActionLoading(true);
-      const invoiceId = unpaidInvoices[0].id;
-      const response = await fetch(`${API_BASE_URL}/api/v1/banking/settlement`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ invoiceId }),
-      });
+        // Resolve userId (same fallback logic as fetchVillaData)
+        let userId = await AsyncStorage.getItem('userId');
+        if (!userId) {
+          const userStr = await AsyncStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            userId = user.id;
+            if (userId) await AsyncStorage.setItem('userId', userId);
+          }
+        }
 
-      if (response.ok) {
-        Alert.alert('정산 완료', '관리비 납부 및 정산이 성공적으로 완료되었습니다.');
-        await fetchUnpaidInvoices(); // UI 업데이트를 위해 다시 불러오기
-      } else {
-        throw new Error('정산 실패');
+        if (!userId) return;
+
+        // 1. Fetch the villa list to get the villa id
+        const villaResponse = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
+        if (!villaResponse.ok) return;
+
+        const villas = await villaResponse.json();
+        if (!Array.isArray(villas) || villas.length === 0) return;
+
+        const firstVilla = villas[0];
+        setVillaInfo(firstVilla);
+
+        // 2. Fetch residents for that villa
+        const residentsResponse = await fetch(
+          `${API_BASE_URL}/api/villas/${firstVilla.id}/residents`
+        );
+        if (!residentsResponse.ok) return;
+
+        const data = await residentsResponse.json();
+        setResidents(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Fetch residents error:', err);
+      } finally {
+        setLoadingResidents(false);
       }
-    } catch (err) {
-      Alert.alert('오류', '정산 처리 중 문제가 발생했습니다.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
+    };
 
-  const totalUnpaid = unpaidInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+    fetchResidents();
+  }, []);
 
-  if (!isRegistered) {
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!villaData) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
@@ -122,65 +165,85 @@ const DashboardScreen = ({ route, navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.header}>환영합니다</Text>
+        <Text style={styles.header}>{villaData.name}</Text>
         
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>이번 달 청구서 요약</Text>
-          
-          {loading ? (
-            <ActivityIndicator size="small" color="#FF3B30" />
-          ) : error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : (
-            <>
-              <View style={styles.billingRow}>
-                <Text style={styles.billingLabel}>미납 금액</Text>
-                <Text style={styles.unpaidAmount}>{totalUnpaid.toLocaleString()} KRW</Text>
-              </View>
-              {unpaidInvoices.length > 0 && (
-                <Text style={styles.billingNote}>납기일: {unpaidInvoices[0].dueDate}</Text>
-              )}
-            </>
-          )}
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>주소</Text>
+            <Text style={styles.infoValue}>{villaData.address}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>총 세대수</Text>
+            <Text style={styles.infoValue}>{villaData.totalUnits}세대</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>관리 중인 세대</Text>
+            <Text style={styles.infoValue}>{villaData._count?.residents || 0}세대</Text>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>공용 계좌 정보</Text>
+          <View style={styles.billingRow}>
+            <Text style={styles.billingLabel}>{villaData.bankName}</Text>
+            <Text style={styles.accountNumber}>{villaData.accountNumber}</Text>
+          </View>
         </View>
 
         <View style={styles.actionContainer}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.createButton]} 
+          <TouchableOpacity
+            style={[styles.actionButton, styles.createButton]}
             onPress={() => navigation.navigate('CreateInvoice')}
           >
             <Text style={styles.actionButtonText}>새 청구서 발행하기</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.remindButton, actionLoading && styles.disabledButton]} 
-            onPress={handleSendReminders}
-            disabled={actionLoading}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.remindButton]}
+            onPress={() => navigation.navigate('ResidentManagement')}
           >
-            <Text style={styles.actionButtonText}>미납자 알림톡 발송</Text>
+            <Text style={styles.actionButtonText}>입주민 관리</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.settleButton, actionLoading && styles.disabledButton]} 
-            onPress={handleSettle}
-            disabled={actionLoading}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.settleButton]}
+            onPress={() => navigation.navigate('Ledger')}
           >
-            <Text style={styles.actionButtonText}>관리비 납부 및 정산 (시연용)</Text>
+            <Text style={styles.actionButtonText}>장부 내역 확인</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, styles.infoCard]}>
-          <Text style={styles.cardTitle}>최근 알림</Text>
-          <Text style={styles.infoText}>- 건물 엘리베이터 점검 안내 (3월 1일)</Text>
-          <Text style={styles.infoText}>- 단지 내 정원 청소 작업 (3월 5일)</Text>
+        {/* 입주민 명부 섹션 */}
+        <View style={styles.residentSection}>
+          <Text style={styles.sectionTitle}>입주민 명부</Text>
+          {loadingResidents ? (
+            <ActivityIndicator size="small" color="#007AFF" style={styles.residentLoader} />
+          ) : residents.length === 0 ? (
+            <View style={styles.card}>
+              <Text style={styles.emptyResidentText}>아직 연동된 입주민이 없습니다.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={residents}
+              keyExtractor={(item, index) => item.id ?? String(index)}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.residentCard}>
+                  <View style={styles.roomBadge}>
+                    <Text style={styles.roomBadgeText}>{item.roomNumber}호</Text>
+                  </View>
+                  <View style={styles.residentInfo}>
+                    <Text style={styles.residentName}>{item.name}</Text>
+                    {item.phone ? (
+                      <Text style={styles.residentPhone}>{item.phone}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              )}
+            />
+          )}
         </View>
       </ScrollView>
-      
-      {actionLoading && (
-        <View style={styles.overlay}>
-          <ActivityIndicator size="large" color="#FF3B30" />
-        </View>
-      )}
     </SafeAreaView>
   );
 };
@@ -189,6 +252,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F7F7F7',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     padding: 20,
@@ -226,24 +294,36 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 20,
   },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#1C1C1E',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 20,
+  },
   billingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
   },
   billingLabel: {
     fontSize: 16,
     color: '#666',
   },
-  unpaidAmount: {
-    fontSize: 24,
+  accountNumber: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#FF3B30',
-  },
-  billingNote: {
-    fontSize: 14,
-    color: '#999',
+    color: '#007AFF',
   },
   actionContainer: {
     marginBottom: 20,
@@ -268,36 +348,69 @@ const styles = StyleSheet.create({
   },
   settleButton: {
     backgroundColor: '#007AFF',
-    height: 55,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   actionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  disabledButton: {
-    opacity: 0.6,
+  residentSection: {
+    marginBottom: 20,
   },
-  errorText: {
-    color: '#FF3B30',
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 12,
+  },
+  residentLoader: {
+    marginTop: 16,
+  },
+  emptyResidentText: {
     fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    paddingVertical: 8,
   },
-  infoCard: {
+  residentCard: {
     backgroundColor: '#fff',
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#444',
-    marginBottom: 8,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    justifyContent: 'center',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  roomBadge: {
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginRight: 14,
+    minWidth: 54,
+    alignItems: 'center',
+  },
+  roomBadgeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  residentInfo: {
+    flex: 1,
+  },
+  residentName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 2,
+  },
+  residentPhone: {
+    fontSize: 13,
+    color: '#8E8E93',
   },
 });
 
