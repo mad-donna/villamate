@@ -3,21 +3,21 @@ import {
   StyleSheet,
   Text,
   View,
-  SafeAreaView,
   TextInput,
   TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
-  Keyboard,
   ActivityIndicator,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.112:3000';
+const API_BASE_URL = 'http://192.168.219.122:3000';
 
 const ResidentJoinScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
   const [inviteCode, setInviteCode] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [loading, setLoading] = useState(false);
@@ -70,12 +70,14 @@ const ResidentJoinScreen = ({ navigation }: any) => {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.content}
-        >
+    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ flexGrow: 1, padding: 16 }}
+        enableOnAndroid={true}
+        extraHeight={120}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.content}>
           <View style={styles.header}>
             <Text style={styles.title}>빌라 입장하기</Text>
             <Text style={styles.subtitle}>동대표님께 받은 초대 코드를 입력해주세요.</Text>
@@ -102,6 +104,21 @@ const ResidentJoinScreen = ({ navigation }: any) => {
           </View>
 
           <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={async () => {
+              await AsyncStorage.clear();
+              navigation.replace('Login');
+            }}
+          >
+            <Text style={styles.logoutButtonText}>로그아웃</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAwareScrollView>
+
+      {/* Bottom Fixed Button */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ padding: 16, paddingBottom: Math.max(insets.bottom + 16, 24), backgroundColor: '#fff' }}>
+          <TouchableOpacity
             style={[styles.joinButton, loading && styles.disabledButton]}
             onPress={handleJoin}
             disabled={loading}
@@ -112,30 +129,16 @@ const ResidentJoinScreen = ({ navigation }: any) => {
               <Text style={styles.joinButtonText}>빌라 입장하기</Text>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={async () => {
-              await AsyncStorage.clear();
-              navigation.replace('Login');
-            }}
-          >
-            <Text style={styles.logoutButtonText}>로그아웃</Text>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </TouchableWithoutFeedback>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
   content: {
     flex: 1,
-    padding: 24,
+    padding: 8,
     justifyContent: 'center',
   },
   header: {

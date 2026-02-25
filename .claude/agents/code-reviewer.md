@@ -159,3 +159,72 @@ Use narrow search terms (error messages, file paths, function names) rather than
 ## MEMORY.md
 
 Your MEMORY.md is currently empty. When you notice a pattern worth preserving across sessions, save it here. Anything in MEMORY.md will be included in your system prompt next time.
+
+---
+
+## 프로젝트 진행 기록
+
+### 2026-02-24 — 빌라메이트 MVP 개발 세션
+
+#### 이 세션에서 리뷰한 주요 내용
+
+- **FIXED/VARIABLE 청구서 기능** 전체 코드 리뷰 수행 (백엔드 + 프론트엔드)
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] 탭 네비게이터 내 스크린에서 스택 스크린으로 이동 불가**
+- 파일: `frontend/src/screens/AdminInvoiceScreen.tsx` (line 218)
+- 문제: `navigation.navigate('CreateInvoice')` — 탭 안에서는 상위 스택 스크린에 직접 접근 불가
+- 해결: `navigation.getParent()?.navigate('CreateInvoice')` 로 변경 필요
+- 이 패턴은 탭 내부의 모든 스크린에서 스택 스크린으로 이동할 때 동일하게 적용해야 함
+
+**[CRITICAL] AsyncStorage 유저 데이터 덮어쓰기**
+- 파일: `LoginScreen.tsx`, `EmailLoginScreen.tsx`
+- 문제: 로그인 API 응답으로 AsyncStorage user를 그대로 덮어쓰면 `villa` 필드가 사라짐
+- 해결: 기존 데이터를 먼저 읽은 뒤 병합 (`const merged = { ...existingUser, ...user }`)
+- 로그인 관련 스크린 수정 시 항상 이 패턴 적용 여부 확인할 것
+
+#### 이 프로젝트의 주요 코딩 패턴
+
+- 네비게이션: `navigation.replace()` = 뒤로가기 불가 (로그인/온보딩), `navigation.navigate()` = 일반 이동
+- 데이터 fetching: `useFocusEffect` + `useCallback` 조합으로 탭 포커스 시 자동 새로고침
+- 로딩 상태: 각 스크린마다 `loading` state + `ActivityIndicator` 패턴 일관 적용
+- API 에러 처리: `response.ok` 체크 후 `Alert.alert()` 표시
+
+#### 보안 관련 주의사항 (MVP 한계)
+
+- 이메일 로그인 시 비밀번호 해싱 없음 (MVP 의도적 생략, 추후 bcrypt 적용 필요)
+- API 엔드포인트에 인증 미들웨어 없음 (누구나 호출 가능)
+- `API_BASE_URL`이 각 스크린에 하드코딩되어 있음 — 공통 config 파일로 추출 필요
+
+---
+
+### 2026-02-25 — 빌라메이트 UX 개선 및 PG 연동 세션
+
+#### 이 세션에서 리뷰한 주요 내용
+
+- **SafeAreaView 전체 수정**: `react-native`의 `SafeAreaView`는 Android 상태바를 처리하지 못함
+- **갤럭시 S25+ 상태바 겹침 버그** (`AdminInvoiceDetailScreen.tsx`) 진단 및 수정
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] SafeAreaView를 react-native에서 import — Android 상태바 겹침**
+- 문제: `import { SafeAreaView } from 'react-native'` — Android에서 상태바 inset을 0으로 처리
+- 해결: `import { SafeAreaView } from 'react-native-safe-area-context'` 로 변경
+- 영향 파일: `AdminInvoiceDetailScreen`, `AdminInvoiceScreen`, `DashboardScreen`, `LoginScreen`, `OnboardingScreen`, `ProfileSetupScreen`, `ResidentDashboardScreen`, `ResidentManagementScreen` (8개)
+- `headerShown: false` 인 스크린에서는 즉시 가시적 버그 발생. `headerShown: true` 스크린도 언제든 재발 가능
+
+**[CRITICAL] SafeAreaProvider 루트 미설정**
+- `App.tsx`에 `<SafeAreaProvider>` 래핑 없으면 `useSafeAreaInsets` 값이 항상 0
+- 해결: `App.tsx` 최상위에 `<SafeAreaProvider>` 추가
+
+**[CRITICAL] 로그인 라우팅 버그 — villaId가 User 모델에 없음**
+- Prisma `User` 모델에 `villaId` 컬럼 자체가 없음. 로그인 API는 `ResidentRecord` 조인 없이 `User` 행만 반환
+- `user.villaId`, `user.villa` 모두 항상 `undefined` → 입주민이 항상 `ResidentJoin`으로 라우팅됨
+- 해결: `GET /api/users/:userId/villa` 엔드포인트 신규 추가, 로그인 후 villa 정보를 별도로 조회해서 `merged` 객체에 합산
+
+#### 추가된 코딩 패턴
+
+- **SafeAreaView**: 항상 `react-native-safe-area-context`에서 import할 것
+- **SafeAreaProvider**: `App.tsx` 최상위 필수
+- **하단 고정 버튼 패딩**: `paddingBottom: Math.max(insets.bottom + 16, 24)` 패턴으로 Android 네비게이션 바 처리

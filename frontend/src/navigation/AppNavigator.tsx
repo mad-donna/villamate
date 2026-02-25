@@ -10,6 +10,7 @@ import ResidentDashboardScreen from '../screens/ResidentDashboardScreen';
 import PaymentScreen from '../screens/PaymentScreen';
 import ResidentJoinScreen from '../screens/ResidentJoinScreen';
 import LedgerScreen from '../screens/LedgerScreen';
+import AdminInvoiceDetailScreen from '../screens/AdminInvoiceDetailScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 const Stack = createNativeStackNavigator();
@@ -52,10 +53,10 @@ const AppNavigator = () => {
         component={CreateInvoiceScreen} 
         options={{ title: '청구서 발행' }} 
       />
-      <Stack.Screen 
-        name="Payment" 
-        component={PaymentScreen} 
-        options={{ title: '결제하기' }} 
+      <Stack.Screen
+        name="Payment"
+        component={PaymentScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="ResidentJoin" 
@@ -71,6 +72,11 @@ const AppNavigator = () => {
         name="AdminInvoice"
         component={AdminInvoiceScreen}
         options={{ title: '청구서 관리' }}
+      />
+      <Stack.Screen
+        name="AdminInvoiceDetail"
+        component={AdminInvoiceDetailScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

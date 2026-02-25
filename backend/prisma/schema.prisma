@@ -52,12 +52,12 @@ enum InvoiceType {
 
 model Invoice {
   id                String           @id @default(uuid())
-  title             String
+  billingMonth      String
+  memo              String?
   type              InvoiceType      @default(FIXED)
   totalAmount       Int
   amountPerResident Int
   items             Json?
-  dueDate           DateTime
   createdAt         DateTime         @default(now())
   villaId           Int
   villa             Villa            @relation(fields: [villaId], references: [id])

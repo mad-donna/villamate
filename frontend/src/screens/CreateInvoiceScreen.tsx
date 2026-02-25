@@ -6,15 +6,16 @@ import {
   SafeAreaView,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.112:3000';
+const API_BASE_URL = 'http://192.168.219.122:3000';
 
 type InvoiceType = 'FIXED' | 'VARIABLE';
 
@@ -24,11 +25,16 @@ interface VariableItem {
 }
 
 const CreateInvoiceScreen = ({ navigation }: any) => {
+  const insets = useSafeAreaInsets();
   const [invoiceType, setInvoiceType] = useState<InvoiceType>('FIXED');
 
-  // Common fields
-  const [title, setTitle] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  // Billing month state: separate year and month for easy increment/decrement
+  const now = new Date();
+  const [billingYear, setBillingYear] = useState(now.getFullYear());
+  const [billingMonthNum, setBillingMonthNum] = useState(now.getMonth() + 1); // 1-12
+
+  // Optional memo field
+  const [memo, setMemo] = useState('');
 
   // FIXED-only field
   const [fixedAmount, setFixedAmount] = useState('');
@@ -84,6 +90,28 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
     resolveVillaId();
   }, []);
 
+  // Billing month navigation helpers
+  const decrementMonth = () => {
+    if (billingMonthNum === 1) {
+      setBillingYear((y) => y - 1);
+      setBillingMonthNum(12);
+    } else {
+      setBillingMonthNum((m) => m - 1);
+    }
+  };
+
+  const incrementMonth = () => {
+    if (billingMonthNum === 12) {
+      setBillingYear((y) => y + 1);
+      setBillingMonthNum(1);
+    } else {
+      setBillingMonthNum((m) => m + 1);
+    }
+  };
+
+  // Format billingMonth as YYYY-MM string for API
+  const billingMonthString = `${billingYear}-${String(billingMonthNum).padStart(2, '0')}`;
+
   // VARIABLE items helpers
   const addItem = () => {
     setItems((prev) => [...prev, { name: '', amount: '' }]);
@@ -107,14 +135,6 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
   }, 0);
 
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      Alert.alert('알림', '제목을 입력해주세요.');
-      return;
-    }
-    if (!dueDate.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())) {
-      Alert.alert('알림', '납부 기한을 YYYY-MM-DD 형식으로 입력해주세요.');
-      return;
-    }
     if (!villaId) {
       Alert.alert('오류', '빌라 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
       return;
@@ -147,9 +167,9 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
       setLoading(true);
 
       const body: any = {
-        title: title.trim(),
+        billingMonth: billingMonthString,
         type: invoiceType,
-        dueDate: dueDate.trim(),
+        memo: memo.trim() || undefined,
       };
 
       if (invoiceType === 'FIXED') {
@@ -195,167 +215,185 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <View style={{ flex: 1, backgroundColor: '#F7F7F7' }}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ flexGrow: 1, padding: 16 }}
+        enableOnAndroid={true}
+        extraHeight={120}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.headerSection}>
-            <Text style={styles.screenTitle}>관리비 청구서 발행</Text>
-            <Text style={styles.subtitle}>입주민에게 발행할 청구서 정보를 입력해주세요.</Text>
+        <View style={styles.headerSection}>
+          <Text style={styles.screenTitle}>관리비 청구서 발행</Text>
+          <Text style={styles.subtitle}>입주민에게 발행할 청구서 정보를 입력해주세요.</Text>
+        </View>
+
+        {/* Segmented Control */}
+        <View style={styles.segmentedControl}>
+          <TouchableOpacity
+            style={[
+              styles.segmentButton,
+              invoiceType === 'FIXED' && styles.segmentButtonActive,
+            ]}
+            onPress={() => setInvoiceType('FIXED')}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.segmentButtonText,
+                invoiceType === 'FIXED' && styles.segmentButtonTextActive,
+              ]}
+            >
+              고정 관리비
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.segmentButton,
+              invoiceType === 'VARIABLE' && styles.segmentButtonActive,
+            ]}
+            onPress={() => setInvoiceType('VARIABLE')}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.segmentButtonText,
+                invoiceType === 'VARIABLE' && styles.segmentButtonTextActive,
+              ]}
+            >
+              변동 관리비
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Common fields */}
+        <View style={styles.formCard}>
+          {/* Billing Month Selector */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>청구 월</Text>
+            <View style={styles.monthSelector}>
+              <TouchableOpacity
+                style={styles.monthArrowButton}
+                onPress={decrementMonth}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.monthArrowText}>{'<'}</Text>
+              </TouchableOpacity>
+              <Text style={styles.monthDisplayText}>
+                {billingYear}년 {billingMonthNum}월
+              </Text>
+              <TouchableOpacity
+                style={styles.monthArrowButton}
+                onPress={incrementMonth}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.monthArrowText}>{'>'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Segmented Control */}
-          <View style={styles.segmentedControl}>
-            <TouchableOpacity
-              style={[
-                styles.segmentButton,
-                invoiceType === 'FIXED' && styles.segmentButtonActive,
-              ]}
-              onPress={() => setInvoiceType('FIXED')}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.segmentButtonText,
-                  invoiceType === 'FIXED' && styles.segmentButtonTextActive,
-                ]}
-              >
-                고정 관리비
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.segmentButton,
-                invoiceType === 'VARIABLE' && styles.segmentButtonActive,
-              ]}
-              onPress={() => setInvoiceType('VARIABLE')}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.segmentButtonText,
-                  invoiceType === 'VARIABLE' && styles.segmentButtonTextActive,
-                ]}
-              >
-                변동 관리비
-              </Text>
-            </TouchableOpacity>
+          {/* Optional Memo */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>메모 (선택)</Text>
+            <TextInput
+              style={[styles.input, styles.memoInput]}
+              placeholder="메모 (선택)"
+              placeholderTextColor="#B0B0B0"
+              value={memo}
+              onChangeText={setMemo}
+              multiline
+              numberOfLines={3}
+              returnKeyType="default"
+              textAlignVertical="top"
+            />
           </View>
 
-          {/* Common fields */}
+          {/* FIXED: single amount input */}
+          {invoiceType === 'FIXED' && (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>세대 당 청구 금액</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="예: 50000"
+                placeholderTextColor="#B0B0B0"
+                value={fixedAmount}
+                onChangeText={setFixedAmount}
+                keyboardType="number-pad"
+                returnKeyType="done"
+              />
+              {fixedAmount !== '' && !isNaN(Number(fixedAmount)) && Number(fixedAmount) > 0 && (
+                <Text style={styles.amountPreview}>
+                  {Number(fixedAmount).toLocaleString()} 원 / 세대
+                </Text>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* VARIABLE: dynamic items list */}
+        {invoiceType === 'VARIABLE' && (
           <View style={styles.formCard}>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>청구서 제목</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="예: 2월 관리비"
-                placeholderTextColor="#B0B0B0"
-                value={title}
-                onChangeText={setTitle}
-                returnKeyType="next"
-              />
-            </View>
+            <Text style={styles.sectionLabel}>청구 항목</Text>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>납부 기한</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#B0B0B0"
-                value={dueDate}
-                onChangeText={setDueDate}
-                keyboardType="numbers-and-punctuation"
-                returnKeyType="next"
-                maxLength={10}
-              />
-            </View>
-
-            {/* FIXED: single amount input */}
-            {invoiceType === 'FIXED' && (
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>세대 당 청구 금액</Text>
+            {items.map((item, index) => (
+              <View key={index} style={styles.itemRow}>
                 <TextInput
-                  style={styles.input}
-                  placeholder="예: 50000"
+                  style={[styles.input, styles.itemNameInput]}
+                  placeholder="항목명"
                   placeholderTextColor="#B0B0B0"
-                  value={fixedAmount}
-                  onChangeText={setFixedAmount}
+                  value={item.name}
+                  onChangeText={(v) => updateItemName(index, v)}
+                  returnKeyType="next"
+                />
+                <TextInput
+                  style={[styles.input, styles.itemAmountInput]}
+                  placeholder="금액"
+                  placeholderTextColor="#B0B0B0"
+                  value={item.amount}
+                  onChangeText={(v) => updateItemAmount(index, v)}
                   keyboardType="number-pad"
                   returnKeyType="done"
                 />
-                {fixedAmount !== '' && !isNaN(Number(fixedAmount)) && Number(fixedAmount) > 0 && (
-                  <Text style={styles.amountPreview}>
-                    {Number(fixedAmount).toLocaleString()} 원 / 세대
-                  </Text>
+                {items.length > 1 && (
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removeItem(index)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.removeButtonText}>x</Text>
+                  </TouchableOpacity>
                 )}
               </View>
-            )}
-          </View>
+            ))}
 
-          {/* VARIABLE: dynamic items list */}
-          {invoiceType === 'VARIABLE' && (
-            <View style={styles.formCard}>
-              <Text style={styles.sectionLabel}>청구 항목</Text>
+            <TouchableOpacity
+              style={styles.addItemButton}
+              onPress={addItem}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.addItemButtonText}>+ 항목 추가</Text>
+            </TouchableOpacity>
 
-              {items.map((item, index) => (
-                <View key={index} style={styles.itemRow}>
-                  <TextInput
-                    style={[styles.input, styles.itemNameInput]}
-                    placeholder="항목명"
-                    placeholderTextColor="#B0B0B0"
-                    value={item.name}
-                    onChangeText={(v) => updateItemName(index, v)}
-                    returnKeyType="next"
-                  />
-                  <TextInput
-                    style={[styles.input, styles.itemAmountInput]}
-                    placeholder="금액"
-                    placeholderTextColor="#B0B0B0"
-                    value={item.amount}
-                    onChangeText={(v) => updateItemAmount(index, v)}
-                    keyboardType="number-pad"
-                    returnKeyType="done"
-                  />
-                  {items.length > 1 && (
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() => removeItem(index)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.removeButtonText}>x</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-
-              <TouchableOpacity
-                style={styles.addItemButton}
-                onPress={addItem}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.addItemButtonText}>+ 항목 추가</Text>
-              </TouchableOpacity>
-
-              {/* Totals summary */}
-              <View style={styles.totalsSummary}>
-                <Text style={styles.totalsText}>
-                  총 청구 금액:{' '}
-                  <Text style={styles.totalsHighlight}>
-                    {variableTotal.toLocaleString()} 원
-                  </Text>
+            {/* Totals summary */}
+            <View style={styles.totalsSummary}>
+              <Text style={styles.totalsText}>
+                총 청구 금액:{' '}
+                <Text style={styles.totalsHighlight}>
+                  {variableTotal.toLocaleString()} 원
                 </Text>
-                <Text style={styles.totalsSubText}>
-                  예상 1/N 청구 금액: 입주민 수 확인 중...
-                </Text>
-              </View>
+              </Text>
+              <Text style={styles.totalsSubText}>
+                예상 1/N 청구 금액: 입주민 수 확인 중...
+              </Text>
             </View>
-          )}
+          </View>
+        )}
+      </KeyboardAwareScrollView>
 
+      {/* Bottom Fixed Button */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ padding: 16, paddingBottom: Math.max(insets.bottom + 16, 24), backgroundColor: '#F7F7F7' }}>
           <TouchableOpacity
             style={[styles.primaryButton, loading && styles.disabledButton]}
             onPress={handleSubmit}
@@ -368,16 +406,13 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
               <Text style={styles.primaryButtonText}>청구서 발행하기</Text>
             )}
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
   container: {
     flex: 1,
     backgroundColor: '#F7F7F7',
@@ -393,12 +428,9 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 8,
   },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 48,
-  },
   headerSection: {
     marginBottom: 24,
+    paddingHorizontal: 8,
   },
   screenTitle: {
     fontSize: 26,
@@ -478,12 +510,45 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     backgroundColor: '#FAFAFA',
   },
+  memoInput: {
+    height: 80,
+    paddingTop: 14,
+    paddingBottom: 14,
+  },
   amountPreview: {
     marginTop: 6,
     fontSize: 13,
     color: '#007AFF',
     fontWeight: '600',
     textAlign: 'right',
+  },
+  // Billing month selector
+  monthSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 50,
+  },
+  monthArrowButton: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthArrowText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  monthDisplayText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   // Variable items
   itemRow: {

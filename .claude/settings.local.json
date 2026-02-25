@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"D:/villamate/frontend\" && npx expo install expo-clipboard 2>&1)",
+      "Bash(head:*)"
+    ]
+  }
+}

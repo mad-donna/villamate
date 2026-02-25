@@ -3,7 +3,6 @@ import {
   StyleSheet,
   Text,
   View,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   TextInput,
@@ -11,10 +10,11 @@ import {
   ActivityIndicator,
   FlatList,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
-const API_BASE_URL = 'http://192.168.219.112:3000';
+const API_BASE_URL = 'http://192.168.219.122:3000';
 
 interface InvoicePayment {
   id: string;
@@ -29,12 +29,12 @@ interface InvoicePayment {
 
 interface Invoice {
   id: string;
-  title: string;
+  billingMonth: string;
+  memo?: string;
   type: 'FIXED' | 'VARIABLE';
   totalAmount: number;
   amountPerResident: number;
   items: any;
-  dueDate: string;
   createdAt: string;
   villaId: number;
   payments: InvoicePayment[];
@@ -136,15 +136,13 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  // Format 'YYYY-MM' -> 'YYYY년 M월 관리비'
+  const formatBillingMonth = (billingMonth: string) => {
     try {
-      const date = new Date(dateStr);
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+      const [y, m] = billingMonth.split('-');
+      return `${y}년 ${parseInt(m, 10)}월 관리비`;
     } catch {
-      return dateStr;
+      return billingMonth;
     }
   };
 
@@ -171,10 +169,19 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
     const isVariable = item.type === 'VARIABLE';
 
     return (
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() =>
+          navigation.getParent()?.navigate('AdminInvoiceDetail', {
+            invoiceId: item.id,
+            billingMonth: item.billingMonth,
+          })
+        }
+      >
       <View style={styles.invoiceCard}>
         <View style={styles.invoiceCardHeader}>
           <View style={styles.invoiceTitleRow}>
-            <Text style={styles.invoiceTitle}>{item.title}</Text>
+            <Text style={styles.invoiceTitle}>{formatBillingMonth(item.billingMonth)}</Text>
             <View style={[styles.typeBadge, isVariable ? styles.typeBadgeVariable : styles.typeBadgeFixed]}>
               <Text style={styles.typeBadgeText}>
                 {isVariable ? '변동' : '고정'}
@@ -189,7 +196,9 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
         <Text style={styles.invoicePerResident}>
           세대 당: {item.amountPerResident.toLocaleString()} 원
         </Text>
-        <Text style={styles.invoiceDueDate}>납부 기한: {formatDate(item.dueDate)}</Text>
+        {item.memo ? (
+          <Text style={styles.invoiceMemo}>{item.memo}</Text>
+        ) : null}
         <Text style={styles.invoiceProgress}>
           납부 현황: {paidCount} / {totalCount} 명
         </Text>
@@ -201,6 +210,7 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
           </View>
         )}
       </View>
+      </TouchableOpacity>
     );
   };
 
@@ -452,10 +462,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 2,
   },
-  invoiceDueDate: {
+  invoiceMemo: {
     fontSize: 13,
-    color: '#FF3B30',
-    fontWeight: '600',
+    color: '#6E6E73',
+    fontStyle: 'italic',
     marginBottom: 4,
   },
   invoiceProgress: {

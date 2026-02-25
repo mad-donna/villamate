@@ -188,3 +188,69 @@ Use narrow search terms (error messages, file paths, function names) rather than
 ## MEMORY.md
 
 Your MEMORY.md is currently empty. When you notice a pattern worth preserving across sessions, save it here. Anything in MEMORY.md will be included in your system prompt next time.
+
+---
+
+## 프로젝트 진행 기록
+
+### 2026-02-24 — 빌라메이트 MVP 개발 세션
+
+#### 현재 운영 위험 현황 (MVP 기준)
+
+**[HIGH] 인증/인가 부재**
+- 모든 API 엔드포인트에 인증 미들웨어 없음. 누구든 `/api/payments/:id/status` 를 호출해 납부 상태 위조 가능
+- 우선순위: 다음 스프린트에서 JWT 미들웨어 적용 필요
+
+**[HIGH] 비밀번호 해싱 없음**
+- `POST /api/auth/email-login` 에서 비밀번호를 저장하지 않고 무조건 upsert (완전 MVP 수준)
+- 실제 운영 전 반드시 bcrypt 적용 필요
+
+**[MEDIUM] API_BASE_URL 하드코딩**
+- 각 스크린마다 `const API_BASE_URL = 'http://192.168.219.112:3000'` 하드코딩
+- IP 변경 시 모든 파일 수정 필요 (현재 10개 이상의 파일에 산재)
+- 공통 `config.ts` 또는 환경 변수로 추출 권장
+
+**[MEDIUM] Auto-billing 기본값 고정**
+- node-cron 자동 청구 시 기본금액 `50000원` 하드코딩 (`backend/src/index.ts` line 467)
+- 빌라별 설정 필드 없이 동작 — 잘못된 금액으로 청구서가 대량 생성될 수 있음
+
+**[LOW] Express 라우트 순서 의존성**
+- `/api/villas/:villaId/invoices` 등 특정 경로가 `/api/villas/:adminId` 보다 먼저 등록되어야 함
+- 라우트 추가 시 순서를 반드시 확인할 것
+
+**[LOW] Prisma upsert id=0 패턴**
+- `backend/src/index.ts` villa join 로직에서 `id: ...?.id ?? 0` 사용 — 불필요한 DB 쿼리 발생
+- findFirst + conditional create/update 로 리팩터링 권장
+
+#### 현재 MVP에서 의도적으로 수용한 위험
+
+- 비밀번호 해싱 없음 (테스트/데모 목적)
+- 인증 미들웨어 없음 (프로토타입 단계)
+- 단일 서버 파일 (`index.ts`) — 모듈화 미적용
+
+---
+
+### 2026-02-25 — 빌라메이트 UX 개선 및 PG 연동 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] 직접 계좌이체 우회 위험**
+- 기존: 입주민 화면에 은행 계좌 직접 노출 → 빌라메이트 수수료 우회 가능
+- 해결: 입주민용 API 응답에서 `accountNumber`, `bankName` 필드 제거. 화면에서도 완전 제거
+
+**[NEW-HIGH] PortOne PG 연동 — 결제 검증 없음**
+- 현재: 클라이언트에서 `response.success === true` 확인 후 바로 `PUT /api/payments/:id/status` 호출
+- 위험: 클라이언트 응답 위조로 결제 없이 COMPLETED 처리 가능
+- 해결 필요: 백엔드에서 PortOne API로 `imp_uid` 결제 금액 서버 검증 필수 (다음 스프린트)
+
+**[NEW-MEDIUM] PUT /api/payments/:paymentId/status 인가 없음**
+- 누구나 paymentId만 알면 상태를 COMPLETED로 변경 가능
+- 해결 필요: 인증 미들웨어 + 요청자가 해당 payment의 소유자인지 확인
+
+**[NEW-LOW] merchantUid 유니크 보장**
+- `villamate_${paymentId}_${Date.now()}` 형식 — 동일 ms 내 중복 가능성 매우 낮으나 존재
+- 향후 UUID v4 적용 권장
+
+**[RESOLVED] API_BASE_URL 일부 중앙화**
+- IP 변경(112→122)시 모든 파일을 수동 수정했음 (10개 파일)
+- 여전히 각 스크린에 하드코딩 — 공통 `config.ts` 추출 미완료, 다음 개선 필요

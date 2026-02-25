@@ -137,3 +137,125 @@ Use narrow search terms (error messages, file paths, function names) rather than
 ## MEMORY.md
 
 Your MEMORY.md is currently empty. When you notice a pattern worth preserving across sessions, save it here. Anything in MEMORY.md will be included in your system prompt next time.
+
+---
+
+## 프로젝트 진행 기록
+
+### 2026-02-24 — 빌라메이트 MVP 개발 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **이메일/비밀번호 로그인** (`EmailLoginScreen.tsx`)
+   - 소셜 로그인 OAuth 프록시 문제 우회용 MVP 대안
+   - 백엔드: `POST /api/auth/email-login` (Prisma upsert by email)
+
+2. **입주민 빌라 가입 플로우** (`ResidentJoinScreen.tsx`)
+   - 초대 코드 + 호수 입력 → `POST /api/villas/join`
+   - 가입 후 AsyncStorage에 `{ ...user, villa }` 저장 → ResidentDashboard로 이동
+
+3. **입주민 관리 화면 리팩터링** (`ResidentManagementScreen.tsx`)
+   - 기존: 클라이언트에서 랜덤 코드 생성 (버그 원인)
+   - 수정: DB에 저장된 실제 `inviteCode` 조회 후 표시
+
+4. **청구서 관리 화면** (`AdminInvoiceScreen.tsx`)
+   - 발행된 청구서 목록 + 입주민별 납부 상태 표시
+   - 자동 발행 날짜 설정 (`POST /api/villas/:villaId/auto-billing`)
+
+5. **청구서 생성 화면** (`CreateInvoiceScreen.tsx`)
+   - 고정 관리비 (FIXED): 세대당 고정금액 입력
+   - 변동 관리비 (VARIABLE): 항목별 금액 입력 → 합산 후 N분의 1 계산
+   - 총 청구 금액 / 예상 세대당 금액 실시간 미리보기
+
+6. **입주민 대시보드** (`ResidentDashboardScreen.tsx`)
+   - `GET /api/residents/:userId/payments` 로 납부 내역 조회
+   - 미납/완료 뱃지, 항목 내역(VARIABLE), 송금완료 처리 버튼
+
+7. **자동 발행 (Auto-billing)** — 백엔드 node-cron
+   - 매일 오전 9시 실행, `autoBillingDay === today` 인 빌라에 청구서 자동 생성
+
+#### 핵심 구현 패턴
+
+- **역할 기반 라우팅**: 로그인 후 `user.role`에 따라 분기
+  - `ADMIN` → villa 유무 확인 → `Main` 또는 `Onboarding`
+  - `RESIDENT` → `user.villa` 유무 → `ResidentDashboard` 또는 `ResidentJoin`
+
+- **AsyncStorage 병합 패턴** (필수):
+  ```typescript
+  const existing = await AsyncStorage.getItem('user');
+  const existingUser = existing ? JSON.parse(existing) : {};
+  const merged = { ...existingUser, ...user };
+  await AsyncStorage.setItem('user', JSON.stringify(merged));
+  ```
+
+- **탭→스택 네비게이션**: `navigation.getParent()?.navigate('ScreenName')`
+
+- **초대 코드**: 빌라 생성 시 서버에서 생성(`Math.random().toString(36)`), DB 저장 → 클라이언트에서 표시만
+
+#### 주요 파일 경로
+
+- 백엔드 진입점: `backend/src/index.ts` (Express 단일 파일 모놀리스)
+- Prisma 스키마: `backend/prisma/schema.prisma`
+- 프론트 네비게이션: `frontend/src/navigation/AppNavigator.tsx`, `MainTabNavigator.tsx`
+- 스크린 디렉토리: `frontend/src/screens/`
+
+---
+
+### 2026-02-25 — 빌라메이트 UX 개선 및 PG 연동 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **Invoice 스키마 리팩터링** (`backend/prisma/schema.prisma`)
+   - `title`, `dueDate` 제거 → `billingMonth String` (YYYY-MM), `memo String?` 추가
+   - `npx prisma db push` 적용
+
+2. **청구서 생성 UX 개선** (`CreateInvoiceScreen.tsx`)
+   - Title/DueDate 입력 제거
+   - `< 2026년 2월 >` 화살표 방식 월 선택기 구현 (billingMonth)
+   - 선택적 메모 입력 (multiline)
+
+3. **로그인 라우팅 수정** (`LoginScreen.tsx`, `EmailLoginScreen.tsx`)
+   - `user.villa` → `merged.villa` 기준 라우팅
+   - `GET /api/users/:userId/villa` 신규 엔드포인트 추가 (ResidentRecord 조회)
+   - 기기 초기화 후에도 DB에서 villa 소속 확인 가능
+
+4. **계좌번호 클립보드 복사** (`ResidentDashboardScreen.tsx`)
+   - `expo-clipboard` + Ionicons `copy-outline` 아이콘 추가
+
+5. **커미션 비즈니스 모델 적용** (`ResidentDashboardScreen.tsx`)
+   - 은행 계좌 표시 완전 제거 (직접 송금 차단)
+   - '빌라메이트로 결제하기' 버튼 (초록색 `#4CAF50`)
+   - 백엔드 입주민용 응답에서 `accountNumber`, `bankName` 필드 제거
+
+6. **PortOne (KG Inicis) PG 연동** (`PaymentScreen.tsx`)
+   - `iamport-react-native` + `react-native-webview` 설치
+   - `IMP.Payment` 컴포넌트: `userCode: 'imp14397622'`, `pg: 'html5_inicis'`, `app_scheme: 'villamate'`
+   - 결제 성공 → `PUT /api/payments/:paymentId/status` COMPLETED
+   - `app.json`에 `"scheme": "villamate"` 추가
+
+7. **키보드 UX 표준** (3개 스크린)
+   - `react-native-keyboard-aware-scroll-view` 설치 및 적용
+   - 구조: `View(flex:1)` > `KeyboardAwareScrollView(enableOnAndroid, extraHeight:120)` + 하단 고정 `KeyboardAvoidingView(behavior:ios-only)`
+   - `useSafeAreaInsets` 하단 버튼 패딩: `Math.max(insets.bottom + 16, 24)`
+
+8. **Admin 청구서 상세 화면** (`AdminInvoiceDetailScreen.tsx`)
+   - 신규 화면: 세대별 납부 현황 (완납 ✅ / 미납 🚨)
+   - 상단 요약: 총 수금액 / 미납액
+   - `GET /api/invoices/:invoiceId/payments` 신규 엔드포인트
+   - `AdminInvoiceScreen` 카드 탭 → `getParent()?.navigate('AdminInvoiceDetail')` 연결
+
+9. **SafeAreaView 전체 수정** (8개 스크린 + `App.tsx`)
+   - `react-native`의 SafeAreaView → `react-native-safe-area-context` 로 일괄 교체
+   - `App.tsx`에 `<SafeAreaProvider>` 추가
+
+#### 추가된 구현 패턴
+
+- **billingMonth 포맷 헬퍼**: `'2026-02'` → `'2026년 2월 관리비'`
+  ```ts
+  const formatBillingMonth = (bm: string) => {
+    const [year, month] = bm.split('-');
+    return `${year}년 ${parseInt(month)}월 관리비`;
+  };
+  ```
+- **PUT /api/invoices/:invoiceId**: 완납 세대 있으면 400, 없으면 수정 허용
+- **roomNumber 위치**: `ResidentRecord`에 있음 (User 모델 아님) — include 시 주의

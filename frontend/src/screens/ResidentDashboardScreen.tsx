@@ -3,23 +3,20 @@ import {
   StyleSheet,
   Text,
   View,
-  SafeAreaView,
   TouchableOpacity,
-  Alert,
   ScrollView,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.112:3000';
+const API_BASE_URL = 'http://192.168.219.122:3000';
 
 interface InvoiceVilla {
   name: string;
-  accountNumber: string;
-  bankName: string;
 }
 
 interface InvoiceItem {
@@ -29,11 +26,11 @@ interface InvoiceItem {
 
 interface InvoiceInfo {
   id: string;
-  title: string;
+  billingMonth: string;
+  memo?: string;
   type: 'FIXED' | 'VARIABLE';
   totalAmount: number;
   items: InvoiceItem[] | null;
-  dueDate: string;
   createdAt: string;
   villa: InvoiceVilla;
 }
@@ -52,7 +49,6 @@ const ResidentDashboardScreen = () => {
   const navigation = useNavigation<any>();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -91,46 +87,18 @@ const ResidentDashboardScreen = () => {
     }, [fetchPayments])
   );
 
-  const handleMarkCompleted = async (paymentId: string) => {
-    setUpdatingId(paymentId);
+  // Format 'YYYY-MM' -> 'YYYY년 M월 관리비'
+  const formatBillingMonth = (billingMonth: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/payments/${paymentId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'COMPLETED' }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        Alert.alert('오류', data.error || '상태 업데이트에 실패했습니다.');
-        return;
-      }
-
-      // Refresh the list
-      await fetchPayments();
-    } catch (err) {
-      console.error('handleMarkCompleted error:', err);
-      Alert.alert('오류', '서버에 연결할 수 없습니다.');
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    try {
-      const date = new Date(dateStr);
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+      const [y, m] = billingMonth.split('-');
+      return `${y}년 ${parseInt(m, 10)}월 관리비`;
     } catch {
-      return dateStr;
+      return billingMonth;
     }
   };
 
   const renderPaymentCard = ({ item }: { item: Payment }) => {
     const isPending = item.status === 'PENDING';
-    const isUpdating = updatingId === item.id;
     const isVariable = item.invoice.type === 'VARIABLE';
     const invoiceItems: { name: string; amount: number }[] | null =
       isVariable && Array.isArray(item.invoice.items) ? item.invoice.items : null;
@@ -139,7 +107,7 @@ const ResidentDashboardScreen = () => {
       <View style={styles.invoiceCard}>
         <View style={styles.invoiceCardHeader}>
           <View style={styles.invoiceTitleRow}>
-            <Text style={styles.invoiceTitle}>{item.invoice.title}</Text>
+            <Text style={styles.invoiceTitle}>{formatBillingMonth(item.invoice.billingMonth)}</Text>
             <View style={[styles.typeBadge, isVariable ? styles.typeBadgeVariable : styles.typeBadgeFixed]}>
               <Text style={styles.typeBadgeText}>
                 {isVariable ? '변동 관리비' : '고정 관리비'}
@@ -159,9 +127,9 @@ const ResidentDashboardScreen = () => {
         </View>
 
         <Text style={styles.invoiceAmount}>{item.amount.toLocaleString()} 원</Text>
-        <Text style={styles.invoiceDueDate}>
-          납부 기한: {formatDate(item.invoice.dueDate)}
-        </Text>
+        {item.invoice.memo ? (
+          <Text style={styles.invoiceMemo}>{item.invoice.memo}</Text>
+        ) : null}
 
         {/* VARIABLE invoice: show per-item breakdown */}
         {invoiceItems && invoiceItems.length > 0 && (
@@ -178,26 +146,17 @@ const ResidentDashboardScreen = () => {
           </View>
         )}
 
-        {item.invoice.villa && (
-          <View style={styles.bankInfo}>
-            <Text style={styles.bankInfoText}>
-              {item.invoice.villa.bankName} {item.invoice.villa.accountNumber}
-            </Text>
-          </View>
-        )}
-
         {isPending && (
           <TouchableOpacity
-            style={[styles.payButton, isUpdating && styles.payButtonDisabled]}
-            onPress={() => handleMarkCompleted(item.id)}
-            disabled={isUpdating}
-            activeOpacity={0.8}
+            style={styles.pgPayButton}
+            onPress={() => navigation.navigate('Payment', {
+              paymentId: item.id,
+              amount: item.amount,
+              invoiceName: formatBillingMonth(item.invoice.billingMonth),
+            })}
+            activeOpacity={0.85}
           >
-            {isUpdating ? (
-              <ActivityIndicator color="#FFF" size="small" />
-            ) : (
-              <Text style={styles.payButtonText}>송금 완료 처리</Text>
-            )}
+            <Text style={styles.pgPayButtonText}>빌라메이트로 결제하기</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -386,10 +345,10 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     marginBottom: 4,
   },
-  invoiceDueDate: {
+  invoiceMemo: {
     fontSize: 13,
-    color: '#FF3B30',
-    fontWeight: '600',
+    color: '#6E6E73',
+    fontStyle: 'italic',
     marginBottom: 10,
   },
   itemBreakdown: {
@@ -425,32 +384,24 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     fontWeight: '600',
   },
-  bankInfo: {
-    backgroundColor: '#F2F2F7',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 14,
-  },
-  bankInfoText: {
-    fontSize: 13,
-    color: '#3A3A3C',
-    fontWeight: '500',
-  },
-  payButton: {
-    backgroundColor: '#007AFF',
-    height: 48,
-    borderRadius: 12,
+  pgPayButton: {
+    backgroundColor: '#4CAF50',
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 6,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  payButtonDisabled: {
-    opacity: 0.6,
-  },
-  payButtonText: {
+  pgPayButtonText: {
     color: '#FFF',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   ledgerButton: {
     backgroundColor: '#FFF',

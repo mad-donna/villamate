@@ -3,16 +3,16 @@ import {
   StyleSheet,
   Text,
   View,
-  SafeAreaView,
   FlatList,
   TouchableOpacity,
   Share,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.112:3000';
+const API_BASE_URL = 'http://192.168.219.122:3000';
 
 const ResidentManagementScreen = () => {
   const [inviteCode, setInviteCode] = useState<string | null>(null);

@@ -4,7 +4,8 @@
 - React Native (Expo) frontend + Node/Express + Prisma backend
 - DB: PostgreSQL via Supabase (DATABASE_URL / DIRECT_URL env vars)
 - Local dev SQLite at `backend/dev.db` also present (schema uses postgres)
-- API base URL is hardcoded per-file as `http://192.168.219.112:3000` — a local LAN IP
+- API base URL is hardcoded per-file as `http://192.168.219.122:3000` — a local LAN IP (updated Feb 2026)
+- `User` model has NO `villaId` field — villa membership lives in `ResidentRecord` join table only
 
 ## Architecture Notes
 - `Villa.id` is `Int` (autoincrement) in Prisma; `User.id` is `String` (uuid)
@@ -23,8 +24,17 @@
 - Backend `GET /api/residents/:residentId/payments` returns `invoice.items` as `Json?` — ResidentDashboardScreen guards with `isVariable && Array.isArray(...)` before rendering (correct pattern)
 - Villa resolution pattern in admin screens: fetch `GET /api/villas/${userId}` → take `villas[0].id`. Used in both CreateInvoiceScreen and AdminInvoiceScreen (duplicated — candidate for shared hook)
 
+## Android Status Bar / SafeAreaView Pattern
+- ALWAYS import `SafeAreaView` from `react-native-safe-area-context`, NEVER from `react-native`
+- `react-native`'s built-in `SafeAreaView` adds NO top padding on Android — only works on iOS
+- Screens with `headerShown: false` MUST use `react-native-safe-area-context`'s version or manually apply `useSafeAreaInsets().top`
+- Affected screens audited Feb 2026: `AdminInvoiceDetailScreen` was the only one with confirmed bug (FIXED). Others using `SafeAreaView` from `react-native` include: `AdminInvoiceScreen`, `DashboardScreen`, `LedgerScreen`, `LoginScreen`, `OnboardingScreen`, `ProfileScreen`, `ProfileSetupScreen`, `ResidentDashboardScreen`, `ResidentManagementScreen` — these have navigator headers visible so may be masked, but should be migrated
+- Screens already using the correct pattern: `EmailLoginScreen`, `ResidentJoinScreen`, `CreateInvoiceScreen` (all use `useSafeAreaInsets`)
+
 ## Known Issues Found (Feb 2026 review)
-- CRITICAL: `ResidentDashboardScreen` reads `user.villa.id` but the login flow for returning residents does NOT re-populate `user.villa` — it only sets a plain user object. Only `ResidentJoinScreen` sets `{ ...user, villa }`. Auto-login restores from AsyncStorage so it persists, but a fresh login wipes it.
+- FIXED (Feb 2026): Resident login routing bug — `User` model has no `villaId` column, so API login responses never include villa info. Fix: `navigateAfterLogin` now calls `GET /api/users/:userId/villa` (new endpoint) when `merged.villa` is absent, and routes based on `merged` (not raw `user`). Applies to both `LoginScreen.tsx` and `EmailLoginScreen.tsx`.
+- New backend endpoint added: `GET /api/users/:userId/villa` — returns `{ villa }` via ResidentRecord lookup.
+- CRITICAL (still open): `ResidentDashboardScreen` reads `user.villa.id` from AsyncStorage — this now works because login flow properly populates `merged.villa` and saves it.
 - CRITICAL: `isPaid` state in `ResidentDashboardScreen` is per-render global — all invoices show paid/unpaid together, no per-invoice payment state.
 - CRITICAL: `AdminInvoiceScreen` "새 청구서 만들기" button calls `navigation.navigate('CreateInvoice')` from inside a Tab screen — fails because CreateInvoice is Stack-only. Fix: `navigation.getParent()?.navigate('CreateInvoice')`. Blocks all of Flow A and Flow B.
 - WARNING: `POST /api/villas/join` upsert logic is fragile — uses a nested query to find existing record id, will create a new record if `findFirst` returns null with id=0.

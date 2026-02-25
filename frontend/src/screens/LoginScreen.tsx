@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  TextInput, 
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  TextInput,
   Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,6 +14,7 @@ import {
   Modal,
   ScrollView
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -22,7 +22,7 @@ import * as AuthSession from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const API_BASE_URL = 'http://192.168.219.112:3000';
+const API_BASE_URL = 'http://192.168.219.122:3000';
 const KAKAO_CLIENT_ID = 'ba8af524bbb28a9f74ce4ed088398fdb';
 const GOOGLE_CLIENT_ID = '540282711889-b5l2sg8hpnqim3a6gaoqht2o61ee4mko.apps.googleusercontent.com';
 const googleRedirectUri = 'https://villamate-proxy.loca.lt/api/auth/proxy';
@@ -170,25 +170,48 @@ const LoginScreen = ({ navigation }: any) => {
   const navigateAfterLogin = async (user: any) => {
     const existing = await AsyncStorage.getItem('user');
     const existingUser = existing ? JSON.parse(existing) : {};
-    const merged = { ...existingUser, ...user };
-    await AsyncStorage.setItem('user', JSON.stringify(merged));
-    await AsyncStorage.setItem('userId', user.id);
-    
+
+    // Start with preserved AsyncStorage data, then overlay fresh API fields.
+    // Do NOT let the API response erase villa info that was stored at join time.
+    let merged = { ...existingUser, ...user };
+
     // 1. Check if profile setup is complete
     if (!user.phone) {
+      await AsyncStorage.setItem('user', JSON.stringify(merged));
+      await AsyncStorage.setItem('userId', user.id);
       navigation.replace('ProfileSetup');
       return;
     }
 
     // 2. Route by role
     if (user.role === 'RESIDENT') {
-      if (user.villa) {
+      // merged.villa may already be set if this user previously joined via ResidentJoinScreen.
+      // If it is missing (e.g. first login on a new device), query the backend.
+      if (!merged.villa) {
+        try {
+          const villaRes = await fetch(`${API_BASE_URL}/api/users/${user.id}/villa`);
+          const villaData = await villaRes.json();
+          if (villaRes.ok && villaData.villa) {
+            merged = { ...merged, villa: villaData.villa };
+          }
+        } catch (error) {
+          console.error('Villa lookup error:', error);
+        }
+      }
+
+      await AsyncStorage.setItem('user', JSON.stringify(merged));
+      await AsyncStorage.setItem('userId', user.id);
+
+      if (merged.villa) {
         navigation.replace('ResidentDashboard');
       } else {
         navigation.replace('ResidentJoin');
       }
     } else {
       // ADMIN: check if they have created a villa
+      await AsyncStorage.setItem('user', JSON.stringify(merged));
+      await AsyncStorage.setItem('userId', user.id);
+
       try {
         const villaResponse = await fetch(`${API_BASE_URL}/api/villas/${user.id}`);
         const villas = await villaResponse.json();

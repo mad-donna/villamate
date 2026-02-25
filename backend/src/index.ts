@@ -240,10 +240,13 @@ app.post('/api/villas/:villaId/invoices', async (req: Request, res: Response) =>
   const villaId = parseInt(String(req.params.villaId), 10);
   if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
 
-  const { title, type, dueDate, fixedAmount, items } = req.body;
+  const { billingMonth, memo, type, fixedAmount, items } = req.body;
 
-  if (!title || !type || !dueDate) {
-    return res.status(400).json({ error: 'title, type, dueDate are required' });
+  if (!billingMonth || !type) {
+    return res.status(400).json({ error: 'billingMonth and type are required' });
+  }
+  if (!/^\d{4}-\d{2}$/.test(billingMonth)) {
+    return res.status(400).json({ error: 'billingMonth must be in YYYY-MM format' });
   }
   if (type !== 'FIXED' && type !== 'VARIABLE') {
     return res.status(400).json({ error: 'type must be FIXED or VARIABLE' });
@@ -281,12 +284,12 @@ app.post('/api/villas/:villaId/invoices', async (req: Request, res: Response) =>
 
     const invoice = await prisma.invoice.create({
       data: {
-        title,
+        billingMonth,
+        memo: memo || undefined,
         type,
         totalAmount,
         amountPerResident,
         items: type === 'VARIABLE' ? items : undefined,
-        dueDate: new Date(dueDate),
         villaId,
         payments: {
           create: residentRecords.map((r) => ({
@@ -337,7 +340,7 @@ app.get('/api/residents/:residentId/payments', async (req: Request, res: Respons
       include: {
         invoice: {
           include: {
-            villa: { select: { name: true, accountNumber: true, bankName: true } },
+            villa: { select: { name: true } },
           },
         },
       },
@@ -368,6 +371,95 @@ app.put('/api/payments/:paymentId/status', async (req: Request, res: Response) =
   }
 });
 
+// Get all payment records for a specific invoice (with resident name + room number)
+app.get('/api/invoices/:invoiceId/payments', async (req: Request, res: Response) => {
+  const invoiceId = String(req.params.invoiceId);
+
+  try {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { villaId: true },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    const payments = await prisma.invoicePayment.findMany({
+      where: { invoiceId },
+      include: {
+        resident: {
+          select: {
+            name: true,
+            residentRecords: {
+              where: { villaId: invoice.villaId },
+              select: { roomNumber: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const result = payments.map((p) => ({
+      id: p.id,
+      invoiceId: p.invoiceId,
+      residentId: p.residentId,
+      amount: p.amount,
+      status: p.status,
+      createdAt: p.createdAt,
+      user: {
+        name: p.resident.name,
+        roomNumber: p.resident.residentRecords[0]?.roomNumber ?? '',
+      },
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Fetch invoice payments error:', error);
+    res.status(500).json({ error: 'Failed to fetch invoice payments' });
+  }
+});
+
+// Update invoice — blocked if any payment is already COMPLETED
+app.put('/api/invoices/:invoiceId', async (req: Request, res: Response) => {
+  const invoiceId = String(req.params.invoiceId);
+
+  try {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { payments: true },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ error: '청구서를 찾을 수 없습니다.' });
+    }
+
+    const hasCompletedPayment = invoice.payments.some((p) => p.status === 'COMPLETED');
+    if (hasCompletedPayment) {
+      return res.status(400).json({ error: '이미 납부한 세대가 있어 수정할 수 없습니다' });
+    }
+
+    const { billingMonth, memo, type, fixedAmount } = req.body;
+
+    const updated = await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        billingMonth: billingMonth || undefined,
+        memo: memo !== undefined ? memo : undefined,
+        type: type || undefined,
+        totalAmount: fixedAmount ? Number(fixedAmount) : undefined,
+        amountPerResident: fixedAmount ? Number(fixedAmount) : undefined,
+      },
+    });
+
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('Update invoice error:', error);
+    res.status(500).json({ error: 'Failed to update invoice' });
+  }
+});
+
 // Set auto-billing day for a villa (1-28)
 app.post('/api/villas/:villaId/auto-billing', async (req: Request, res: Response) => {
   const villaId = parseInt(String(req.params.villaId), 10);
@@ -387,6 +479,29 @@ app.post('/api/villas/:villaId/auto-billing', async (req: Request, res: Response
   } catch (error) {
     console.error('Auto-billing setup error:', error);
     res.status(500).json({ error: 'Failed to set auto-billing' });
+  }
+});
+
+// Get the villa a resident belongs to (via ResidentRecord)
+app.get('/api/users/:userId/villa', async (req: Request, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const record = await prisma.residentRecord.findFirst({
+      where: { userId: String(userId) },
+      include: {
+        villa: true,
+      },
+    });
+
+    if (!record) {
+      return res.status(404).json({ villa: null });
+    }
+
+    res.status(200).json({ villa: record.villa });
+  } catch (error) {
+    console.error('Fetch resident villa error:', error);
+    res.status(500).json({ error: 'Failed to fetch resident villa' });
   }
 });
 
@@ -462,19 +577,19 @@ cron.schedule('0 9 * * *', async () => {
       if (villa.residents.length === 0) continue;
 
       const now = new Date();
-      const dueDate = new Date(now.getFullYear(), now.getMonth() + 1, 5); // Due 5th of next month
-      const title = `${now.getFullYear()}년 ${now.getMonth() + 1}월 관리비`;
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const billingMonth = `${year}-${month}`;
       const defaultAmount = 50000; // Default; can be customized later
       const perPerson = Math.ceil(defaultAmount / villa.residents.length);
 
       await prisma.invoice.create({
         data: {
-          title,
+          billingMonth,
           type: 'FIXED',
           totalAmount: defaultAmount,
           amountPerResident: perPerson,
           items: undefined,
-          dueDate,
           villaId: villa.id,
           payments: {
             create: villa.residents.map((r) => ({
