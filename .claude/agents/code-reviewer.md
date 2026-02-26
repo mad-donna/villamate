@@ -199,6 +199,53 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 
 ---
 
+### 2026-02-26 — 커뮤니티 게시판, 댓글, 차량/주차 관리 세션
+
+#### 이 세션에서 리뷰/진단한 주요 내용
+
+- **커뮤니티 게시판** 글쓰기 불가 버그 진단 및 수정
+- **SafeArea 회색 박스** (탭 내부 이중 패딩) 반복 진단
+- **주차 조회 기능** 전체 엔드-투-엔드 버그 감사 (14개 이슈 발견)
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] 탭 내부 스크린에서 스택 스크린으로 navigate — 재발 패턴**
+- `BoardScreen`이 `CommunityTabScreen`으로 감싸져 렌더링될 때 `navigation` 객체가 탭 네비게이터에 바인딩됨
+- `navigation.navigate('CreatePost', ...)` → 탭 네비게이터에는 해당 라우트 없음 → 런타임 에러
+- 해결: `navigation.getParent()?.navigate('CreatePost', ...)` 로 부모 스택 네비게이터로 올라감
+- **단, 대시보드 스크린에서는 반대** — React Navigation이 위로 버블링하므로 `navigation.navigate()`가 바로 작동. `getParent()`를 불필요하게 추가하면 오히려 실패함
+
+**[CRITICAL] Express 라우트 순서 — 구체적 라우트가 와일드카드보다 앞에 있어야 함**
+- `GET /api/villas/:adminId` (와일드카드)가 `GET /api/villas/:villaId/vehicles/search` (구체적) 앞에 등록됨
+- Express는 등록 순서대로 매칭 → 검색 라우트가 완전히 차단됨
+- 해결: 세그먼트가 많은 구체적 라우트를 와일드카드 라우트보다 항상 먼저 등록
+
+**[CRITICAL] Prisma include에서 존재하지 않는 필드 선택**
+- `author: { select: { name: true, roomNumber: true } as any }` — `roomNumber`는 `User`가 아닌 `ResidentRecord`에 있음
+- `as any` 캐스팅으로 컴파일 에러는 숨겨지지만 Prisma 런타임에서 500 에러 발생
+- 해결: `select`에서 `roomNumber` 제거, 별도 `residentRecord.findFirst()`로 조회
+- **교훈**: `as any` 로 Prisma 타입 우회 시 반드시 런타임 검증할 것
+
+**[CRITICAL] 관리자 계정의 AsyncStorage에 villa 정보 없음**
+- 입주민은 가입 시 `user.villa`가 저장되지만 관리자는 빌라 등록 응답이 AsyncStorage에 병합되지 않음
+- `villaId`가 항상 null → 차량 등록 등 villaId 필요 기능 전부 실패
+- 해결: `GET /api/users/:userId/villa` 폴백 API 호출
+
+**[MAJOR] req.params 타입 — `string | string[]` 불일치**
+- TypeScript에서 `req.params.someId`의 타입은 `string | string[]`
+- Prisma where 조건은 순수 `string`만 허용 → 컴파일 에러
+- 해결: `String(req.params.someId)` 래핑
+
+#### 추가된 코딩 패턴
+
+- **탭 내 스택 이동 규칙 정리**:
+  - 탭 스크린 → 스택 스크린: `navigation.navigate('StackScreen')` (버블링으로 자동 탐색)
+  - 탭 내 인라인 컴포넌트 → 스택 스크린: `navigation.getParent()?.navigate('StackScreen')` (탭 네비게이터를 수동으로 탈출)
+- **SafeArea 탭 이중 패딩**: 탭 내부 스크린은 `<SafeAreaView edges={['top']}>` 만 사용. bottom은 탭 바가 자동 처리
+- **Express 라우트 등록 순서**: 경로 세그먼트가 많은 라우트 먼저, 와일드카드 나중
+
+---
+
 ### 2026-02-25 — 빌라메이트 UX 개선 및 PG 연동 세션
 
 #### 이 세션에서 리뷰한 주요 내용

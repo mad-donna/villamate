@@ -1,86 +1,114 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
+var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+    function accept(f) { if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected"); return f; }
+    var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
+    var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
+    var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
+    var _, done = false;
+    for (var i = decorators.length - 1; i >= 0; i--) {
+        var context = {};
+        for (var p in contextIn) context[p] = p === "access" ? {} : contextIn[p];
+        for (var p in contextIn.access) context.access[p] = contextIn.access[p];
+        context.addInitializer = function (f) { if (done) throw new TypeError("Cannot add initializers after decoration has completed"); extraInitializers.push(accept(f || null)); };
+        var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
+        if (kind === "accessor") {
+            if (result === void 0) continue;
+            if (result === null || typeof result !== "object") throw new TypeError("Object expected");
+            if (_ = accept(result.get)) descriptor.get = _;
+            if (_ = accept(result.set)) descriptor.set = _;
+            if (_ = accept(result.init)) initializers.unshift(_);
+        }
+        else if (_ = accept(result)) {
+            if (kind === "field") initializers.unshift(_);
+            else descriptor[key] = _;
+        }
+    }
+    if (target) Object.defineProperty(target, contextIn.name, descriptor);
+    done = true;
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
+var __runInitializers = (this && this.__runInitializers) || function (thisArg, initializers, value) {
+    var useValue = arguments.length > 2;
+    for (var i = 0; i < initializers.length; i++) {
+        value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
+    }
+    return useValue ? value : void 0;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BankingService = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const typeorm_2 = require("typeorm");
-const bank_account_entity_1 = require("./bank-account.entity");
 const invoice_entity_1 = require("../billing/invoice.entity");
-let BankingService = class BankingService {
-    bankAccountRepository;
-    invoiceRepository;
-    constructor(bankAccountRepository, invoiceRepository) {
-        this.bankAccountRepository = bankAccountRepository;
-        this.invoiceRepository = invoiceRepository;
-    }
-    async registerAccount(buildingId, accountNumber, bankName) {
-        return Promise.resolve({
-            id: 1,
-            buildingId,
-            accountNumber,
-            bankName,
-        });
-    }
-    async getTransactions() {
-        return Promise.resolve([
-            {
-                date: new Date().toISOString(),
-                amount: 50000,
-                type: 'DEPOSIT',
-                description: 'Monthly Fee - Unit 101',
-            },
-            {
-                date: new Date().toISOString(),
-                amount: -10000,
-                type: 'WITHDRAWAL',
-                description: 'Cleaning Service',
-            },
-            {
-                date: new Date().toISOString(),
-                amount: 50000,
-                type: 'DEPOSIT',
-                description: 'Monthly Fee - Unit 102',
-            },
-        ]);
-    }
-    async settleInvoice(invoiceId) {
-        const invoice = await this.invoiceRepository.findOne({
-            where: { id: invoiceId },
-        });
-        if (!invoice) {
-            throw new common_1.NotFoundException(`Invoice with ID ${invoiceId} not found`);
+let BankingService = (() => {
+    let _classDecorators = [(0, common_1.Injectable)()];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var BankingService = class {
+        static { _classThis = this; }
+        static {
+            const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+            __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+            BankingService = _classThis = _classDescriptor.value;
+            if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+            __runInitializers(_classThis, _classExtraInitializers);
         }
-        invoice.status = invoice_entity_1.InvoiceStatus.PAID;
-        await this.invoiceRepository.save(invoice);
-        const total = Number(invoice.amount);
-        const platformFee = total * 0.25;
-        const villaAccount = total - platformFee;
-        console.log(`[Settlement Mock] Invoice ID: ${invoice.id}, Total: ${total}, Villa Account: ${villaAccount}, Platform Fee: ${platformFee}`);
-        return {
-            success: true,
-            invoiceId: invoice.id,
-            status: invoice.status,
-        };
-    }
-};
+        bankAccountRepository;
+        invoiceRepository;
+        constructor(bankAccountRepository, invoiceRepository) {
+            this.bankAccountRepository = bankAccountRepository;
+            this.invoiceRepository = invoiceRepository;
+        }
+        async registerAccount(buildingId, accountNumber, bankName) {
+            // PoC: Bypass database save for Building #1
+            return Promise.resolve({
+                id: 1,
+                buildingId,
+                accountNumber,
+                bankName,
+            });
+        }
+        async getTransactions() {
+            // Return mock transaction objects
+            return Promise.resolve([
+                {
+                    date: new Date().toISOString(),
+                    amount: 50000,
+                    type: 'DEPOSIT',
+                    description: 'Monthly Fee - Unit 101',
+                },
+                {
+                    date: new Date().toISOString(),
+                    amount: -10000,
+                    type: 'WITHDRAWAL',
+                    description: 'Cleaning Service',
+                },
+                {
+                    date: new Date().toISOString(),
+                    amount: 50000,
+                    type: 'DEPOSIT',
+                    description: 'Monthly Fee - Unit 102',
+                },
+            ]);
+        }
+        async settleInvoice(invoiceId) {
+            const invoice = await this.invoiceRepository.findOne({
+                where: { id: invoiceId },
+            });
+            if (!invoice) {
+                throw new common_1.NotFoundException(`Invoice with ID ${invoiceId} not found`);
+            }
+            invoice.status = invoice_entity_1.InvoiceStatus.PAID;
+            await this.invoiceRepository.save(invoice);
+            const total = Number(invoice.amount);
+            const platformFee = total * 0.25;
+            const villaAccount = total - platformFee;
+            console.log(`[Settlement Mock] Invoice ID: ${invoice.id}, Total: ${total}, Villa Account: ${villaAccount}, Platform Fee: ${platformFee}`);
+            return {
+                success: true,
+                invoiceId: invoice.id,
+                status: invoice.status,
+            };
+        }
+    };
+    return BankingService = _classThis;
+})();
 exports.BankingService = BankingService;
-exports.BankingService = BankingService = __decorate([
-    (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(bank_account_entity_1.BankAccount)),
-    __param(1, (0, typeorm_1.InjectRepository)(invoice_entity_1.Invoice)),
-    __metadata("design:paramtypes", [typeorm_2.Repository,
-        typeorm_2.Repository])
-], BankingService);
-//# sourceMappingURL=banking.service.js.map

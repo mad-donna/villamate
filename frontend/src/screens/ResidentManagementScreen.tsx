@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.122:3000';
+const API_BASE_URL = 'http://192.168.219.108:3000';
 
 const ResidentManagementScreen = () => {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -66,7 +66,7 @@ const ResidentManagementScreen = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.content}>
         <Text style={styles.title}>입주민 관리</Text>
 

@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.122:3000';
+const API_BASE_URL = 'http://192.168.219.108:3000';
 
 const BANKS = [
   { id: '1', name: '국민은행' },

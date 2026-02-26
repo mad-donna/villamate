@@ -1,14 +1,13 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import DashboardScreen from '../screens/DashboardScreen';
-import CommunityTabScreen from '../screens/CommunityTabScreen';
-import ManagementScreen from '../screens/ManagementScreen';
+import ResidentDashboardScreen from '../screens/ResidentDashboardScreen';
+import ResidentCommunityTabScreen from '../screens/ResidentCommunityTabScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
-const MainTabNavigator = () => {
+const ResidentTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -19,25 +18,22 @@ const MainTabNavigator = () => {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === '커뮤니티') {
             iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-          } else if (route.name === '관리') {
-            iconName = focused ? 'grid' : 'grid-outline';
           } else if (route.name === '프로필') {
             iconName = focused ? 'person' : 'person-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#007AFF',
+        tabBarActiveTintColor: '#5856D6',
         tabBarInactiveTintColor: 'gray',
         headerShown: false,
       })}
     >
-      <Tab.Screen name="홈" component={DashboardScreen} />
-      <Tab.Screen name="커뮤니티" component={CommunityTabScreen} />
-      <Tab.Screen name="관리" component={ManagementScreen} />
+      <Tab.Screen name="홈" component={ResidentDashboardScreen} />
+      <Tab.Screen name="커뮤니티" component={ResidentCommunityTabScreen} />
       <Tab.Screen name="프로필" component={ProfileScreen} />
     </Tab.Navigator>
   );
 };
 
-export default MainTabNavigator;
+export default ResidentTabNavigator;

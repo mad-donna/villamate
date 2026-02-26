@@ -537,6 +537,37 @@ app.get('/api/villas/:villaId/residents', async (req: Request, res: Response) =>
   }
 });
 
+// Search vehicles by plate number within a villa (includes owner name + roomNumber)
+// NOTE: This route MUST be registered before /api/villas/:adminId to avoid wildcard shadowing.
+app.get('/api/villas/:villaId/vehicles/search', async (req: Request, res: Response) => {
+  try {
+    const villaId = parseInt(String(req.params.villaId), 10);
+    if (isNaN(villaId)) {
+      return res.status(400).json({ message: '빌라 ID가 올바르지 않습니다.' });
+    }
+    const query = String(req.query.query ?? '');
+    const vehicles = await prisma.vehicle.findMany({
+      where: {
+        villaId,
+        plateNumber: { contains: query },
+      },
+      include: { owner: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const result = await Promise.all(vehicles.map(async (v) => {
+      const record = await prisma.residentRecord.findFirst({
+        where: { userId: v.ownerId, villaId },
+        select: { roomNumber: true },
+      });
+      return { ...v, owner: { name: v.owner.name, roomNumber: record?.roomNumber ?? null } };
+    }));
+    res.json(result);
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Get villas by admin ID
 app.get('/api/villas/:adminId', async (req: Request, res: Response) => {
   const { adminId } = req.params;
@@ -557,6 +588,248 @@ app.get('/api/villas/:adminId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Fetch villas error:', error);
     res.status(500).json({ error: 'Failed to fetch villas' });
+  }
+});
+
+// Get all posts for a villa (notices first, then by most recent)
+app.get('/api/villas/:villaId/posts', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  try {
+    const posts = await prisma.post.findMany({
+      where: { villaId },
+      include: {
+        author: { select: { name: true } },
+      },
+      orderBy: [{ isNotice: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    // Resolve roomNumber from ResidentRecord since it lives there, not on User
+    const postsWithRoomNumber = await Promise.all(
+      posts.map(async (post) => {
+        const record = await prisma.residentRecord.findFirst({
+          where: { userId: post.authorId, villaId },
+          select: { roomNumber: true },
+        });
+        return {
+          ...post,
+          author: {
+            name: post.author.name,
+            roomNumber: record?.roomNumber ?? null,
+          },
+        };
+      })
+    );
+
+    res.status(200).json(postsWithRoomNumber);
+  } catch (error) {
+    console.error('Fetch posts error:', error);
+    res.status(500).json({ error: 'Failed to fetch posts' });
+  }
+});
+
+// Create a new post for a villa
+app.post('/api/villas/:villaId/posts', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  const { title, content, authorId, isNotice } = req.body;
+
+  if (!title || !content || !authorId) {
+    return res.status(400).json({ error: 'title, content, and authorId are required' });
+  }
+
+  try {
+    const post = await prisma.post.create({
+      data: {
+        title: String(title),
+        content: String(content),
+        isNotice: Boolean(isNotice) || false,
+        authorId: String(authorId),
+        villaId,
+      },
+    });
+    res.status(201).json(post);
+  } catch (error) {
+    console.error('Create post error:', error);
+    res.status(500).json({ error: 'Failed to create post' });
+  }
+});
+
+// Toggle notice (pin/unpin) for a post — max 3 pinned notices per villa
+app.put('/api/posts/:postId/notice', async (req: Request, res: Response) => {
+  const postId = String(req.params.postId);
+  const { isNotice, villaId } = req.body;
+
+  if (typeof isNotice !== 'boolean' || !villaId) {
+    return res.status(400).json({ error: 'isNotice (boolean) and villaId are required' });
+  }
+
+  try {
+    if (isNotice === true) {
+      const count = await prisma.post.count({
+        where: { villaId: parseInt(String(villaId), 10), isNotice: true },
+      });
+      if (count >= 3) {
+        return res.status(400).json({ message: '공지사항은 최대 3개까지만 등록할 수 있습니다.' });
+      }
+    }
+
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: { isNotice },
+    });
+
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('Toggle notice error:', error);
+    res.status(500).json({ error: 'Failed to update notice status' });
+  }
+});
+
+// Get a single post by ID (with author name + roomNumber)
+app.get('/api/posts/:postId', async (req: Request, res: Response) => {
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: String(req.params.postId) },
+      include: { author: { select: { name: true } } },
+    });
+    if (!post) return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+
+    // Resolve roomNumber via ResidentRecord (it lives there, not on User)
+    const record = await prisma.residentRecord.findFirst({
+      where: { userId: post.authorId, villaId: post.villaId },
+      select: { roomNumber: true },
+    });
+
+    res.json({
+      ...post,
+      author: { name: post.author.name, roomNumber: record?.roomNumber ?? null },
+    });
+  } catch (err: any) {
+    console.error('Fetch post error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get all comments for a post (with author name + roomNumber)
+app.get('/api/posts/:postId/comments', async (req: Request, res: Response) => {
+  try {
+    const postId = String(req.params.postId);
+    const comments = await prisma.comment.findMany({
+      where: { postId },
+      orderBy: { createdAt: 'asc' },
+      include: { author: { select: { name: true } } },
+    });
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { villaId: true },
+    });
+    const villaId = post?.villaId;
+
+    const result = await Promise.all(
+      comments.map(async (c) => {
+        const record = await prisma.residentRecord.findFirst({
+          where: { userId: c.authorId, villaId },
+          select: { roomNumber: true },
+        });
+        return { ...c, author: { name: c.author.name, roomNumber: record?.roomNumber ?? null } };
+      })
+    );
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('Fetch comments error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Post a new comment on a post
+app.post('/api/posts/:postId/comments', async (req: Request, res: Response) => {
+  try {
+    const { content, authorId } = req.body;
+    if (!content || !authorId) {
+      return res.status(400).json({ message: 'content and authorId are required' });
+    }
+    const comment = await prisma.comment.create({
+      data: { content, authorId, postId: String(req.params.postId) },
+    });
+    res.status(201).json(comment);
+  } catch (err: any) {
+    console.error('Create comment error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Delete a post by ID — only the author may delete
+app.delete('/api/posts/:postId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.body;
+    const post = await prisma.post.findUnique({ where: { id: String(req.params.postId) } });
+    if (!post) return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+    if (post.authorId !== userId) return res.status(403).json({ message: '삭제 권한이 없습니다.' });
+    await prisma.post.delete({ where: { id: String(req.params.postId) } });
+    res.json({ message: '게시글이 삭제되었습니다.' });
+  } catch (err: any) {
+    console.error('Delete post error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Register a vehicle (resident or visitor)
+app.post('/api/vehicles', async (req: Request, res: Response) => {
+  const { plateNumber, ownerId, villaId, isVisitor, expectedDeparture } = req.body;
+  if (!plateNumber || !ownerId || !villaId) {
+    return res.status(400).json({ message: '필수 항목이 누락되었습니다.' });
+  }
+  const parsedVillaId = parseInt(String(villaId), 10);
+  if (isNaN(parsedVillaId)) {
+    return res.status(400).json({ message: '빌라 정보가 올바르지 않습니다.' });
+  }
+  try {
+    const vehicle = await prisma.vehicle.create({
+      data: {
+        plateNumber,
+        ownerId,
+        villaId: parsedVillaId,
+        isVisitor: Boolean(isVisitor),
+        expectedDeparture: expectedDeparture ? new Date(expectedDeparture) : null,
+      },
+    });
+    res.status(201).json(vehicle);
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get all vehicles registered by a specific user
+app.get('/api/users/:userId/vehicles', async (req: Request, res: Response) => {
+  try {
+    const vehicles = await prisma.vehicle.findMany({
+      where: { ownerId: String(req.params.userId) },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(vehicles);
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Delete a vehicle by ID
+app.delete('/api/vehicles/:vehicleId', async (req: Request, res: Response) => {
+  try {
+    await prisma.vehicle.delete({ where: { id: String(req.params.vehicleId) } });
+    res.json({ message: '차량이 삭제되었습니다.' });
+  } catch (err: any) {
+    console.error(err);
+    if (err.code === 'P2025') {
+      return res.status(404).json({ message: '차량을 찾을 수 없습니다.' });
+    }
+    res.status(500).json({ message: err.message });
   }
 });
 

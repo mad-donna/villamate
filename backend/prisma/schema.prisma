@@ -26,6 +26,9 @@ model User {
   villasManaged   Villa[]          @relation("VillaAdmin")
   residentRecords ResidentRecord[]
   invoicePayments InvoicePayment[]
+  posts           Post[]
+  comments        Comment[]
+  vehicles        Vehicle[]
 }
 
 model Villa {
@@ -43,6 +46,8 @@ model Villa {
   residents       ResidentRecord[]
   transactions    LedgerTransaction[]
   invoices        Invoice[]
+  posts           Post[]
+  vehicles        Vehicle[]
 }
 
 enum InvoiceType {
@@ -95,4 +100,39 @@ model LedgerTransaction {
   type        String   // 'INCOME' or 'EXPENSE'
   hasReceipt  Boolean  @default(false)
   receiptUrl  String?
+}
+
+model Post {
+  id        String    @id @default(uuid())
+  title     String
+  content   String
+  isNotice  Boolean   @default(false)
+  authorId  String
+  villaId   Int
+  createdAt DateTime  @default(now())
+  author    User      @relation(fields: [authorId], references: [id])
+  villa     Villa     @relation(fields: [villaId], references: [id])
+  comments  Comment[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  authorId  String
+  postId    String
+  createdAt DateTime @default(now())
+  author    User     @relation(fields: [authorId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id])
+}
+
+model Vehicle {
+  id                String    @id @default(uuid())
+  plateNumber       String
+  isVisitor         Boolean   @default(false)
+  expectedDeparture DateTime?
+  ownerId           String
+  villaId           Int
+  createdAt         DateTime  @default(now())
+  owner             User      @relation(fields: [ownerId], references: [id])
+  villa             Villa     @relation(fields: [villaId], references: [id])
 }

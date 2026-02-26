@@ -201,6 +201,48 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 
 ---
 
+### 2026-02-26 — 커뮤니티 게시판, 댓글, 차량/주차 관리 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **UI 텍스트 일괄 변경**: "동대표" → "관리자" (4개 스크린의 표시 문자열만 변경, 변수명/라우트 유지)
+
+2. **커뮤니티 게시판** 풀스택 구현
+   - DB: `Post` 모델 추가 (`id`, `title`, `content`, `isNotice`, `authorId`, `villaId`, `createdAt`)
+   - 백엔드: `GET/POST /api/villas/:villaId/posts`, `PUT /api/posts/:postId/notice` (공지 최대 3개 제한)
+   - 프론트: `BoardScreen.tsx` (공지 배지, 관리자 토글), `CreatePostScreen.tsx` (KeyboardAwareScrollView 표준)
+
+3. **탭 네비게이터 리팩터링**
+   - Admin 탭 4개: 홈 / 커뮤니티 / 관리 / 프로필
+   - Resident 탭 3개: 홈 / 커뮤니티 / 프로필
+   - `ManagementScreen.tsx` 신규 생성 (청구서 발행, 입주민 관리, 장부 확인)
+   - `CommunityTabScreen.tsx`, `ResidentCommunityTabScreen.tsx` — BoardScreen 래퍼
+
+4. **게시글 상세 화면** (`PostDetailScreen.tsx`)
+   - 백엔드: `GET /api/posts/:postId`, `DELETE /api/posts/:postId` (작성자 본인만 삭제)
+   - 프론트: 공지 배지, 작성자/호수/날짜, ScrollView 본문, 삭제 버튼
+
+5. **댓글 기능** 풀스택 구현
+   - DB: `Comment` 모델 추가
+   - 백엔드: `GET/POST /api/posts/:postId/comments`
+   - 프론트: `PostDetailScreen`에 댓글 목록 + 하단 입력바 + `KeyboardAvoidingView`
+
+6. **차량/주차 관리** 풀스택 구현
+   - DB: `Vehicle` 모델 추가 (`plateNumber`, `isVisitor`, `expectedDeparture`)
+   - 백엔드: `POST /api/vehicles`, `GET /api/villas/:villaId/vehicles/search`, `GET/DELETE /api/users/:userId/vehicles`
+   - 프론트: `ProfileScreen`에 차량 등록/삭제 UI, `ParkingSearchScreen.tsx` 신규 생성
+   - 대시보드(Admin/Resident) 양쪽에 "주차 조회" 버튼 추가
+
+#### 이 세션에서 확립된 구현 패턴
+
+- **탭 내 인라인 컴포넌트의 스택 이동**: `navigation.getParent()?.navigate()` 사용 (BoardScreen → CreatePost)
+- **대시보드(탭 스크린)의 스택 이동**: `navigation.navigate()` 직접 사용 (버블링 활용, getParent() 불필요)
+- **roomNumber 조회 패턴**: 항상 `residentRecord.findFirst({ where: { userId, villaId } })`로 별도 조회
+- **관리자 villaId 폴백**: AsyncStorage에 villa 없으면 `GET /api/users/:userId/villa` API로 조회
+- **req.params 타입 안전**: 항상 `String(req.params.paramName)` 래핑 후 사용
+
+---
+
 ### 2026-02-25 — 빌라메이트 UX 개선 및 PG 연동 세션
 
 #### 이 세션에서 구현한 기능

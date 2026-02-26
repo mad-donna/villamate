@@ -7,13 +7,14 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.122:3000';
+const API_BASE_URL = 'http://192.168.219.108:3000';
 
 interface InvoiceVilla {
   name: string;
@@ -49,6 +50,8 @@ const ResidentDashboardScreen = () => {
   const navigation = useNavigation<any>();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
+  const [residentUserId, setResidentUserId] = useState<string | null>(null);
+  const [residentVillaId, setResidentVillaId] = useState<number | null>(null);
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -66,6 +69,17 @@ const ResidentDashboardScreen = () => {
       }
 
       if (!userId) return;
+
+      setResidentUserId(userId);
+
+      // Resolve villaId from stored user.villa
+      const userStr = await AsyncStorage.getItem('user');
+      if (userStr) {
+        const storedUser = JSON.parse(userStr);
+        if (storedUser?.villa?.id) {
+          setResidentVillaId(storedUser.villa.id);
+        }
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/residents/${userId}/payments`);
       if (!response.ok) {
@@ -164,7 +178,7 @@ const ResidentDashboardScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>빌라메이트 (입주민)</Text>
@@ -201,16 +215,41 @@ const ResidentDashboardScreen = () => {
           <Text style={styles.ledgerButtonText}>투명한 공용 장부 및 영수증 확인하기</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.communityButton}
+          onPress={() =>
+            navigation.navigate('Board', {
+              villaId: residentVillaId,
+              userId: residentUserId,
+              userRole: 'RESIDENT',
+            })
+          }
+        >
+          <Text style={styles.communityButtonText}>커뮤니티 게시판</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.parkingButton}
+          onPress={() => {
+            if (!residentVillaId) return Alert.alert('오류', '빌라 정보를 불러오는 중입니다.');
+            navigation.navigate('ParkingSearch', { villaId: residentVillaId });
+          }}
+        >
+          <Text style={styles.parkingButtonText}>주차 조회</Text>
+        </TouchableOpacity>
+
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>* 관리비는 매달 25일에 발행됩니다.</Text>
-          <Text style={styles.infoText}>* 문의사항은 동대표님께 연락주세요.</Text>
+          <Text style={styles.infoText}>* 문의사항은 관리자님께 연락주세요.</Text>
         </View>
 
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={async () => {
             await AsyncStorage.clear();
-            navigation.replace('Login');
+            navigation.dispatch(
+              CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] })
+            );
           }}
         >
           <Text style={styles.logoutButtonText}>로그아웃</Text>
@@ -412,7 +451,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 24,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -422,6 +461,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#3A3A3C',
+  },
+  communityButton: {
+    backgroundColor: '#5856D6',
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#5856D6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  communityButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  parkingButton: {
+    backgroundColor: '#30B0C7',
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#30B0C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  parkingButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
   },
   infoBox: {
     padding: 16,

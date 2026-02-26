@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
-const API_BASE_URL = 'http://192.168.219.122:3000';
+const API_BASE_URL = 'http://192.168.219.108:3000';
 
 interface Villa {
   id: number;
@@ -34,12 +34,13 @@ const DashboardScreen = ({ navigation }: any) => {
   const [residents, setResidents] = useState<any[]>([]);
   const [villaInfo, setVillaInfo] = useState<any>(null);
   const [loadingResidents, setLoadingResidents] = useState(false);
+  const [adminUserId, setAdminUserId] = useState<string | null>(null);
 
   const fetchVillaData = useCallback(async () => {
     try {
       setLoading(true);
       let userId = await AsyncStorage.getItem('userId');
-      
+
       // 폴백: userId 키가 없으면 user 객체에서 시도
       if (!userId) {
         const userStr = await AsyncStorage.getItem('user');
@@ -54,6 +55,8 @@ const DashboardScreen = ({ navigation }: any) => {
         setVillaData(null);
         return;
       }
+
+      setAdminUserId(userId);
 
       console.log(`Fetching villas for adminId: ${userId}`);
       const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
@@ -134,7 +137,7 @@ const DashboardScreen = ({ navigation }: any) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
         </View>
@@ -144,13 +147,13 @@ const DashboardScreen = ({ navigation }: any) => {
 
   if (!villaData) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.emptyContainer}>
           <Text style={styles.header}>환영합니다</Text>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>등록된 빌라 정보가 없습니다</Text>
             <Text style={styles.cardSubtitle}>서비스 이용을 위해 빌라를 먼저 등록해주세요.</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.settleButton}
               onPress={() => navigation.navigate('Onboarding')}
             >
@@ -163,7 +166,7 @@ const DashboardScreen = ({ navigation }: any) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.header}>{villaData.name}</Text>
         
@@ -210,6 +213,30 @@ const DashboardScreen = ({ navigation }: any) => {
             onPress={() => navigation.navigate('Ledger')}
           >
             <Text style={styles.actionButtonText}>장부 내역 확인</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.communityButton]}
+            onPress={() =>
+              navigation.navigate('Board', {
+                villaId: villaData.id,
+                userId: adminUserId,
+                userRole: 'ADMIN',
+              })
+            }
+          >
+            <Text style={styles.actionButtonText}>커뮤니티</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.parkingButton]}
+            onPress={() =>
+              navigation.navigate('ParkingSearch', {
+                villaId: villaData.id,
+              })
+            }
+          >
+            <Text style={styles.actionButtonText}>주차 조회</Text>
           </TouchableOpacity>
         </View>
 
@@ -348,6 +375,12 @@ const styles = StyleSheet.create({
   },
   settleButton: {
     backgroundColor: '#007AFF',
+  },
+  communityButton: {
+    backgroundColor: '#5856D6',
+  },
+  parkingButton: {
+    backgroundColor: '#30B0C7',
   },
   actionButtonText: {
     color: '#fff',

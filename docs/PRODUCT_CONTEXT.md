@@ -185,3 +185,86 @@
 3. **API_BASE_URL 공통화**: 각 스크린 하드코딩 → `config.ts` 환경변수
 4. **알림 기능**: 미납자 푸시 알림 또는 카카오 알림톡
 5. **정산 화면**: 동대표용 수금액 정산 및 관리 화면
+
+---
+
+## 9. MVP 구현 현황 (2026-02-26 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### UI 텍스트 전면 변경
+- "동대표" → "관리자" (표시 문자열만 변경, 변수명·라우트·백엔드 로직 유지)
+- 변경 파일: `LoginScreen`, `ProfileSetupScreen`, `ResidentDashboardScreen`, `ResidentJoinScreen`
+
+#### 커뮤니티 게시판 (신규)
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Post` 모델: `id`, `title`, `content`, `isNotice(bool)`, `authorId`, `villaId`, `createdAt` |
+| 백엔드 | `GET/POST /api/villas/:villaId/posts`, `PUT /api/posts/:postId/notice` |
+| 공지 제한 | 공지 최대 3개 — 초과 시 400 반환 |
+| 화면 | `BoardScreen.tsx` (공지 배지, 관리자 토글), `CreatePostScreen.tsx` |
+
+#### 게시글 상세 + 댓글 (신규)
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Comment` 모델: `id`, `content`, `authorId`, `postId`, `createdAt` |
+| 백엔드 | `GET /api/posts/:postId`, `DELETE /api/posts/:postId` (작성자 본인만), `GET/POST /api/posts/:postId/comments` |
+| 화면 | `PostDetailScreen.tsx` — 공지 배지, 본문, 댓글 목록, 하단 입력바 (KeyboardAvoidingView) |
+
+#### 탭 네비게이터 리팩터링
+
+- **Admin 탭 4개**: 홈(DashboardScreen) / 커뮤니티(BoardScreen) / 관리(ManagementScreen) / 프로필
+- **Resident 탭 3개**: 홈(ResidentDashboardScreen) / 커뮤니티(BoardScreen) / 프로필
+- `ManagementScreen.tsx` 신규 생성: 청구서 발행 / 입주민 관리 / 장부 확인 메뉴 통합
+
+#### 차량 및 주차 관리 (신규)
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Vehicle` 모델: `plateNumber`, `isVisitor(bool)`, `expectedDeparture(DateTime?)`, `ownerId`, `villaId` |
+| 백엔드 | `POST /api/vehicles`, `GET /api/villas/:villaId/vehicles/search?query=`, `GET/DELETE /api/users/:userId/vehicles` |
+| ProfileScreen | 차량 등록/삭제 UI — 일반차량/방문차량 토글, 방문 시 출발 예정 시간 입력 |
+| ParkingSearchScreen | 번호판 검색 → 호수·이름·방문여부·출발예정 표시 |
+| 대시보드 | Admin/Resident 홈 화면 양쪽에 "주차 조회" 버튼 추가 |
+
+### 현재 구현된 전체 화면 목록 (2026-02-26 기준)
+
+#### 인증/온보딩
+- `LoginScreen` — 역할 선택 (관리자/입주민) + 이메일 로그인 이동
+- `EmailLoginScreen` — 이메일/비밀번호 로그인
+- `ProfileSetupScreen` — 이름 입력 후 역할 선택
+- `OnboardingScreen` — 빌라 등록 (관리자)
+- `ResidentJoinScreen` — 초대 코드로 빌라 가입 (입주민)
+
+#### 관리자 탭
+- `DashboardScreen` (홈) — 빌라 요약, 주요 기능 바로가기
+- `BoardScreen` (커뮤니티) — 게시글 목록, 공지 관리
+- `ManagementScreen` (관리) — 청구서/입주민/장부 메뉴
+- `ProfileScreen` (프로필) — 내 정보, 차량 관리, 로그아웃
+
+#### 입주민 탭
+- `ResidentDashboardScreen` (홈) — 납부 현황, 주요 기능 바로가기
+- `BoardScreen` (커뮤니티) — 게시글 목록 (공지 읽기 전용)
+- `ProfileScreen` (프로필) — 내 정보, 차량 관리, 로그아웃
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen` — 청구서 목록
+- `AdminInvoiceDetailScreen` — 세대별 납부 현황
+- `CreateInvoiceScreen` — 청구서 발행
+- `ResidentManagementScreen` — 입주민 목록 + 초대코드
+- `LedgerScreen` — 공용 장부 내역
+- `PaymentScreen` — PortOne PG 결제
+- `PostDetailScreen` — 게시글 상세 + 댓글
+- `CreatePostScreen` — 게시글 작성
+- `ParkingSearchScreen` — 주차 조회
+
+### 다음 개발 우선순위 (2026-02-26 업데이트)
+
+1. **보안**: 비밀번호 해싱(bcrypt), JWT 인증 미들웨어
+2. **PG 결제 서버 검증**: `imp_uid` → PortOne API 서버 검증
+3. **Vehicle 중복 방지**: `@@unique([plateNumber, villaId])` 제약 추가
+4. **API_BASE_URL 공통화**: `config.ts` 환경변수로 추출
+5. **투표 기능**: 주요 안건 모바일 투표
+6. **알림 기능**: 미납자 푸시 알림 또는 카카오 알림톡

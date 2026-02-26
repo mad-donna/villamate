@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.122:3000';
+const API_BASE_URL = 'http://192.168.219.108:3000';
 
 const ProfileSetupScreen = ({ navigation }: any) => {
   const [name, setName] = useState('');
@@ -132,7 +132,7 @@ const ProfileSetupScreen = ({ navigation }: any) => {
                 <Text style={[
                   styles.roleButtonText,
                   role === 'ADMIN' && styles.roleButtonTextActive,
-                ]}>동대표</Text>
+                ]}>관리자</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

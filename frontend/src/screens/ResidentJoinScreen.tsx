@@ -14,7 +14,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.122:3000';
+const API_BASE_URL = 'http://192.168.219.108:3000';
 
 const ResidentJoinScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
@@ -80,7 +80,7 @@ const ResidentJoinScreen = ({ navigation }: any) => {
         <View style={styles.content}>
           <View style={styles.header}>
             <Text style={styles.title}>빌라 입장하기</Text>
-            <Text style={styles.subtitle}>동대표님께 받은 초대 코드를 입력해주세요.</Text>
+            <Text style={styles.subtitle}>관리자님께 받은 초대 코드를 입력해주세요.</Text>
           </View>
 
           <View style={styles.inputSection}>

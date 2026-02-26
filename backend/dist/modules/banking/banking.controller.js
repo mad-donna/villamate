@@ -1,66 +1,81 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
+var __runInitializers = (this && this.__runInitializers) || function (thisArg, initializers, value) {
+    var useValue = arguments.length > 2;
+    for (var i = 0; i < initializers.length; i++) {
+        value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
+    }
+    return useValue ? value : void 0;
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
+var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+    function accept(f) { if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected"); return f; }
+    var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
+    var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
+    var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
+    var _, done = false;
+    for (var i = decorators.length - 1; i >= 0; i--) {
+        var context = {};
+        for (var p in contextIn) context[p] = p === "access" ? {} : contextIn[p];
+        for (var p in contextIn.access) context.access[p] = contextIn.access[p];
+        context.addInitializer = function (f) { if (done) throw new TypeError("Cannot add initializers after decoration has completed"); extraInitializers.push(accept(f || null)); };
+        var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
+        if (kind === "accessor") {
+            if (result === void 0) continue;
+            if (result === null || typeof result !== "object") throw new TypeError("Object expected");
+            if (_ = accept(result.get)) descriptor.get = _;
+            if (_ = accept(result.set)) descriptor.set = _;
+            if (_ = accept(result.init)) initializers.unshift(_);
+        }
+        else if (_ = accept(result)) {
+            if (kind === "field") initializers.unshift(_);
+            else descriptor[key] = _;
+        }
+    }
+    if (target) Object.defineProperty(target, contextIn.name, descriptor);
+    done = true;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BankingController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
-const banking_service_1 = require("./banking.service");
-const register_account_dto_1 = require("./dto/register-account.dto");
-const settle_invoice_dto_1 = require("./dto/settle-invoice.dto");
-let BankingController = class BankingController {
-    bankingService;
-    constructor(bankingService) {
-        this.bankingService = bankingService;
-    }
-    async registerAccount(dto) {
-        return this.bankingService.registerAccount(dto.buildingId, dto.accountNumber, dto.bankName);
-    }
-    async getTransactions(accountId) {
-        return this.bankingService.getTransactions();
-    }
-    async settleInvoice(dto) {
-        return this.bankingService.settleInvoice(dto.invoiceId);
-    }
-};
+let BankingController = (() => {
+    let _classDecorators = [(0, swagger_1.ApiTags)('banking'), (0, common_1.Controller)('api/v1/banking')];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    let _instanceExtraInitializers = [];
+    let _registerAccount_decorators;
+    let _getTransactions_decorators;
+    let _settleInvoice_decorators;
+    var BankingController = class {
+        static { _classThis = this; }
+        static {
+            const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+            _registerAccount_decorators = [(0, common_1.Post)('account'), (0, swagger_1.ApiOperation)({ summary: 'Register a mock building account' })];
+            _getTransactions_decorators = [(0, common_1.Get)('transactions'), (0, swagger_1.ApiOperation)({ summary: 'Get mock transactions for an account' })];
+            _settleInvoice_decorators = [(0, common_1.Post)('settlement'), (0, swagger_1.ApiOperation)({ summary: 'Mock Webhook for invoice settlement' })];
+            __esDecorate(this, null, _registerAccount_decorators, { kind: "method", name: "registerAccount", static: false, private: false, access: { has: obj => "registerAccount" in obj, get: obj => obj.registerAccount }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _getTransactions_decorators, { kind: "method", name: "getTransactions", static: false, private: false, access: { has: obj => "getTransactions" in obj, get: obj => obj.getTransactions }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _settleInvoice_decorators, { kind: "method", name: "settleInvoice", static: false, private: false, access: { has: obj => "settleInvoice" in obj, get: obj => obj.settleInvoice }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+            BankingController = _classThis = _classDescriptor.value;
+            if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+            __runInitializers(_classThis, _classExtraInitializers);
+        }
+        bankingService = __runInitializers(this, _instanceExtraInitializers);
+        constructor(bankingService) {
+            this.bankingService = bankingService;
+        }
+        async registerAccount(dto) {
+            return this.bankingService.registerAccount(dto.buildingId, dto.accountNumber, dto.bankName);
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        async getTransactions(accountId) {
+            return this.bankingService.getTransactions();
+        }
+        async settleInvoice(dto) {
+            return this.bankingService.settleInvoice(dto.invoiceId);
+        }
+    };
+    return BankingController = _classThis;
+})();
 exports.BankingController = BankingController;
-__decorate([
-    (0, common_1.Post)('account'),
-    (0, swagger_1.ApiOperation)({ summary: 'Register a mock building account' }),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [register_account_dto_1.RegisterAccountDto]),
-    __metadata("design:returntype", Promise)
-], BankingController.prototype, "registerAccount", null);
-__decorate([
-    (0, common_1.Get)('transactions'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get mock transactions for an account' }),
-    __param(0, (0, common_1.Query)('accountId', common_1.ParseIntPipe)),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number]),
-    __metadata("design:returntype", Promise)
-], BankingController.prototype, "getTransactions", null);
-__decorate([
-    (0, common_1.Post)('settlement'),
-    (0, swagger_1.ApiOperation)({ summary: 'Mock Webhook for invoice settlement' }),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [settle_invoice_dto_1.SettleInvoiceDto]),
-    __metadata("design:returntype", Promise)
-], BankingController.prototype, "settleInvoice", null);
-exports.BankingController = BankingController = __decorate([
-    (0, swagger_1.ApiTags)('banking'),
-    (0, common_1.Controller)('api/v1/banking'),
-    __metadata("design:paramtypes", [banking_service_1.BankingService])
-], BankingController);
-//# sourceMappingURL=banking.controller.js.map

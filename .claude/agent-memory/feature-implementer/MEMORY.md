@@ -4,7 +4,7 @@
 - React Native (Expo) + Node.js/Express + Prisma + Supabase PostgreSQL
 - Frontend: `D:\villamate\frontend\`
 - Backend: `D:\villamate\backend\`
-- API base URL: `http://192.168.219.122:3000`
+- API base URL: `http://192.168.219.108:3000`
 
 ## Architecture Patterns
 
@@ -29,8 +29,17 @@
 
 ### Navigation (`frontend/src/navigation/AppNavigator.tsx`)
 - NativeStack navigator with all screens registered
-- Key routes: `Login`, `Main` (tab navigator), `ResidentDashboard`, `CreateInvoice`, `AdminInvoice`, `AdminInvoiceDetail`, `Payment`, `Ledger`, `ResidentJoin`, `Onboarding`
+- Key routes: `Login`, `Main` (admin tab navigator), `ResidentDashboard` (resident tab navigator), `CreateInvoice`, `AdminInvoice`, `AdminInvoiceDetail`, `Payment`, `Ledger`, `ResidentJoin`, `Onboarding`, `Board`, `CreatePost`, `ResidentManagement`
+- Admin tabs (MainTabNavigator): 홈 (DashboardScreen), 커뮤니티 (CommunityTabScreen), 관리 (ManagementScreen), 프로필 (ProfileScreen)
+- Resident tabs (ResidentTabNavigator): 홈 (ResidentDashboardScreen), 커뮤니티 (ResidentCommunityTabScreen), 프로필 (ProfileScreen)
+- Tab navigator community wrappers: `CommunityTabScreen` (admin) and `ResidentCommunityTabScreen` (resident) — these load villaId/userId from AsyncStorage on focus, then render `BoardScreen` with a fakeRoute object
+- Admin villaId in CommunityTabScreen: fetched via `GET /api/villas/${userId}` -> `villas[0].id`
+- Resident villaId in ResidentCommunityTabScreen: from `AsyncStorage.getItem('user') -> storedUser.villa.id`
+- Safe Area pattern for tab screens: use `SafeAreaView` from `react-native-safe-area-context` with `edges={['top']}` — the tab bar handles bottom safe area automatically; omitting `edges={['top']}` causes gray box below content
+- Logout from tab screens: use `CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] })` — `navigation.replace('Login')` only works on stack screens, not inside tabs
+- Stack-screen navigation from tab screens: React Navigation's `navigate` bubbles up to parent navigators automatically — no need for `getParent()` for stack routes
 - Express params destructured from `req.params` must use `String(req.params.x)` not `const { x } = req.params` — the latter causes TS2322 type errors
+- `API_BASE_URL = 'http://192.168.219.108:3000'` — confirmed correct URL (not .122)
 
 ### Invoice System (updated Feb 2026 — refactored)
 - Invoice model: `id`, `billingMonth` (String, 'YYYY-MM'), `memo` (String?), `type` (InvoiceType enum), `totalAmount` (Int), `amountPerResident` (Int), `items` (Json? — nullable), `villaId`
@@ -56,9 +65,52 @@
 - Auto-billing CRON: creates FIXED-type invoices with `billingMonth` as `YYYY-MM` string, runs daily at 9 AM
 - Auto-billing: `Villa.autoBillingDay` (Int?), cron job runs daily at 9 AM
 
+### Community Board System (added Feb 2026)
+- Post model: `id` (uuid), `title`, `content`, `isNotice` (Boolean, default false), `authorId` (String -> User), `villaId` (Int -> Villa), `createdAt`
+- `roomNumber` is NOT on User — GET /api/villas/:villaId/posts does a per-post ResidentRecord lookup to attach roomNumber to author
+- GET `/api/villas/:villaId/posts` — orderBy `[isNotice: desc, createdAt: desc]`; returns posts with `author: { name, roomNumber }`
+- POST `/api/villas/:villaId/posts` — body: `{ title, content, authorId, isNotice? }`
+- PUT `/api/posts/:postId/notice` — body: `{ isNotice: boolean, villaId }`. If pinning and count >= 3, returns 400 with Korean message
+- BoardScreen registered as `Board` in AppNavigator; params: `{ villaId, userId, userRole }`
+- BoardScreen cards are wrapped in `TouchableOpacity` that navigates to `PostDetail` via `navigation.getParent()?.navigate()`
+- CreatePostScreen registered as `CreatePost` in AppNavigator; params: `{ villaId, userId, userRole }`
+- PostDetailScreen registered as `PostDetail` in AppNavigator; params: `{ postId, userId, userRole }`
+- GET `/api/posts/:postId` — returns full post with `author: { name, roomNumber }` (roomNumber from ResidentRecord lookup)
+- DELETE `/api/posts/:postId` — hard delete; author-only (server checks `post.authorId !== userId` and returns 403). Body: `{ userId }`. UI shows delete button only when `userId === post.authorId` (no ADMIN bypass)
+- GET `/api/posts/:postId/comments` — returns comments with `author: { name, roomNumber }` (roomNumber from ResidentRecord), ordered by createdAt asc
+- POST `/api/posts/:postId/comments` — body: `{ content, authorId }`, returns created Comment
+- Comment model: `id` (uuid), `content`, `authorId` (String -> User), `postId` (String -> Post), `createdAt`
+- PostDetailScreen (Feb 2026 update): uses KeyboardAvoidingView wrapping ScrollView + fixed bottom commentInputBar; delete button moved INSIDE ScrollView below content; comment section (댓글 N개 header + commentCard list) rendered inside ScrollView below delete button; no ADMIN delete bypass
+- Admin nav to Board: `navigation.navigate('Board', { villaId: villaData.id, userId: adminUserId, userRole: 'ADMIN' })`; `adminUserId` stored in state, set inside `fetchVillaData`
+- Resident nav to Board: `navigation.navigate('Board', { villaId: residentVillaId, userId: residentUserId, userRole: 'RESIDENT' })`; both stored in state
+- `residentVillaId` resolved from `AsyncStorage.getItem('user') -> JSON.parse -> storedUser.villa.id`
+- Color for Community buttons: `#5856D6` (indigo/purple)
+- Pre-existing frontend TS errors: `@expo/vector-icons` type declarations missing — safe to ignore
+
+### Vehicle & Parking System (added Feb 2026)
+- Vehicle model: `id` (uuid), `plateNumber`, `isVisitor` (Boolean), `expectedDeparture` (DateTime?), `ownerId` (String -> User), `villaId` (Int -> Villa), `createdAt`
+- POST `/api/vehicles` — body: `{ plateNumber, ownerId, villaId, isVisitor, expectedDeparture? }`
+- GET `/api/villas/:villaId/vehicles/search?query=` — contains search on plateNumber; includes `owner: { name, roomNumber }` (roomNumber from ResidentRecord)
+- GET `/api/users/:userId/vehicles` — fetch vehicles by owner
+- DELETE `/api/vehicles/:vehicleId` — hard delete
+- ParkingSearch registered as `ParkingSearch` in AppNavigator (title: '주차 조회')
+- Navigation from tab screens to ParkingSearch: use `navigation.getParent()?.navigate('ParkingSearch', { villaId })`
+- ProfileScreen vehicle section: villaId resolved from `AsyncStorage.getItem('user') -> storedUser.villa.id` (residents only); useFocusEffect for vehicle list refresh
+- Visitor vehicle color: `#FF9500` (orange badge + departure text); Regular vehicle: `#E3F2FD` (blue badge)
+- Parking button color on dashboards: `#30B0C7` (teal)
+
 ## Key Files
 - `backend/src/index.ts` — all API routes
 - `backend/prisma/schema.prisma` — database schema
 - `frontend/src/navigation/AppNavigator.tsx` — all screen registrations
-- `frontend/src/navigation/MainTabNavigator.tsx` — tab navigator (admin tabs)
+- `frontend/src/navigation/MainTabNavigator.tsx` — admin 4-tab navigator (홈/커뮤니티/관리/프로필)
+- `frontend/src/navigation/ResidentTabNavigator.tsx` — resident 3-tab navigator (홈/커뮤니티/프로필)
+- `frontend/src/screens/ManagementScreen.tsx` — admin management menu (CreateInvoice, ResidentManagement, Ledger)
+- `frontend/src/screens/CommunityTabScreen.tsx` — admin community tab wrapper (loads villaId from API)
+- `frontend/src/screens/ResidentCommunityTabScreen.tsx` — resident community tab wrapper (loads villaId from storage)
 - `frontend/src/screens/AdminInvoiceScreen.tsx` — admin invoice management with auto-billing
+- `frontend/src/screens/BoardScreen.tsx` — community board (FlatList + FAB)
+- `frontend/src/screens/CreatePostScreen.tsx` — new post form (KeyboardAwareScrollView pattern)
+- `frontend/src/screens/PostDetailScreen.tsx` — post detail view with delete button (SafeAreaView edges top + useSafeAreaInsets bottom)
+- `frontend/src/screens/ParkingSearchScreen.tsx` — vehicle search by plate number; receives `{ villaId }` from route.params
+- `frontend/src/screens/ProfileScreen.tsx` — now includes vehicle management section (register/list/delete); uses ScrollView wrapper

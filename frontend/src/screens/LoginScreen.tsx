@@ -22,7 +22,7 @@ import * as AuthSession from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const API_BASE_URL = 'http://192.168.219.122:3000';
+const API_BASE_URL = 'http://192.168.219.108:3000';
 const KAKAO_CLIENT_ID = 'ba8af524bbb28a9f74ce4ed088398fdb';
 const GOOGLE_CLIENT_ID = '540282711889-b5l2sg8hpnqim3a6gaoqht2o61ee4mko.apps.googleusercontent.com';
 const googleRedirectUri = 'https://villamate-proxy.loca.lt/api/auth/proxy';
@@ -439,7 +439,7 @@ const LoginScreen = ({ navigation }: any) => {
                       style={[styles.testActionButton, { backgroundColor: '#007AFF' }]}
                       onPress={() => handleLogin('ADMIN')}
                     >
-                      <Text style={styles.testActionButtonText}>동대표 로그인</Text>
+                      <Text style={styles.testActionButtonText}>관리자 로그인</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity 
