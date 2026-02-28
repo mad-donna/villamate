@@ -410,7 +410,7 @@ ManagementScreen 메뉴 구성 (현재):
         └── multer (diskStorage)
               └── backend/uploads/{timestamp}-{random}.{ext}
                     └── app.use('/uploads', express.static())
-                          → fileUrl: http://192.168.219.124:3000/uploads/...
+                          → fileUrl: http://192.168.219.178:3000/uploads/...
 ```
 
 - **현재**: 로컬 디스크 저장, 서버 재시작 시 파일 보존 (uploads/ 디렉토리)
@@ -436,3 +436,170 @@ ManagementScreen 메뉴 구성 (현재):
 - 단일 index.ts (~900+ 라인) → 도메인별 라우터 분리 필요 (auth, villas, invoices, vehicles, events, upload)
 - 업로드 파일 로컬 저장 → 오브젝트 스토리지(S3) 마이그레이션
 - multer 파일 타입 검증 부재 → MIME whitelist 추가 필요
+
+---
+
+### 2026-02-28 — 외부 웹 청구, 대시보드 고도화, API 중앙화, 전자투표 세션
+
+#### 데이터 모델 변경 사항
+
+**ExternalBilling 모델 신규 추가**
+```
+ExternalBilling (id: uuid)
+  ├── targetName String          (청구 대상자 이름)
+  ├── phoneNumber String
+  ├── amount Int
+  ├── description String
+  ├── dueDate String             (자유 텍스트, YYYY-MM-DD)
+  ├── status String @default("PENDING")  (PENDING | PENDING_CONFIRMATION | COMPLETED)
+  ├── villaId Int → Villa
+  └── createdAt DateTime
+```
+
+**Poll / PollOption / Vote 모델 신규 추가 (전자투표)**
+```
+Poll (id: uuid)
+  ├── title String
+  ├── description String?
+  ├── isAnonymous Boolean @default(false)
+  ├── endDate DateTime
+  ├── villaId Int → Villa
+  ├── creatorId String → User
+  ├── options → PollOption[]
+  └── createdAt DateTime
+
+PollOption (id: uuid)
+  ├── text String
+  ├── pollId String → Poll
+  └── votes → Vote[]
+
+Vote (id: uuid)
+  ├── pollId String → Poll
+  ├── optionId String → PollOption
+  ├── voterId String → User
+  ├── roomNumber String           ← 1세대 1표 판별 기준
+  └── @@unique([pollId, roomNumber])  ← DB 레벨 1세대 1표 강제
+```
+
+**Villa, User 모델에 관계 필드 추가**
+```
+Villa:
+  ├── externalBills → ExternalBilling[]
+  └── polls → Poll[]
+
+User:
+  └── votes → Vote[]
+```
+
+#### 신규 엔드포인트 (2026-02-28 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `POST` | `/api/villas/:villaId/external-bills` | 외부 청구서 생성 |
+| `GET` | `/api/villas/:villaId/external-bills` | 외부 청구서 목록 |
+| `PATCH` | `/api/villas/:villaId/external-bills/:billId/confirm` | 납부 확인 처리 (COMPLETED) |
+| `GET` | `/pay/:billId` | 공개 결제 웹페이지 (HTML 응답, 앱 불필요) |
+| `POST` | `/api/public/pay/:billId/notify` | 입금 알림 전송 (PENDING_CONFIRMATION 설정) |
+| `GET` | `/api/dashboard/:userId?villaId=&role=` | 역할별 대시보드 통계 |
+| `POST` | `/api/villas/:villaId/polls` | 투표 생성 (옵션 중첩 생성) |
+| `GET` | `/api/villas/:villaId/polls` | 투표 목록 (투표수·투표자 포함) |
+| `POST` | `/api/villas/:villaId/polls/:pollId/vote` | 투표 참여 (1세대 1표 검증) |
+
+#### API_BASE_URL 중앙화 아키텍처
+
+```
+frontend/src/config.ts  ← 단일 소스
+  export const API_BASE_URL = 'http://192.168.219.178:3000';
+
+모든 22개 스크린:
+  import { API_BASE_URL } from '../config';
+```
+- 이전: 각 스크린에 하드코딩 (IP 변경 시 전 파일 수정 필요)
+- 현재: config.ts 1개 파일만 수정하면 전체 반영
+- **[RESOLVED]** 2026-02-24부터 누적되던 API_BASE_URL 기술 부채 해소
+
+#### 대시보드 아키텍처 (위젯 기반)
+
+```
+DashboardScreen (관리자 홈) — Promise.all 병렬 fetch
+  ├── GET /api/villas/:userId                (빌라 정보)
+  ├── GET /api/dashboard/:userId?role=ADMIN  (통계)
+  └── GET /api/villas/:villaId/residents     (입주민 목록)
+
+  위젯 구조:
+  ├── 미납 관리비 (→ AdminInvoice)
+  ├── 확인 대기 (→ ExternalBilling)
+  ├── 최근 공지 (→ PostDetail)
+  ├── 진행중인 투표 (→ PollList)
+  └── 바로가기 7개 (3+3+1 그리드)
+
+ResidentDashboardScreen (입주민 홈) — ScrollView ref + onLayout
+  ├── GET /api/dashboard/:userId?role=RESIDENT (통계)
+  └── 별도 청구 데이터 fetch
+
+  위젯 → scroll-to-section 패턴:
+    scrollRef.current?.scrollTo({ y: paymentSectionY.current, animated: true })
+```
+
+#### 1세대 1표 아키텍처 (이중 강제)
+
+```
+레이어 1 — DB 제약:
+  @@unique([pollId, roomNumber])
+  → 같은 세대 중복 투표 시 Prisma P2002 에러 (데이터 무결성 보장)
+
+레이어 2 — 서버 검증:
+  const existing = await prisma.vote.findUnique({
+    where: { pollId_roomNumber: { pollId, roomNumber } }
+  });
+  if (existing) return res.status(409).json({ error: '이미 투표한 세대입니다.' });
+  → 친절한 한국어 에러 메시지 반환
+
+roomNumber 조회:
+  서버에서 ResidentRecord.findFirst({ where: { userId, villaId } })로 직접 조회
+  → 클라이언트가 roomNumber를 직접 전달하지 않아도 됨 (스푸핑 방지)
+```
+
+#### 외부 청구 웹 결제 아키텍처
+
+```
+관리자 → 청구서 생성 (targetName, phone, amount)
+  → ExternalBilling DB 레코드 생성
+  → Alert: "${API_BASE_URL}/pay/${billId}" SMS 링크 안내
+
+비앱 사용자 → GET /pay/:billId
+  → Express가 HTML 페이지 직접 반환 (모바일 최적화)
+  → "입금 완료 알림 보내기" 버튼 클릭
+  → POST /api/public/pay/:billId/notify
+  → status: PENDING_CONFIRMATION
+
+관리자 → ExternalBillingScreen에서 "납부 확인" 버튼
+  → PATCH confirm → status: COMPLETED
+```
+
+#### 신규 화면 및 네비게이션 업데이트
+
+```
+AppNavigator (Stack) — 2026-02-28 추가분
+├── ExternalBilling (Stack)   ← 외부 청구 관리
+├── CreatePoll (Stack)         ← 투표 생성
+├── PollList (Stack)           ← 투표 목록
+└── PollDetail (Stack)         ← 투표 상세/참여/결과
+
+ManagementScreen 메뉴 구성 (현재):
+  ├── 새 청구서 발행하기        → CreateInvoice
+  ├── 입주민 및 전출입 관리     → ResidentManagement
+  ├── 납부 내역 확인            → AdminInvoice
+  ├── 건물 이력 및 계약 관리   → BuildingHistory
+  └── 외부 청구서 발송          → ExternalBilling (NEW)
+```
+
+#### 알려진 기술 부채 (2026-02-28 업데이트)
+
+- ~~API_BASE_URL 각 스크린에 하드코딩~~ → **[RESOLVED]** `config.ts` 중앙화 완료
+- 인증 미들웨어 없음 → JWT + Express middleware 필요
+- 비밀번호 미저장 → bcrypt + password 컬럼 추가 필요
+- 단일 index.ts (~1200+ 라인) → 도메인별 라우터 분리 필요
+- 업로드 파일 로컬 저장 → 오브젝트 스토리지(S3) 마이그레이션
+- `POST /api/public/pay/:billId/notify` 인증 없이 공개 — 악의적 상태 변경 가능
+- 전자투표 법적 증거력 → 본인인증 + 타임스탬프 암호화 미적용 (기획 요구사항 잔여)

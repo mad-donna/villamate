@@ -40,7 +40,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 // File upload endpoint — returns a public URL for the uploaded file
 app.post('/api/upload', upload.single('file'), (req: Request, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const fileUrl = `http://192.168.219.124:3000/uploads/${req.file.filename}`;
+  const fileUrl = `http://192.168.219.178:3000/uploads/${req.file.filename}`;
   res.json({ fileUrl });
 });
 
@@ -1019,6 +1019,388 @@ cron.schedule('0 9 * * *', async () => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+// Create an external bill for a villa (non-resident target — e.g. contractors, visitors)
+app.post('/api/villas/:villaId/external-bills', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  const { targetName, phoneNumber, amount, description, dueDate } = req.body;
+  if (!targetName || !phoneNumber || !amount || !description || !dueDate) {
+    return res.status(400).json({ error: 'targetName, phoneNumber, amount, description, dueDate are all required' });
+  }
+
+  try {
+    const bill = await prisma.externalBilling.create({
+      data: {
+        targetName: String(targetName),
+        phoneNumber: String(phoneNumber),
+        amount: Number(amount),
+        description: String(description),
+        dueDate: String(dueDate),
+        villaId,
+      },
+    });
+    res.status(201).json(bill);
+  } catch (error) {
+    console.error('Create external bill error:', error);
+    res.status(500).json({ error: 'Failed to create external bill' });
+  }
 });
+
+// Get all external bills for a villa (newest first)
+app.get('/api/villas/:villaId/external-bills', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  try {
+    const bills = await prisma.externalBilling.findMany({
+      where: { villaId },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(bills);
+  } catch (error) {
+    console.error('Fetch external bills error:', error);
+    res.status(500).json({ error: 'Failed to fetch external bills' });
+  }
+});
+
+// Confirm an external bill — mark it as COMPLETED
+app.patch('/api/villas/:villaId/external-bills/:billId/confirm', async (req: Request, res: Response) => {
+  const billId = String(req.params.billId);
+
+  try {
+    const bill = await prisma.externalBilling.update({
+      where: { id: billId },
+      data: { status: 'COMPLETED' },
+    });
+    res.status(200).json(bill);
+  } catch (error) {
+    console.error('Confirm external bill error:', error);
+    res.status(500).json({ error: 'Failed to confirm external bill' });
+  }
+});
+
+// Public payment page for an external bill (mobile-friendly Korean HTML)
+app.get('/pay/:billId', async (req: Request, res: Response) => {
+  const billId = String(req.params.billId);
+
+  try {
+    const bill = await prisma.externalBilling.findUnique({
+      where: { id: billId },
+      include: {
+        villa: { select: { accountNumber: true, bankName: true } },
+      },
+    });
+
+    if (!bill) {
+      return res.status(404).send('<html><body><h2>청구서를 찾을 수 없습니다.</h2></body></html>');
+    }
+
+    const formattedAmount = bill.amount.toLocaleString('ko-KR');
+    const statusLabel =
+      bill.status === 'COMPLETED' ? '납부 완료'
+      : bill.status === 'PENDING_CONFIRMATION' ? '납부 확인 중'
+      : '미납';
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(200).send(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>빌라메이트 청구서</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F2F2F7; min-height: 100vh; }
+    .container { max-width: 480px; margin: 0 auto; padding: 24px 16px 40px; }
+    .header { text-align: center; padding: 32px 0 24px; }
+    .header h1 { font-size: 22px; font-weight: 700; color: #1C1C1E; }
+    .header p { font-size: 14px; color: #8E8E93; margin-top: 6px; }
+    .card { background: #FFFFFF; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .card-title { font-size: 12px; font-weight: 600; color: #8E8E93; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
+    .row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #F2F2F7; }
+    .row:last-child { border-bottom: none; }
+    .row-label { font-size: 15px; color: #3C3C43; }
+    .row-value { font-size: 15px; font-weight: 500; color: #1C1C1E; text-align: right; max-width: 60%; }
+    .amount-value { font-size: 22px; font-weight: 700; color: #007AFF; }
+    .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+    .status-PENDING { background: #FFF3CD; color: #856404; }
+    .status-PENDING_CONFIRMATION { background: #D1ECF1; color: #0C5460; }
+    .status-COMPLETED { background: #D4EDDA; color: #155724; }
+    .btn { display: block; width: 100%; padding: 16px; background: #4CAF50; color: #FFFFFF; border: none; border-radius: 14px; font-size: 17px; font-weight: 700; cursor: pointer; text-align: center; margin-top: 8px; transition: opacity 0.15s; }
+    .btn:active { opacity: 0.8; }
+    .btn:disabled { background: #C7C7CC; cursor: not-allowed; }
+    .notice { font-size: 13px; color: #8E8E93; text-align: center; margin-top: 16px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>빌라메이트 청구서</h1>
+      <p>${bill.targetName}님께 발송된 청구서입니다</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">청구 내용</div>
+      <div class="row">
+        <span class="row-label">내용</span>
+        <span class="row-value">${bill.description}</span>
+      </div>
+      <div class="row">
+        <span class="row-label">금액</span>
+        <span class="row-value amount-value">${formattedAmount}원</span>
+      </div>
+      <div class="row">
+        <span class="row-label">납부 기한</span>
+        <span class="row-value">${bill.dueDate}</span>
+      </div>
+      <div class="row">
+        <span class="row-label">상태</span>
+        <span class="status-badge status-${bill.status}">${statusLabel}</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">입금 계좌</div>
+      <div class="row">
+        <span class="row-label">은행</span>
+        <span class="row-value">${bill.villa.bankName}</span>
+      </div>
+      <div class="row">
+        <span class="row-label">계좌번호</span>
+        <span class="row-value">${bill.villa.accountNumber}</span>
+      </div>
+    </div>
+
+    <button class="btn" id="notifyBtn" onclick="sendNotify()" ${bill.status === 'COMPLETED' ? 'disabled' : ''}>
+      ${bill.status === 'COMPLETED' ? '납부가 완료되었습니다' : '입금 완료 알림 보내기'}
+    </button>
+    <p class="notice">입금 후 위 버튼을 눌러 관리자에게 알려주세요.<br>관리자가 확인 후 납부 처리됩니다.</p>
+  </div>
+
+  <script>
+    async function sendNotify() {
+      const btn = document.getElementById('notifyBtn');
+      btn.disabled = true;
+      btn.textContent = '전송 중...';
+      try {
+        const res = await fetch('/api/public/pay/${billId}/notify', { method: 'POST' });
+        if (res.ok) {
+          alert('알림이 전송되었습니다! 관리자가 확인 후 처리합니다.');
+          btn.textContent = '알림 전송 완료';
+        } else {
+          throw new Error('서버 오류');
+        }
+      } catch (e) {
+        alert('알림 전송에 실패했습니다. 다시 시도해주세요.');
+        btn.disabled = false;
+        btn.textContent = '입금 완료 알림 보내기';
+      }
+    }
+  </script>
+</body>
+</html>`);
+  } catch (error) {
+    console.error('External bill pay page error:', error);
+    res.status(500).send('<html><body><h2>오류가 발생했습니다. 잠시 후 다시 시도해주세요.</h2></body></html>');
+  }
+});
+
+// Resident notifies payment — sets bill to PENDING_CONFIRMATION for admin review
+app.post('/api/public/pay/:billId/notify', async (req: Request, res: Response) => {
+  const billId = String(req.params.billId);
+
+  try {
+    await prisma.externalBilling.update({
+      where: { id: billId },
+      data: { status: 'PENDING_CONFIRMATION' },
+    });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('External bill notify error:', error);
+    res.status(500).json({ error: 'Failed to update bill status' });
+  }
+});
+
+// Dashboard summary data — returns role-specific stats for a user in a villa
+app.get('/api/dashboard/:userId', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.query.villaId), 10);
+  const role = String(req.query.role ?? '');
+
+  if (isNaN(villaId)) {
+    return res.status(400).json({ error: 'villaId is required' });
+  }
+
+  try {
+    if (role === 'RESIDENT') {
+      const unpaidAggregate = await prisma.invoicePayment.aggregate({
+        where: { residentId: String(req.params.userId), status: 'PENDING' },
+        _sum: { amount: true },
+      });
+      const myUnpaidAmount = unpaidAggregate._sum.amount ?? 0;
+
+      const latestNotice = await prisma.post.findFirst({
+        where: { villaId, isNotice: true },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, title: true, createdAt: true },
+      });
+
+      const myVehicleCount = await prisma.vehicle.count({
+        where: { ownerId: String(req.params.userId), villaId },
+      });
+
+      const votedPollIds = (await prisma.vote.findMany({
+        where: { voterId: String(req.params.userId) },
+        select: { pollId: true },
+      })).map((v: { pollId: string }) => v.pollId);
+
+      const activePollsCount = await prisma.poll.count({
+        where: {
+          villaId,
+          endDate: { gt: new Date() },
+          id: { notIn: votedPollIds },
+        },
+      });
+
+      return res.json({ myUnpaidAmount, latestNotice, myVehicleCount, activePollsCount });
+    }
+
+    if (role === 'ADMIN') {
+      const totalUnpaidCount = await prisma.invoicePayment.count({
+        where: { invoice: { villaId }, status: 'PENDING' },
+      });
+
+      const pendingExternalBillsCount = await prisma.externalBilling.count({
+        where: { villaId, status: 'PENDING_CONFIRMATION' },
+      });
+
+      const latestNotice = await prisma.post.findFirst({
+        where: { villaId, isNotice: true },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, title: true, createdAt: true },
+      });
+
+      const activePollsCount = await prisma.poll.count({
+        where: { villaId, endDate: { gt: new Date() } },
+      });
+
+      return res.json({ totalUnpaidCount, pendingExternalBillsCount, latestNotice, activePollsCount });
+    }
+
+    return res.status(400).json({ error: 'role must be ADMIN or RESIDENT' });
+  } catch (error) {
+    console.error('Dashboard fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard data' });
+  }
+});
+
+// Create a poll for a villa (with at least 2 options)
+app.post('/api/villas/:villaId/polls', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  const { title, description, endDate, isAnonymous, creatorId, options } = req.body;
+
+  if (!title || !endDate || !creatorId) {
+    return res.status(400).json({ error: 'title, endDate, and creatorId are required' });
+  }
+  if (!Array.isArray(options) || options.length < 2) {
+    return res.status(400).json({ error: 'options must be an array with at least 2 items' });
+  }
+
+  try {
+    const poll = await prisma.poll.create({
+      data: {
+        title,
+        description: description || null,
+        endDate: new Date(endDate),
+        isAnonymous: Boolean(isAnonymous),
+        villaId,
+        creatorId: String(creatorId),
+        options: {
+          create: (options as string[]).map((text: string) => ({ text })),
+        },
+      },
+      include: { options: true },
+    });
+    res.status(201).json(poll);
+  } catch (error) {
+    console.error('Create poll error:', error);
+    res.status(500).json({ error: 'Failed to create poll' });
+  }
+});
+
+// Get all polls for a villa (with options and vote counts)
+app.get('/api/villas/:villaId/polls', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  try {
+    const polls = await prisma.poll.findMany({
+      where: { villaId },
+      include: {
+        options: {
+          include: {
+            _count: { select: { votes: true } },
+            votes: { select: { roomNumber: true, voterId: true } },
+          },
+        },
+        _count: { select: { votes: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(polls);
+  } catch (error) {
+    console.error('Fetch polls error:', error);
+    res.status(500).json({ error: 'Failed to fetch polls' });
+  }
+});
+
+// Cast a vote — enforces 1-house-1-vote and checks poll is still active
+app.post('/api/villas/:villaId/polls/:pollId/vote', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+  const pollId = String(req.params.pollId);
+
+  const { voterId, optionId } = req.body;
+  if (!voterId || !optionId) {
+    return res.status(400).json({ error: 'voterId and optionId are required' });
+  }
+
+  try {
+    // Verify the voter is a resident of this villa and retrieve their roomNumber
+    const record = await prisma.residentRecord.findFirst({
+      where: { userId: String(voterId), villaId },
+    });
+    if (!record) return res.status(403).json({ error: '해당 빌라의 입주민이 아닙니다.' });
+    const roomNumber = record.roomNumber;
+
+    // Verify the poll exists and is still active
+    const poll = await prisma.poll.findUnique({ where: { id: pollId } });
+    if (!poll) return res.status(404).json({ error: '투표를 찾을 수 없습니다.' });
+    if (new Date() > poll.endDate) return res.status(400).json({ error: '투표 기간이 종료되었습니다.' });
+
+    // Enforce 1-house-1-vote constraint
+    const existing = await prisma.vote.findUnique({
+      where: { pollId_roomNumber: { pollId, roomNumber } },
+    });
+    if (existing) return res.status(409).json({ error: '이미 투표한 세대입니다. (1세대 1표)' });
+
+    // Create the vote
+    const vote = await prisma.vote.create({
+      data: { pollId, optionId: String(optionId), voterId: String(voterId), roomNumber },
+    });
+    res.status(201).json(vote);
+  } catch (error) {
+    console.error('Cast vote error:', error);
+    res.status(500).json({ error: 'Failed to cast vote' });
+  }
+});
+
+export { app };
+
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
+}

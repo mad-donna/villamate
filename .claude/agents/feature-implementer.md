@@ -310,7 +310,7 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 
 1. **파일 인코딩 복구** (전체 20개 스크린)
    - 한국어 문자가 `?` 시퀀스로 깨진 인코딩 오류 일괄 복구
-   - IP 주소 `192.168.219.108` → `192.168.219.124` 4개 파일 수정 (sed 사용)
+   - IP 주소 `192.168.219.108` → `192.168.219.178` 4개 파일 수정 (sed 사용)
    - JSX 닫힘 태그 누락 (`텍스트/Text>` → `텍스트</Text>`), placeholder 따옴표 누락 패턴 수정
 
 2. **관리자 차량 등록 버그 수정** (`ProfileScreen.tsx`)
@@ -357,3 +357,58 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
   formData.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
   ```
 - **자유 텍스트 날짜/시간**: MVP 단계에서 DatePicker 대신 자유 텍스트 허용 시 DB 타입도 `String`으로 맞춰야 함
+
+---
+
+### 2026-02-28 — 외부 웹 청구, 대시보드 고도화, 전자투표 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **API_BASE_URL 공통화** (`frontend/src/config.ts` 신규)
+   - 22개 스크린에 하드코딩된 `const API_BASE_URL = '...'` 일괄 제거
+   - Python 스크립트로 각 파일에 `import { API_BASE_URL } from '../config'` 자동 삽입
+   - 이후 IP 변경 시 `config.ts` 1줄만 수정하면 됨
+
+2. **외부 웹 청구 (External Web Billing)** — 앱 미설치 대상자 청구
+   - DB: `ExternalBilling` 모델 추가 (id, targetName, phoneNumber, amount, description, dueDate, status, villaId Int, createdAt)
+   - 백엔드: `POST/GET /api/villas/:villaId/external-bills`, `PATCH .../confirm` (COMPLETED), `GET /pay/:billId` (모바일 HTML 반환), `POST /api/public/pay/:billId/notify` (PENDING_CONFIRMATION)
+   - 상태 흐름: `PENDING` → `PENDING_CONFIRMATION` (납부자 알림) → `COMPLETED` (관리자 확인)
+   - 프론트: `ExternalBillingScreen.tsx` 신규 — 청구서 목록, FAB+모달 생성, Alert로 웹 링크 표시
+   - `ManagementScreen`에 "외부 청구서 발송" 메뉴 추가, `AppNavigator`에 등록
+
+3. **대시보드 위젯 기반 전면 개편**
+   - 백엔드: `GET /api/dashboard/:userId?villaId=&role=` 신규
+     - ADMIN 반환: `totalUnpaidCount`, `pendingExternalBillsCount`, `latestNotice`, `activePollsCount`
+     - RESIDENT 반환: `myUnpaidAmount`, `latestNotice`, `myVehicleCount`, `activePollsCount`
+   - `DashboardScreen.tsx` (관리자 홈) 전면 재작성: Toss 스타일 위젯 대시보드
+     - 위젯 행: 미납 관리비(파랑) + 확인 대기(주황) 나란히, 최근 공지 전체 너비, 진행중인 투표(빨강)
+     - 퀵액션 6개 (3×2 그리드): 청구서 발행/주차 조회/입주민 관리/외부 청구/공용 장부/커뮤니티
+   - `ResidentDashboardScreen.tsx` (입주민 홈) 전면 재작성
+     - 미납 관리비 전체 너비 (미납=빨강/완납=초록), 최근 공지+내 차량 나란히, 참여 가능한 투표(빨강)
+     - 퀵액션 pill 4개: 주차 조회/커뮤니티/공용 장부/투표
+     - 이름 표시: AsyncStorage 'user' JSON의 name 필드 활용
+
+4. **대시보드 위젯 인터랙션** (TouchableOpacity + 네비게이션)
+   - 모든 위젯 `View` → `TouchableOpacity` (activeOpacity 0.7)
+   - 각 위젯 헤더에 `widgetHeader` 스타일(flexRow + spaceBetween) + `chevron-forward` 아이콘
+   - 관리자: 미납 → `AdminInvoice`, 확인 대기 → `ExternalBilling`, 공지 → `PostDetail`
+   - 입주민: 미납 → ScrollView ref로 납부 내역 섹션 스크롤, 공지 → `PostDetail`, 차량 → `'프로필'` 탭
+   - 공지 없을 때: chevron 숨김 + `activeOpacity: 1` (비활성)
+
+5. **전자투표 (Electronic Voting)** — 1세대1표
+   - DB: `Poll` (id, title, description?, endDate DateTime, isAnonymous, villaId Int, creatorId), `PollOption` (id, text, pollId), `Vote` (id, pollId, optionId, voterId, roomNumber, `@@unique([pollId, roomNumber])`)
+   - 1세대1표 강제: DB 레벨 `@@unique` + 서버 409 응답 이중 보장
+   - 백엔드: `POST /api/villas/:villaId/polls`, `GET .../polls`, `POST .../polls/:pollId/vote`
+     - vote API: ResidentRecord에서 roomNumber 조회 → DB unique 충돌 시 409
+   - 대시보드 API: `activePollsCount` 추가 (ADMIN: 전체 활성 투표 수, RESIDENT: 아직 미투표 활성 수)
+   - 신규 화면: `CreatePollScreen.tsx` (DateTimePicker, 동적 옵션 추가/삭제, 익명 Switch), `PollListScreen.tsx` (D-N 남음 뱃지), `PollDetailScreen.tsx` (라디오 버튼 투표 → 결과 바 차트 + 기명 시 호수 표시)
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **IP 일괄 교체**: `grep -rl "IP" . --include="*.ts" --include="*.tsx" | xargs sed -i 's/구IP/신IP/g'` — Windows bash에서 작동
+- **Python으로 파일 일괄 수정**: sed가 복잡한 경우 Python `open + re.sub + write` 패턴이 더 안정적
+- **ScrollView ref 스크롤**: `useRef<any>(null)` + `onLayout` + `scrollRef.current?.scrollTo({ y, animated: true })`
+- **위젯 헤더 패턴**: `widgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }`
+- **1세대1표 패턴**: Vote 모델에 `@@unique([pollId, roomNumber])` + 백엔드에서 `findUnique({ where: { pollId_roomNumber: { pollId, roomNumber } } })`
+- **투표 결과 바**: `barBg`(flex row) + `barFill`(flex: pct) + 나머지(flex: 100-pct) — React Native에서 퍼센트 바 구현
+- **DateTimePicker (투표)**: iOS `inline`, Android `default`; `minimumDate={new Date()}` 으로 과거 날짜 차단

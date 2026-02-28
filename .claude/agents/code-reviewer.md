@@ -328,3 +328,72 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
   onChange={(_e, date) => { setShowPicker(Platform.OS === 'ios'); if (date) setDate(date); }}
   ```
+
+---
+
+### 2026-02-28 — 외부 웹 청구, 대시보드 고도화, API 중앙화, 전자투표 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **외부 청구 기능** 전체 구현 (DB + 백엔드 + 프론트엔드)
+- **API_BASE_URL 중앙화** (Python 스크립트 활용 일괄 치환)
+- **대시보드 위젯 리팩터링** (Admin + Resident)
+- **전자투표 기능** 전체 구현 (1세대 1표 이중 강제 포함)
+
+#### 발견된 주요 패턴 / 확인된 버그
+
+**[IMPORTANT] 공개 엔드포인트 인증 부재 — 신규 위험**
+- `POST /api/public/pay/:billId/notify` — 인증 없이 누구나 status를 PENDING_CONFIRMATION으로 변경 가능
+- billId(UUID)를 모르면 호출 불가하므로 MVP 단계에서 수용. 추후 서명 토큰 방식 권장
+- 유사 패턴: `GET /pay/:billId` HTML 페이지도 공개이나 읽기 전용이므로 위험 낮음
+
+**[GOOD] 1세대 1표 이중 강제 패턴 — 올바른 설계**
+- DB 레벨: `@@unique([pollId, roomNumber])` — 데이터 무결성 최후 보루
+- 서버 레벨: `findUnique` 사전 체크 후 409 반환 — 사용자 친화적 에러 메시지
+- roomNumber는 서버에서 `ResidentRecord.findFirst`로 직접 조회 — 클라이언트 스푸핑 불가
+- 이 패턴을 다른 "중복 방지" 기능(차량 번호판 중복 등)에도 동일하게 적용 권장
+
+**[GOOD] 대시보드 병렬 데이터 fetch — 올바른 패턴**
+- `Promise.all([dashRes, residentsRes])` 로 병렬 요청 → 불필요한 직렬 대기 없음
+- 각 fetch 결과를 개별 `if (res.ok)` 로 독립적으로 처리 → 일부 실패해도 나머지 표시 가능
+
+**[IMPORTANT] Python 활용 일괄 파일 치환**
+- bash `sed`로 복잡한 멀티라인 편집 시 "bad substitution" 에러 발생
+- 해결: Python `open + re.sub + write` 패턴 사용 → 22개 파일 일괄 처리 성공
+- **교훈**: Windows bash에서 sed 복잡 치환 → Python 스크립트로 대체할 것
+
+**[PATTERN] ScrollView ref + onLayout 스크롤 이동 패턴**
+- 입주민 대시보드의 "미납 관리비" 위젯: 같은 화면 내 특정 섹션으로 스크롤
+- `scrollRef = useRef<any>(null)`, `paymentSectionY = useRef<number>(0)`
+- `onLayout={(e) => { paymentSectionY.current = e.nativeEvent.layout.y; }}`
+- `scrollRef.current?.scrollTo({ y: paymentSectionY.current, animated: true })`
+
+#### 추가된 코딩 패턴
+
+- **위젯 헤더 표준** (`widgetHeader` style):
+  ```typescript
+  widgetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  }
+  // 내부: <Text style={styles.widgetLabel}>라벨</Text> + <Ionicons name="chevron-forward" ... />
+  ```
+
+- **탭 이름이 한국어인 경우** (ResidentTabNavigator):
+  - 탭 이름 `'프로필'`, `'홈'` 등 한국어 — `navigation.navigate('프로필')` 로 탐색
+
+- **투표 결과 퍼센트 바 계산**:
+  ```typescript
+  const total = options.reduce((sum, o) => sum + o.votes.length, 0);
+  const pct = total === 0 ? 0 : Math.round((option.votes.length / total) * 100);
+  // <View style={{ width: `${pct}%` }} />
+  ```
+
+- **DateTimePicker (전자투표용)** — `@react-native-community/datetimepicker` v8.4.4:
+  ```typescript
+  // iOS: inline 달력, Android: default (네이티브 다이얼로그)
+  display={Platform.OS === 'ios' ? 'inline' : 'default'}
+  minimumDate={new Date()}
+  ```

@@ -12,8 +12,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { API_BASE_URL } from '../config';
 
-const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface MenuItem {
   id: string;
@@ -95,6 +95,14 @@ const ManagementScreen = () => {
       icon: 'construct-outline',
       color: '#5856D6',
       onPress: () => navigation.navigate('BuildingHistory'),
+    },
+    {
+      id: 'external-billing',
+      label: '외부 청구서 발송',
+      sublabel: '앱 미설치 대상자에게 웹 링크로 청구합니다',
+      icon: 'link-outline',
+      color: '#FF3B30',
+      onPress: () => navigation.navigate('ExternalBilling'),
     },
   ];
 

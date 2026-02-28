@@ -17,6 +17,10 @@ import ResidentManagementScreen from '../screens/ResidentManagementScreen';
 import ParkingSearchScreen from '../screens/ParkingSearchScreen';
 import BuildingHistoryScreen from '../screens/BuildingHistoryScreen';
 import CreateBuildingEventScreen from '../screens/CreateBuildingEventScreen';
+import ExternalBillingScreen from '../screens/ExternalBillingScreen';
+import CreatePollScreen from '../screens/CreatePollScreen';
+import PollListScreen from '../screens/PollListScreen';
+import PollDetailScreen from '../screens/PollDetailScreen';
 import MainTabNavigator from './MainTabNavigator';
 import ResidentTabNavigator from './ResidentTabNavigator';
 
@@ -121,6 +125,26 @@ const AppNavigator = () => {
         name="CreateBuildingEvent"
         component={CreateBuildingEventScreen}
         options={{ title: '이력 등록' }}
+      />
+      <Stack.Screen
+        name="ExternalBilling"
+        component={ExternalBillingScreen}
+        options={{ title: '외부 청구 관리' }}
+      />
+      <Stack.Screen
+        name="CreatePoll"
+        component={CreatePollScreen}
+        options={{ title: '투표 생성' }}
+      />
+      <Stack.Screen
+        name="PollList"
+        component={PollListScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PollDetail"
+        component={PollDetailScreen}
+        options={{ title: '투표 상세' }}
       />
     </Stack.Navigator>
   );

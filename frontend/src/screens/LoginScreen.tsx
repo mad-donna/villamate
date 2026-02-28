@@ -19,10 +19,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import { API_BASE_URL } from '../config';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const API_BASE_URL = 'http://192.168.219.124:3000';
 const KAKAO_CLIENT_ID = 'ba8af524bbb28a9f74ce4ed088398fdb';
 const GOOGLE_CLIENT_ID = '540282711889-b5l2sg8hpnqim3a6gaoqht2o61ee4mko.apps.googleusercontent.com';
 const googleRedirectUri = 'https://villamate-proxy.loca.lt/api/auth/proxy';

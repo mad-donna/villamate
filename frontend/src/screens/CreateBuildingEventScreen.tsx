@@ -16,8 +16,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
+import { API_BASE_URL } from '../config';
 
-const API_BASE_URL = 'http://192.168.219.124:3000';
 
 const CATEGORIES = ['하자보수', '정기점검', '유지계약', '청소', '기타'];
 

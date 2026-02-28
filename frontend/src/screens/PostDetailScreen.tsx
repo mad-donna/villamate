@@ -12,8 +12,8 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { API_BASE_URL } from '../config';
 
-const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface PostDetail {
   id: string;

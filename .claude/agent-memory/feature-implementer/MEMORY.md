@@ -4,7 +4,7 @@
 - React Native (Expo) + Node.js/Express + Prisma + Supabase PostgreSQL
 - Frontend: `D:\villamate\frontend\`
 - Backend: `D:\villamate\backend\`
-- API base URL: `http://192.168.219.124:3000` (updated Feb 2026 — was .108, now .124)
+- API base URL: `http://192.168.219.178:3000` (updated Feb 2026 — was .108, now .124)
 
 ## Architecture Patterns
 
@@ -107,6 +107,26 @@
 - Visitor vehicle color: `#FF9500` (orange badge + departure text); Regular vehicle: `#E3F2FD` (blue badge)
 - Parking button color on dashboards: `#30B0C7` (teal)
 
+### Electronic Voting Frontend (added Feb 2026)
+- PollListScreen: registered as `PollList` in AppNavigator (headerShown: false); receives `{ villaId, userId }` params; FAB navigates to CreatePoll; cards navigate to PollDetail
+- CreatePollScreen: registered as `CreatePoll` (title: '투표 생성'); dynamic options list (min 2); DateTimePicker for endDate (iOS inline, Android default); Switch for isAnonymous
+- PollDetailScreen: registered as `PollDetail` (title: '투표 상세'); fetches all polls then finds by id; shows voting UI if active+not voted, results UI otherwise; 1세대1표 enforced server-side (409 response)
+- Results bar: `flexDirection: 'row'` with `flex: pct` fill + `flex: 100-pct` empty inside `barBg`
+- hasVoted detection: `poll.options.some(o => o.votes.some(v => v.voterId === userId))`
+- Admin dashboard: `activePollsCount` in DashData interface; '진행중인 투표' full-width widget; '전자투표' quick action (color #FF2D55)
+- Resident dashboard: `activePollsCount` in DashData interface; '참여 가능한 투표' full-width widget; '투표' pill button (color #FF2D55)
+- Voting color: `#FF2D55` (red/pink) used consistently across admin + resident
+
+### Electronic Voting System (added Feb 2026)
+- Poll model: `id` (uuid), `title`, `description?`, `endDate` (DateTime), `isAnonymous` (Boolean), `villaId` (Int -> Villa), `creatorId` (String -> User)
+- PollOption model: `id` (uuid), `text`, `pollId` (String -> Poll)
+- Vote model: `id` (uuid), `pollId`, `optionId`, `voterId` (String -> User), `roomNumber`; unique: `@@unique([pollId, roomNumber])` — enforces 1-house-1-vote at DB level
+- POST `/api/villas/:villaId/polls` — body: `{ title, description?, endDate, isAnonymous?, creatorId, options: string[] }`; options >= 2 items; returns poll with options
+- GET `/api/villas/:villaId/polls` — includes `options._count.votes`, `options.votes (roomNumber + voterId)`, `_count.votes`; ordered by `createdAt: 'desc'`
+- POST `/api/villas/:villaId/polls/:pollId/vote` — body: `{ voterId, optionId }`; 403 if not resident, 404 if no poll, 400 if expired, 409 if already voted (compound key: `pollId_roomNumber`)
+- Dashboard ADMIN adds `activePollsCount` = `poll.count({ where: { villaId, endDate: { gt: new Date() } } })`
+- Dashboard RESIDENT adds `activePollsCount` = active polls minus polls already voted on (fetches `votedPollIds` first via `vote.findMany`)
+
 ## Key Files
 - `backend/src/index.ts` — all API routes
 - `backend/prisma/schema.prisma` — database schema
@@ -122,3 +142,12 @@
 - `frontend/src/screens/PostDetailScreen.tsx` — post detail view with delete button (SafeAreaView edges top + useSafeAreaInsets bottom)
 - `frontend/src/screens/ParkingSearchScreen.tsx` — vehicle search by plate number; receives `{ villaId }` from route.params
 - `frontend/src/screens/ProfileScreen.tsx` — now includes vehicle management section (register/list/delete); uses ScrollView wrapper
+
+### Testing (added Feb 2026)
+- Test file: `backend/src/api.spec.ts` — Jest + supertest integration tests (no real DB)
+- Jest config in `backend/package.json`: `rootDir: "src"`, `testRegex: ".*\\.spec\\.ts$"`, `transform: ts-jest`; tsconfig uses `module: CommonJS` — no extra ts-jest globals needed
+- Run tests: `cd /d/villamate/backend && npx jest src/api.spec.ts --no-coverage --forceExit`
+- Mock strategy: `jest.mock('@prisma/client', ...)` BEFORE importing app; mock returns a single `mockPrisma` object from `new PrismaClient()`; then `const prisma = new PrismaClient() as any` to get a reference to the same mock instance
+- `app` export: `index.ts` exports `app` as a named export; `app.listen()` is wrapped in `if (require.main === module)` so the server does NOT start during tests
+- `node-cron` in `index.ts` causes "Jest did not exit" warning — use `--forceExit` flag to suppress; this is cosmetic and does not affect test correctness
+- `beforeEach(() => jest.clearAllMocks())` is essential to prevent mock state leaking between tests

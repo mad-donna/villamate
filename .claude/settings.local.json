@@ -7,7 +7,11 @@
       "Bash(npx prisma:*)",
       "Bash(npx tsc:*)",
       "Bash(npm install:*)",
-      "Bash(npx expo:*)"
+      "Bash(npx expo:*)",
+      "Bash(xargs grep:*)",
+      "Bash(xargs sed:*)",
+      "Bash(python3:*)",
+      "Bash(npx jest:*)"
     ]
   }
 }

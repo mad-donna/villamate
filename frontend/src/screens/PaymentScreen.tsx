@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import IMP from 'iamport-react-native';
+import { API_BASE_URL } from '../config';
 
-const API_BASE_URL = 'http://192.168.219.124:3000';
 
 export default function PaymentScreen({ route, navigation }: any) {
   const { paymentId, amount, invoiceName } = route.params;

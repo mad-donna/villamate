@@ -278,7 +278,7 @@
 #### 버그 수정 및 코드 복구
 
 - **파일 인코딩 오류 전체 복구**: 20개 스크린 파일의 한국어 문자가 `?` 시퀀스로 깨지는 인코딩 오류 일괄 복구
-- **API IP 주소 수정**: `192.168.219.108` → `192.168.219.124` (4개 파일 수정)
+- **API IP 주소 수정**: `192.168.219.108` → `192.168.219.178` (4개 파일 수정)
 - **관리자 차량 등록 버그 수정**: `GET /api/users/:userId/villa` (입주민 전용) → `GET /api/villas/:userId` (관리자용) 으로 수정
 
 #### 차량 관리 고도화
@@ -361,3 +361,122 @@
 4. **업로드 스토리지 마이그레이션**: 로컬 디스크 → S3 또는 Supabase Storage
 5. **API_BASE_URL 공통화**: 각 스크린 하드코딩 → `config.ts` 환경변수
 6. **투표 기능**: 초기 기획 요구사항 잔여 (전자투표 + 본인인증)
+
+---
+
+## 11. MVP 구현 현황 (2026-02-28 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### API_BASE_URL 중앙화 (기술 부채 해소)
+
+- `frontend/src/config.ts` 신규 생성:
+  ```typescript
+  export const API_BASE_URL = 'http://192.168.219.178:3000';
+  ```
+- 22개 스크린 파일 일괄 업데이트: 하드코딩 제거 → `import { API_BASE_URL } from '../config'`
+- 향후 IP/도메인 변경 시 이 파일 1개만 수정하면 전체 반영
+
+#### 외부 청구 기능 (앱 미설치 사용자 대상)
+
+초기 기획 문서의 "앱 설치 없이 모바일 웹과 알림톡만으로 청구서 확인 및 결제 가능" 요구사항 MVP 수준 구현.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `ExternalBilling` 모델 신규 (id, targetName, phoneNumber, amount, description, dueDate, status, villaId, createdAt) |
+| 백엔드 | `POST/GET /api/villas/:villaId/external-bills` |
+| 백엔드 | `PATCH /api/villas/:villaId/external-bills/:billId/confirm` (납부 확인) |
+| 백엔드 | `GET /pay/:billId` — 모바일 최적화 HTML 페이지 직접 반환 (Express) |
+| 백엔드 | `POST /api/public/pay/:billId/notify` — 입금 알림 (PENDING_CONFIRMATION 설정) |
+| ExternalBillingScreen | 청구서 목록 (상태 배지), FAB → 생성 모달, "납부 확인" 버튼 |
+| ManagementScreen | "외부 청구서 발송" 메뉴 항목 추가 |
+
+상태 흐름: `PENDING` → (비앱 사용자 알림 클릭) `PENDING_CONFIRMATION` → (관리자 확인) `COMPLETED`
+
+#### 대시보드 위젯 고도화
+
+기존 정적 대시보드를 동적 위젯 기반으로 전환. `GET /api/dashboard/:userId?villaId=&role=` 신규 엔드포인트로 역할별 통계 일괄 조회.
+
+**관리자 대시보드 (`DashboardScreen.tsx` 완전 재작성)**
+
+| 위젯 | 데이터 | 이동 |
+|------|--------|------|
+| 미납 관리비 | `totalUnpaidCount` | AdminInvoice |
+| 확인 대기 | `pendingExternalBillsCount` | ExternalBilling |
+| 최근 공지 | `latestNotice` | PostDetail |
+| 진행중인 투표 | `activePollsCount` | PollList |
+| 바로가기 (7개) | — | 각 화면 |
+
+**입주민 대시보드 (`ResidentDashboardScreen.tsx` 완전 재작성)**
+
+| 위젯 | 데이터 | 이동 |
+|------|--------|------|
+| 미납 관리비 | `myUnpaidAmount` | 같은 화면 내 스크롤 |
+| 최근 공지 | `latestNotice` | PostDetail |
+| 내 차량 | `myVehicleCount` | 프로필 탭 |
+| 참여 가능한 투표 | `activePollsCount` | PollList |
+
+#### 전자투표 기능 (초기 기획 요구사항 달성)
+
+초기 기획 문서의 "주요 안건 처리를 위한 비동기식 모바일 투표 기능" 요구사항 MVP 수준 구현.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Poll` 모델 (id, title, description?, isAnonymous, endDate, villaId, creatorId) |
+| DB | `PollOption` 모델 (id, text, pollId) |
+| DB | `Vote` 모델 (id, pollId, optionId, voterId, roomNumber, `@@unique([pollId, roomNumber])`) |
+| 백엔드 | `POST /api/villas/:villaId/polls` (옵션 중첩 생성) |
+| 백엔드 | `GET /api/villas/:villaId/polls` (투표수·투표자 포함) |
+| 백엔드 | `POST /api/villas/:villaId/polls/:pollId/vote` (1세대 1표 이중 검증) |
+| CreatePollScreen | 제목/설명/옵션(동적)/종료일(DateTimePicker)/익명 여부 |
+| PollListScreen | 카드 목록, D-N 남은 일, 총 투표수, FAB으로 생성 이동 |
+| PollDetailScreen | 미투표: 라디오 선택 → 투표하기 / 투표완료·종료: 퍼센트 바 + 기명 시 호수 칩 표시 |
+
+1세대 1표 구현: DB `@@unique([pollId, roomNumber])` 제약 + 서버 사전 체크(409 반환) 이중 강제
+
+### 현재 구현된 전체 화면 목록 (2026-02-28 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `ProfileSetupScreen`, `OnboardingScreen`, `ResidentJoinScreen`
+
+#### 관리자 탭 (4개)
+- `DashboardScreen` (홈 — 위젯), `BoardScreen` (커뮤니티), `ManagementScreen` (관리), `ProfileScreen` (프로필)
+
+#### 입주민 탭 (3개)
+- `ResidentDashboardScreen` (홈 — 위젯), `BoardScreen` (커뮤니티), `ProfileScreen` (프로필)
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen` (전출 처리 + 초대코드)
+- `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen`, `CreatePostScreen`
+- `ParkingSearchScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`
+- `ExternalBillingScreen` ← NEW
+- `CreatePollScreen` ← NEW
+- `PollListScreen` ← NEW
+- `PollDetailScreen` ← NEW
+
+### 현재 기술 스택 (2026-02-28 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~1200+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| API 설정 | `frontend/src/config.ts` (API_BASE_URL 중앙화) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker v8.4.4 |
+| 키보드 처리 | react-native-keyboard-aware-scroll-view |
+| SafeArea | react-native-safe-area-context |
+
+### 다음 개발 우선순위 (2026-02-28 업데이트)
+
+1. **보안 강화**: 비밀번호 해싱(bcrypt), JWT 인증 미들웨어, PG 결제 `imp_uid` 서버 검증
+2. **알림 기능**: 미납자 푸시 알림 또는 카카오 알림톡 (핵심 기획 요구사항)
+3. **공용 장부 실데이터 연동**: LedgerScreen 더미 데이터 → 실제 LedgerTransaction DB 연동
+4. **외부 청구 SMS 자동화**: 수동 복사 → 카카오 알림톡 자동 발송 연결
+5. **업로드 스토리지 마이그레이션**: 로컬 디스크 → S3 또는 Supabase Storage

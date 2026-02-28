@@ -14,8 +14,8 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../config';
 
-const API_BASE_URL = 'http://192.168.219.124:3000';
 
 type InvoiceType = 'FIXED' | 'VARIABLE';
 

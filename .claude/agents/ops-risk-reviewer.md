@@ -299,3 +299,49 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 | multer 파일 타입 검증 부재 | MEDIUM | 신규 |
 | 업로드 파일 공개 접근 | MEDIUM | 신규 |
 | ResidentRecord 하드 삭제 | LOW | 신규, 수용 |
+
+---
+
+### 2026-02-28 — 외부 웹 청구, 대시보드 고도화, API 중앙화, 전자투표 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] API_BASE_URL 하드코딩**
+- 기존: 22개 스크린 각각에 IP 하드코딩 → IP 변경 시 전 파일 수정 필요
+- 해결: `frontend/src/config.ts` 중앙화 완료. 이제 1개 파일만 수정하면 전체 반영
+- **완전 해소됨**
+
+**[NEW-MEDIUM] POST /api/public/pay/:billId/notify — 인증 없는 공개 상태 변경**
+- 인증 없이 billId(UUID)만 알면 status를 PENDING_CONFIRMATION으로 변경 가능
+- UUID 자체가 guessable하지 않으므로 실질적 위험은 낮음 (정보 노출 전제 필요)
+- MVP 단계 수용, 향후 HMAC 서명 토큰 또는 단회성 결제 토큰 방식으로 개선 필요
+
+**[NEW-MEDIUM] GET /api/dashboard/:userId — 인증 없이 타인 통계 조회 가능**
+- `?villaId=` 파라미터와 userId를 임의 조합하면 다른 빌라 데이터 접근 가능
+- 현재 모든 API에 인증 미들웨어 없으므로 기존 위험과 동일 수준
+- JWT 인증 미들웨어 도입 시 함께 해소됨
+
+**[NEW-LOW] POST /api/villas/:villaId/polls/vote — userId 클라이언트 전달**
+- 투표 시 `voterId`를 클라이언트 요청 바디에서 받음 → 인증 없이 타인 명의 투표 가능
+- 단, roomNumber는 서버에서 ResidentRecord 조회로 결정 → 세대 중복 방지는 보장됨
+- 해소 방법: JWT 인증 미들웨어 적용 후 `req.user.id`로 voterId 대체
+
+**[NEW-LOW] ExternalBilling 알림 URL 앱 내 노출**
+- Alert 메시지에 `${API_BASE_URL}/pay/${newBill.id}` 표시 → 관리자가 SMS로 수동 발송
+- billId가 UUID이므로 추측 불가. 내부 IP(192.168.x.x)가 Alert에 표시되나 관리자에게만 보임
+- 프로덕션 배포 시 도메인 URL로 변경 필요
+
+#### 현재 누적 위험 현황 요약 (2026-02-28 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 | HIGH | 미해결 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| 비밀번호 해싱 없음 | HIGH | 미해결 |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| 공개 notify 엔드포인트 (상태 변경) | MEDIUM | 신규, 수용 |
+| dashboard 통계 인증 없이 조회 | MEDIUM | 신규, JWT 적용 시 해소 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| vote userId 클라이언트 전달 | LOW | 신규, JWT 적용 시 해소 |
+| ResidentRecord 하드 삭제 | LOW | 수용 |

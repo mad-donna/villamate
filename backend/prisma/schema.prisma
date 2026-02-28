@@ -30,6 +30,8 @@ model User {
   comments        Comment[]
   vehicles        Vehicle[]
   buildingEvents  BuildingEvent[]
+  createdPolls    Poll[]
+  votes           Vote[]
 }
 
 model Villa {
@@ -44,12 +46,14 @@ model Villa {
   inviteCode      String?             @unique
   autoBillingDay  Int?
   createdAt       DateTime            @default(now())
-  residents       ResidentRecord[]
-  transactions    LedgerTransaction[]
-  invoices        Invoice[]
-  posts           Post[]
-  vehicles        Vehicle[]
-  buildingEvents  BuildingEvent[]
+  residents        ResidentRecord[]
+  transactions     LedgerTransaction[]
+  invoices         Invoice[]
+  posts            Post[]
+  vehicles         Vehicle[]
+  buildingEvents   BuildingEvent[]
+  externalBillings ExternalBilling[]
+  polls            Poll[]
 }
 
 enum InvoiceType {
@@ -154,4 +158,54 @@ model BuildingEvent {
   creatorId      String
   creator        User     @relation(fields: [creatorId], references: [id])
   createdAt      DateTime @default(now())
+}
+
+model ExternalBilling {
+  id          String   @id @default(uuid())
+  targetName  String
+  phoneNumber String
+  amount      Int
+  description String
+  dueDate     String
+  status      String   @default("PENDING")
+  villaId     Int
+  villa       Villa    @relation(fields: [villaId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Poll {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  endDate     DateTime
+  isAnonymous Boolean      @default(false)
+  villaId     Int
+  villa       Villa        @relation(fields: [villaId], references: [id])
+  creatorId   String
+  creator     User         @relation(fields: [creatorId], references: [id])
+  options     PollOption[]
+  votes       Vote[]
+  createdAt   DateTime     @default(now())
+}
+
+model PollOption {
+  id     String @id @default(uuid())
+  text   String
+  pollId String
+  poll   Poll   @relation(fields: [pollId], references: [id])
+  votes  Vote[]
+}
+
+model Vote {
+  id         String     @id @default(uuid())
+  pollId     String
+  poll       Poll       @relation(fields: [pollId], references: [id])
+  optionId   String
+  option     PollOption @relation(fields: [optionId], references: [id])
+  voterId    String
+  voter      User       @relation(fields: [voterId], references: [id])
+  roomNumber String
+  createdAt  DateTime   @default(now())
+
+  @@unique([pollId, roomNumber])
 }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,14 +6,13 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
-  Alert,
-  TouchableOpacity
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-
-const API_BASE_URL = 'http://192.168.219.124:3000';
+import { API_BASE_URL } from '../config';
 
 interface Villa {
   id: number;
@@ -27,21 +26,34 @@ interface Villa {
   };
 }
 
+interface DashData {
+  totalUnpaidCount: number;
+  pendingExternalBillsCount: number;
+  latestNotice: { id: string; title: string; createdAt: string } | null;
+  activePollsCount: number;
+}
+
+interface Resident {
+  recordId: string;
+  userId: string;
+  name: string;
+  roomNumber: string;
+  joinedAt: string;
+}
+
 const DashboardScreen = ({ navigation }: any) => {
   const [villaData, setVillaData] = useState<Villa | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [residents, setResidents] = useState<any[]>([]);
-  const [villaInfo, setVillaInfo] = useState<any>(null);
-  const [loadingResidents, setLoadingResidents] = useState(false);
+  const [dashData, setDashData] = useState<DashData | null>(null);
+  const [residents, setResidents] = useState<Resident[]>([]);
   const [adminUserId, setAdminUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const fetchVillaData = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     try {
       setLoading(true);
-      let userId = await AsyncStorage.getItem('userId');
 
-      // 폴백: userId 없으면 user 객체에서 시도
+      // Resolve userId
+      let userId = await AsyncStorage.getItem('userId');
       if (!userId) {
         const userStr = await AsyncStorage.getItem('user');
         if (userStr) {
@@ -50,7 +62,6 @@ const DashboardScreen = ({ navigation }: any) => {
           if (userId) await AsyncStorage.setItem('userId', userId);
         }
       }
-
       if (!userId) {
         setVillaData(null);
         return;
@@ -58,23 +69,37 @@ const DashboardScreen = ({ navigation }: any) => {
 
       setAdminUserId(userId);
 
-      console.log(`Fetching villas for adminId: ${userId}`);
-      const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
+      // Fetch villa list
+      const villaRes = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
+      if (!villaRes.ok) {
+        setVillaData(null);
+        return;
+      }
+      const villas = await villaRes.json();
+      if (!Array.isArray(villas) || villas.length === 0) {
+        setVillaData(null);
+        return;
+      }
+      const villa = villas[0] as Villa;
+      setVillaData(villa);
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
+      // Fetch dashboard stats + residents in parallel
+      const [dashRes, residentsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/dashboard/${userId}?villaId=${villa.id}&role=ADMIN`),
+        fetch(`${API_BASE_URL}/api/villas/${villa.id}/residents`),
+      ]);
+
+      if (dashRes.ok) {
+        const dd = await dashRes.json();
+        setDashData(dd);
       }
 
-      const villas = await response.json();
-      console.log('Villas received:', villas);
-
-      if (Array.isArray(villas) && villas.length > 0) {
-        setVillaData(villas[0]);
-      } else {
-        setVillaData(null);
+      if (residentsRes.ok) {
+        const rd = await residentsRes.json();
+        setResidents(Array.isArray(rd) ? rd : []);
       }
     } catch (err) {
-      console.error('Fetch villa error:', err);
+      console.error('Dashboard load error:', err);
     } finally {
       setLoading(false);
     }
@@ -82,56 +107,18 @@ const DashboardScreen = ({ navigation }: any) => {
 
   useFocusEffect(
     useCallback(() => {
-      fetchVillaData();
-    }, [fetchVillaData])
+      loadAll();
+    }, [loadAll])
   );
 
-  // Fetch the resident list whenever the villa is loaded
-  useEffect(() => {
-    const fetchResidents = async () => {
-      try {
-        setLoadingResidents(true);
-
-        // Resolve userId (same fallback logic as fetchVillaData)
-        let userId = await AsyncStorage.getItem('userId');
-        if (!userId) {
-          const userStr = await AsyncStorage.getItem('user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            userId = user.id;
-            if (userId) await AsyncStorage.setItem('userId', userId);
-          }
-        }
-
-        if (!userId) return;
-
-        // 1. Fetch the villa list to get the villa id
-        const villaResponse = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
-        if (!villaResponse.ok) return;
-
-        const villas = await villaResponse.json();
-        if (!Array.isArray(villas) || villas.length === 0) return;
-
-        const firstVilla = villas[0];
-        setVillaInfo(firstVilla);
-
-        // 2. Fetch residents for that villa
-        const residentsResponse = await fetch(
-          `${API_BASE_URL}/api/villas/${firstVilla.id}/residents`
-        );
-        if (!residentsResponse.ok) return;
-
-        const data = await residentsResponse.json();
-        setResidents(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Fetch residents error:', err);
-      } finally {
-        setLoadingResidents(false);
-      }
-    };
-
-    fetchResidents();
-  }, []);
+  const formatDate = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+    } catch {
+      return iso;
+    }
+  };
 
   if (loading) {
     return (
@@ -147,15 +134,15 @@ const DashboardScreen = ({ navigation }: any) => {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.emptyContainer}>
-          <Text style={styles.header}>환영합니다</Text>
+          <Text style={styles.emptyTitle}>환영합니다</Text>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>등록된 빌라 정보가 없습니다</Text>
             <Text style={styles.cardSubtitle}>서비스 이용을 위해 빌라를 먼저 등록해주세요.</Text>
             <TouchableOpacity
-              style={styles.settleButton}
+              style={styles.registerButton}
               onPress={() => navigation.navigate('Onboarding')}
             >
-              <Text style={styles.actionButtonText}>빌라 등록하기</Text>
+              <Text style={styles.registerButtonText}>빌라 등록하기</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -163,111 +150,180 @@ const DashboardScreen = ({ navigation }: any) => {
     );
   }
 
+  const quickActions = [
+    {
+      label: '청구서 발행',
+      icon: 'receipt-outline' as const,
+      color: '#FF9500',
+      onPress: () => navigation.navigate('CreateInvoice'),
+    },
+    {
+      label: '주차 조회',
+      icon: 'car-outline' as const,
+      color: '#30B0C7',
+      onPress: () => navigation.navigate('ParkingSearch', { villaId: villaData.id }),
+    },
+    {
+      label: '입주민 관리',
+      icon: 'people-outline' as const,
+      color: '#34C759',
+      onPress: () => navigation.navigate('ResidentManagement'),
+    },
+    {
+      label: '외부 청구',
+      icon: 'link-outline' as const,
+      color: '#FF3B30',
+      onPress: () => navigation.navigate('ExternalBilling'),
+    },
+    {
+      label: '공용 장부',
+      icon: 'book-outline' as const,
+      color: '#007AFF',
+      onPress: () => navigation.navigate('Ledger'),
+    },
+    {
+      label: '커뮤니티',
+      icon: 'chatbubbles-outline' as const,
+      color: '#5856D6',
+      onPress: () =>
+        navigation.navigate('Board', {
+          villaId: villaData.id,
+          userId: adminUserId,
+          userRole: 'ADMIN',
+        }),
+    },
+    {
+      label: '전자투표',
+      icon: 'checkbox-outline' as const,
+      color: '#FF2D55',
+      onPress: () => navigation.navigate('PollList', { villaId: villaData.id, userId: adminUserId }),
+    },
+  ];
+
+  // Split quick actions into rows of 3
+  const actionRows: (typeof quickActions)[] = [];
+  for (let i = 0; i < quickActions.length; i += 3) {
+    actionRows.push(quickActions.slice(i, i + 3));
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.header}>{villaData.name}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.card}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>주소</Text>
-            <Text style={styles.infoValue}>{villaData.address}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>총 세대수</Text>
-            <Text style={styles.infoValue}>{villaData.totalUnits}세대</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>관리중인 세대</Text>
-            <Text style={styles.infoValue}>{villaData._count?.residents || 0}세대</Text>
-          </View>
+        {/* Header */}
+        <View style={styles.headerSection}>
+          <Text style={styles.greeting}>안녕하세요, 관리자님 👋</Text>
+          <Text style={styles.villaName}>{villaData.name}</Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>공용 계좌 정보</Text>
-          <View style={styles.billingRow}>
-            <Text style={styles.billingLabel}>{villaData.bankName}</Text>
-            <Text style={styles.accountNumber}>{villaData.accountNumber}</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionContainer}>
+        {/* Widget row: 미납 관리비 + 확인 대기 */}
+        <View style={styles.widgetRow}>
           <TouchableOpacity
-            style={[styles.actionButton, styles.createButton]}
-            onPress={() => navigation.navigate('CreateInvoice')}
+            style={[styles.widget, styles.widgetHalf]}
+            onPress={() => navigation.navigate('AdminInvoice')}
+            activeOpacity={0.7}
           >
-            <Text style={styles.actionButtonText}>새 청구서 발행하기</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.remindButton]}
-            onPress={() => navigation.navigate('ResidentManagement')}
-          >
-            <Text style={styles.actionButtonText}>입주민 관리</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.settleButton]}
-            onPress={() => navigation.navigate('Ledger')}
-          >
-            <Text style={styles.actionButtonText}>납부 내역 확인</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.communityButton]}
-            onPress={() =>
-              navigation.navigate('Board', {
-                villaId: villaData.id,
-                userId: adminUserId,
-                userRole: 'ADMIN',
-              })
-            }
-          >
-            <Text style={styles.actionButtonText}>커뮤니티</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.parkingButton]}
-            onPress={() =>
-              navigation.navigate('ParkingSearch', {
-                villaId: villaData.id,
-              })
-            }
-          >
-            <Text style={styles.actionButtonText}>주차 조회</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 입주민 명단 섹션 */}
-        <View style={styles.residentSection}>
-          <Text style={styles.sectionTitle}>입주민 명단</Text>
-          {loadingResidents ? (
-            <ActivityIndicator size="small" color="#007AFF" style={styles.residentLoader} />
-          ) : residents.length === 0 ? (
-            <View style={styles.card}>
-              <Text style={styles.emptyResidentText}>아직 등록된 입주민이 없습니다.</Text>
+            <View style={styles.widgetHeader}>
+              <Text style={styles.widgetLabel}>미납 관리비</Text>
+              <Ionicons name="chevron-forward" size={14} color="#C7C7CC" />
             </View>
-          ) : (
-            <FlatList
-              data={residents}
-              keyExtractor={(item, index) => item.id ?? String(index)}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <View style={styles.residentCard}>
-                  <View style={styles.roomBadge}>
-                    <Text style={styles.roomBadgeText}>{item.roomNumber}호</Text>
-                  </View>
-                  <View style={styles.residentInfo}>
-                    <Text style={styles.residentName}>{item.name}</Text>
-                    {item.phone ? (
-                      <Text style={styles.residentPhone}>{item.phone}</Text>
-                    ) : null}
-                  </View>
-                </View>
-              )}
-            />
-          )}
+            <Text style={[styles.widgetNumber, { color: '#007AFF' }]}>
+              {dashData?.totalUnpaidCount ?? 0}건
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.widget, styles.widgetHalf]}
+            onPress={() => navigation.navigate('ExternalBilling')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.widgetHeader}>
+              <Text style={styles.widgetLabel}>확인 대기</Text>
+              <Ionicons name="chevron-forward" size={14} color="#C7C7CC" />
+            </View>
+            <Text style={[styles.widgetNumber, { color: '#FF9500' }]}>
+              {dashData?.pendingExternalBillsCount ?? 0}건
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Full-width notice widget */}
+        <TouchableOpacity
+          style={styles.widget}
+          onPress={() => dashData?.latestNotice && navigation.navigate('PostDetail', { postId: dashData.latestNotice.id })}
+          activeOpacity={dashData?.latestNotice ? 0.7 : 1}
+        >
+          <View style={styles.widgetHeader}>
+            <Text style={styles.widgetSmallLabel}>최근 공지</Text>
+            {dashData?.latestNotice && <Ionicons name="chevron-forward" size={14} color="#C7C7CC" />}
+          </View>
+          {dashData?.latestNotice ? (
+            <>
+              <Text style={styles.noticeTitle}>{dashData.latestNotice.title}</Text>
+              <Text style={styles.noticeDate}>{formatDate(dashData.latestNotice.createdAt)}</Text>
+            </>
+          ) : (
+            <Text style={styles.noticeEmpty}>최근 공지가 없습니다</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Active polls widget */}
+        <TouchableOpacity
+          style={styles.widget}
+          onPress={() => navigation.navigate('PollList', { villaId: villaData.id, userId: adminUserId })}
+          activeOpacity={0.7}
+        >
+          <View style={styles.widgetHeader}>
+            <Text style={styles.widgetSmallLabel}>진행중인 투표</Text>
+            <Ionicons name="chevron-forward" size={14} color="#C7C7CC" />
+          </View>
+          <Text style={[styles.widgetNumber, { color: '#FF2D55' }]}>
+            {dashData?.activePollsCount ?? 0}건
+          </Text>
+        </TouchableOpacity>
+
+        {/* Quick Actions */}
+        <Text style={styles.sectionLabel}>바로가기</Text>
+        {actionRows.map((row, rowIndex) => (
+          <View key={rowIndex} style={styles.actionRow}>
+            {row.map((action, colIndex) => (
+              <TouchableOpacity
+                key={colIndex}
+                style={styles.actionCard}
+                onPress={action.onPress}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.actionIconCircle, { backgroundColor: action.color + '1A' }]}>
+                  <Ionicons name={action.icon} size={24} color={action.color} />
+                </View>
+                <Text style={styles.actionLabel}>{action.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ))}
+
+        {/* Resident list */}
+        <Text style={styles.sectionLabel}>입주민 명단</Text>
+        {residents.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.emptyResidentText}>아직 등록된 입주민이 없습니다.</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={residents}
+            keyExtractor={(item, index) => item.recordId ?? String(index)}
+            scrollEnabled={false}
+            renderItem={({ item }) => (
+              <View style={styles.residentCard}>
+                <View style={styles.roomBadge}>
+                  <Text style={styles.roomBadgeText}>{item.roomNumber}호</Text>
+                </View>
+                <View style={styles.residentInfo}>
+                  <Text style={styles.residentName}>{item.name}</Text>
+                </View>
+              </View>
+            )}
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -276,127 +332,187 @@ const DashboardScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#F2F3F7',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
+
+  // Empty state
   emptyContainer: {
     flex: 1,
     padding: 20,
     justifyContent: 'center',
   },
-  header: {
+  emptyTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1C1C1E',
     marginBottom: 20,
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
-    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 10,
+    color: '#1C1C1E',
+    marginBottom: 8,
   },
   cardSubtitle: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  infoLabel: {
-    fontSize: 14,
     color: '#8E8E93',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#1C1C1E',
-    fontWeight: '500',
-    flex: 1,
-    textAlign: 'right',
-    marginLeft: 20,
-  },
-  billingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  billingLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  accountNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  actionContainer: {
     marginBottom: 20,
   },
-  actionButton: {
-    height: 55,
-    borderRadius: 12,
+  registerButton: {
+    backgroundColor: '#007AFF',
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
   },
-  remindButton: {
-    backgroundColor: '#34C759',
-  },
-  createButton: {
-    backgroundColor: '#FF9500',
-  },
-  settleButton: {
-    backgroundColor: '#007AFF',
-  },
-  communityButton: {
-    backgroundColor: '#5856D6',
-  },
-  parkingButton: {
-    backgroundColor: '#30B0C7',
-  },
-  actionButtonText: {
+  registerButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
-  },
-  residentSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
     fontWeight: '700',
-    color: '#333',
+  },
+
+  // Header
+  headerSection: {
+    marginBottom: 24,
+  },
+  greeting: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  villaName: {
+    fontSize: 15,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+
+  // Widgets
+  widgetRow: {
+    flexDirection: 'row',
+    gap: 12,
     marginBottom: 12,
   },
-  residentLoader: {
-    marginTop: 16,
+  widget: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
+    marginBottom: 12,
   },
+  widgetHalf: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  widgetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  widgetLabel: {
+    fontSize: 13,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  widgetSmallLabel: {
+    fontSize: 11,
+    color: '#8E8E93',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  widgetNumber: {
+    fontSize: 32,
+    fontWeight: '800',
+    lineHeight: 38,
+  },
+
+  // Notice widget
+  noticeTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  noticeDate: {
+    fontSize: 13,
+    color: '#8E8E93',
+  },
+  noticeEmpty: {
+    fontSize: 14,
+    color: '#C7C7CC',
+    fontStyle: 'italic',
+  },
+
+  // Section label
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#8E8E93',
+    marginBottom: 12,
+    marginTop: 24,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // Quick actions
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  actionCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  actionIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  actionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    textAlign: 'center',
+  },
+
+  // Resident list
   emptyResidentText: {
     fontSize: 14,
     color: '#8E8E93',
@@ -411,10 +527,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
   },
   roomBadge: {
     backgroundColor: '#007AFF',
@@ -437,11 +553,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1C1C1E',
-    marginBottom: 2,
-  },
-  residentPhone: {
-    fontSize: 13,
-    color: '#8E8E93',
   },
 });
 
