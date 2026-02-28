@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   Modal,
-  Image,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,9 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { width } = Dimensions.get('window');
 
 const TRANSACTIONS = [
-  { id: '1', date: '2026-03-02', desc: '크린탑 청소용역', amount: -100000, type: 'expense', hasReceipt: true },
-  { id: '2', date: '2026-03-02', desc: '현대엘리베이터 유지보수', amount: -150000, type: 'expense', hasReceipt: true },
-  { id: '3', date: '2026-03-01', desc: '101호 관리비 입금', amount: 35000, type: 'income', hasReceipt: false },
+  { id: '1', date: '2026-03-02', desc: '클리닝 용역비', amount: -100000, type: 'expense', hasReceipt: true },
+  { id: '2', date: '2026-03-02', desc: '엘리베이터 수리보수', amount: -150000, type: 'expense', hasReceipt: true },
+  { id: '3', date: '2026-03-01', desc: '101호 관리비 납금', amount: 35000, type: 'income', hasReceipt: false },
 ];
 
 const LedgerScreen = () => {
@@ -51,7 +50,7 @@ const LedgerScreen = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerLabel}>우리 빌라 공용 통장</Text>
-        <Text style={styles.balanceText}>₩ 1,250,000</Text>
+        <Text style={styles.balanceText}>₩1,250,000</Text>
       </View>
 
       <View style={styles.listContainer}>
@@ -79,7 +78,7 @@ const LedgerScreen = () => {
               <Text style={styles.receiptLabel}>상태: 결제 완료</Text>
               <View style={styles.fakeImage}>
                 <Text style={styles.fakeImageText}>영수증 이미지 샘플</Text>
-                <Text style={styles.fakeImageSubtext}>[인증 완료]</Text>
+                <Text style={styles.fakeImageSubtext}>[검증 완료]</Text>
               </View>
             </View>
             <TouchableOpacity style={styles.closeButton} onPress={() => setIsModalVisible(false)}>

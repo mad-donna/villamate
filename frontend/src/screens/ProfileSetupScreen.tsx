@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 const ProfileSetupScreen = ({ navigation }: any) => {
   const [name, setName] = useState('');
@@ -75,7 +75,7 @@ const ProfileSetupScreen = ({ navigation }: any) => {
           navigation.replace('ResidentJoin');
         }
       } else {
-        Alert.alert('오류', updatedUser.error || '프로필 설정에 실패했습니다.');
+        Alert.alert('오류', updatedUser.error || '프로필 설정이 실패했습니다.');
       }
     } catch (error) {
       console.error('Profile setup error:', error);
@@ -93,8 +93,8 @@ const ProfileSetupScreen = ({ navigation }: any) => {
           style={styles.content}
         >
           <View style={styles.header}>
-            <Text style={styles.title}>프로필 완성하기</Text>
-            <Text style={styles.subtitle}>편리한 이용을 위해 추가 정보를 입력해주세요.</Text>
+            <Text style={styles.title}>프로필 설정하기</Text>
+            <Text style={styles.subtitle}>서비스 이용을 위해 추가 정보를 입력해주세요.</Text>
           </View>
 
           <View style={styles.form}>
@@ -109,7 +109,7 @@ const ProfileSetupScreen = ({ navigation }: any) => {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>휴대폰 번호</Text>
+              <Text style={styles.label}>전화번호</Text>
               <TextInput
                 style={styles.input}
                 placeholder="01012345678"

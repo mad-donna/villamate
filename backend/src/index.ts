@@ -3,6 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import cron from 'node-cron';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -10,12 +13,35 @@ const prisma = new PrismaClient();
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static(uploadsDir));
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', message: 'Villamate API is running' });
+});
+
+// File upload endpoint — returns a public URL for the uploaded file
+app.post('/api/upload', upload.single('file'), (req: Request, res: Response) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const fileUrl = `http://192.168.219.124:3000/uploads/${req.file.filename}`;
+  res.json({ fileUrl });
 });
 
 // Auth login (Simple version: Find or Create)
@@ -505,35 +531,86 @@ app.get('/api/users/:userId/villa', async (req: Request, res: Response) => {
   }
 });
 
-// Get residents by villa ID
+// Get residents by villa ID (ordered by roomNumber asc, includes recordId + joinedAt)
 app.get('/api/villas/:villaId/residents', async (req: Request, res: Response) => {
   const villaId = parseInt(String(req.params.villaId), 10);
-
-  if (isNaN(villaId)) {
-    return res.status(400).json({ error: 'villaId must be a number' });
-  }
+  if (isNaN(villaId)) return res.status(400).json({ error: 'villaId must be a number' });
 
   try {
     const records = await prisma.residentRecord.findMany({
       where: { villaId },
-      include: {
-        user: {
-          select: { id: true, name: true, phone: true },
-        },
-      },
+      include: { user: true },
+      orderBy: { roomNumber: 'asc' },
     });
-
-    const residents = records.map((record) => ({
-      id: record.user.id,
-      name: record.user.name,
-      phone: record.user.phone,
-      roomNumber: record.roomNumber,
+    const result = records.map((r) => ({
+      recordId: r.id,
+      userId: r.userId,
+      name: r.user.name,
+      roomNumber: r.roomNumber,
+      joinedAt: r.joinedAt,
     }));
-
-    res.status(200).json(residents);
+    res.json(result);
   } catch (error) {
     console.error('Fetch residents error:', error);
     res.status(500).json({ error: 'Failed to fetch residents' });
+  }
+});
+
+// Move-out: delete a resident's ResidentRecord for this villa (keeps payment history)
+app.post('/api/villas/:villaId/residents/:residentId/move-out', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  const residentId = String(req.params.residentId);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'villaId must be a number' });
+
+  try {
+    await prisma.residentRecord.deleteMany({
+      where: {
+        villaId,
+        userId: residentId,
+      },
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Move-out error:', error);
+    res.status(500).json({ error: 'Failed to process move-out' });
+  }
+});
+
+// Get all vehicles registered in a villa (includes owner name + roomNumber)
+app.get('/api/villas/:villaId/vehicles', async (req: Request, res: Response) => {
+  const { villaId } = req.params;
+  try {
+    const vehicles = await prisma.vehicle.findMany({
+      where: { villaId: Number(villaId) },
+      include: {
+        owner: {
+          include: {
+            residentRecords: {
+              where: { villaId: Number(villaId) },
+              select: { roomNumber: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const result = vehicles.map((v) => ({
+      id: v.id,
+      plateNumber: v.plateNumber,
+      modelName: (v as any).modelName ?? null,
+      isVisitor: v.isVisitor,
+      expectedDeparture: v.expectedDeparture ?? null,
+      owner: {
+        name: v.owner.name,
+        roomNumber: v.owner.residentRecords[0]?.roomNumber ?? null,
+      },
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Fetch villa vehicles error:', error);
+    res.status(500).json({ error: 'Failed to fetch vehicles' });
   }
 });
 
@@ -565,6 +642,66 @@ app.get('/api/villas/:villaId/vehicles/search', async (req: Request, res: Respon
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// Create a building event for a villa (history/contract record)
+app.post('/api/villas/:villaId/building-events', async (req: Request, res: Response) => {
+  const { villaId } = req.params;
+  const { title, description, category, eventDate, contractorName, contactNumber, creatorId, attachmentUrl } = req.body;
+  if (!title || !category || !eventDate || !creatorId) {
+    return res.status(400).json({ error: 'title, category, eventDate, creatorId are required' });
+  }
+  try {
+    const event = await prisma.buildingEvent.create({
+      data: {
+        title,
+        description: description || null,
+        category,
+        eventDate,
+        contractorName: contractorName || null,
+        contactNumber: contactNumber || null,
+        villaId: Number(villaId),
+        creatorId: String(creatorId),
+        attachmentUrl: attachmentUrl || null,
+      },
+    });
+    res.status(201).json(event);
+  } catch (error) {
+    console.error('Create building event error:', error);
+    res.status(500).json({ error: 'Failed to create building event' });
+  }
+});
+
+// Get all building events for a villa (ordered by eventDate desc)
+app.get('/api/villas/:villaId/building-events', async (req: Request, res: Response) => {
+  const { villaId } = req.params;
+  try {
+    const events = await prisma.buildingEvent.findMany({
+      where: { villaId: Number(villaId) },
+      orderBy: { eventDate: 'desc' },
+    });
+    res.json(events);
+  } catch (error) {
+    console.error('Fetch building events error:', error);
+    res.status(500).json({ error: 'Failed to fetch building events' });
+  }
+});
+
+// Get villa details by villaId (numeric ID) — placed before wildcard :adminId to avoid shadowing
+app.get('/api/villas/:villaId/detail', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  try {
+    const villa = await prisma.villa.findUnique({
+      where: { id: villaId },
+    });
+    if (!villa) return res.status(404).json({ error: 'Villa not found' });
+    res.json(villa);
+  } catch (error) {
+    console.error('Fetch villa detail error:', error);
+    res.status(500).json({ error: 'Failed to fetch villa' });
   }
 });
 
@@ -780,7 +917,7 @@ app.delete('/api/posts/:postId', async (req: Request, res: Response) => {
 
 // Register a vehicle (resident or visitor)
 app.post('/api/vehicles', async (req: Request, res: Response) => {
-  const { plateNumber, ownerId, villaId, isVisitor, expectedDeparture } = req.body;
+  const { plateNumber, ownerId, villaId, isVisitor, expectedDeparture, modelName } = req.body;
   if (!plateNumber || !ownerId || !villaId) {
     return res.status(400).json({ message: '필수 항목이 누락되었습니다.' });
   }
@@ -792,10 +929,11 @@ app.post('/api/vehicles', async (req: Request, res: Response) => {
     const vehicle = await prisma.vehicle.create({
       data: {
         plateNumber,
+        modelName: modelName || null,
         ownerId,
         villaId: parsedVillaId,
         isVisitor: Boolean(isVisitor),
-        expectedDeparture: expectedDeparture ? new Date(expectedDeparture) : null,
+        expectedDeparture: expectedDeparture || null,
       },
     });
     res.status(201).json(vehicle);

@@ -1,67 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TextInput,
-  TouchableOpacity,
   FlatList,
   ActivityIndicator,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
-interface SearchResult {
+interface VehicleItem {
   id: string;
   plateNumber: string;
+  modelName: string | null;
   isVisitor: boolean;
   expectedDeparture: string | null;
   owner: { name: string; roomNumber: string | null };
 }
 
-const ParkingSearchScreen = ({ route, navigation }: any) => {
+const ParkingSearchScreen = ({ route }: any) => {
   const { villaId } = route.params ?? {};
 
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [allVehicles, setAllVehicles] = useState<VehicleItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
 
-  const handleSearch = async () => {
-    if (!villaId) return Alert.alert('오류', '빌라 정보를 불러올 수 없습니다.');
-    if (!query.trim()) return;
+  const fetchAllVehicles = useCallback(async () => {
+    if (!villaId) return;
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/villas/${villaId}/vehicles/search?query=${encodeURIComponent(query.trim())}`
-      );
+      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/vehicles`);
       const data = await res.json();
-      setResults(Array.isArray(data) ? data : []);
-      setSearched(true);
+      setAllVehicles(Array.isArray(data) ? data : []);
     } catch (e) {
-      Alert.alert('오류', '검색에 실패했습니다.');
+      Alert.alert('오류', '차량 목록을 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [villaId]);
 
-  const formatDeparture = (dt: string | null) => {
-    if (!dt) return '';
-    try {
-      const d = new Date(dt);
-      const month = d.getMonth() + 1;
-      const day = d.getDate();
-      const hours = String(d.getHours()).padStart(2, '0');
-      const mins = String(d.getMinutes()).padStart(2, '0');
-      return `${month}/${day} ${hours}:${mins}`;
-    } catch {
-      return dt;
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      fetchAllVehicles();
+    }, [fetchAllVehicles])
+  );
 
-  const renderResult = ({ item }: { item: SearchResult }) => {
+  const filteredVehicles = query.trim()
+    ? allVehicles.filter((v) =>
+        v.plateNumber.replace(/\s/g, '').includes(query.trim().replace(/\s/g, ''))
+      )
+    : allVehicles;
+
+  const renderItem = ({ item }: { item: VehicleItem }) => {
     const ownerLabel = item.owner.roomNumber
       ? `${item.owner.roomNumber}호 · ${item.owner.name}`
       : item.owner.name;
@@ -74,9 +68,12 @@ const ParkingSearchScreen = ({ route, navigation }: any) => {
             <Text style={styles.badgeText}>{item.isVisitor ? '방문차량' : '일반차량'}</Text>
           </View>
         </View>
+        {item.modelName ? (
+          <Text style={styles.modelName}>{item.modelName}</Text>
+        ) : null}
         <Text style={styles.ownerText}>{ownerLabel}</Text>
         {item.isVisitor && item.expectedDeparture ? (
-          <Text style={styles.departureText}>출발 예정: {formatDeparture(item.expectedDeparture)}</Text>
+          <Text style={styles.departureText}>출차 예정: {item.expectedDeparture}</Text>
         ) : null}
       </View>
     );
@@ -84,7 +81,6 @@ const ParkingSearchScreen = ({ route, navigation }: any) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Search bar */}
       <View style={styles.searchBar}>
         <TextInput
           style={styles.searchInput}
@@ -92,37 +88,26 @@ const ParkingSearchScreen = ({ route, navigation }: any) => {
           placeholderTextColor="#C7C7CC"
           value={query}
           onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
           returnKeyType="search"
           autoCapitalize="none"
         />
-        <TouchableOpacity
-          style={[styles.searchButton, loading && styles.searchButtonDisabled]}
-          onPress={handleSearch}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.searchButtonText}>검색</Text>
-          )}
-        </TouchableOpacity>
       </View>
 
-      {/* Results */}
-      {!searched ? (
-        <View style={styles.instructionContainer}>
-          <Text style={styles.instructionText}>차량 번호를 검색하세요</Text>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
         </View>
-      ) : results.length === 0 ? (
+      ) : filteredVehicles.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>검색 결과가 없습니다.</Text>
+          <Text style={styles.emptyText}>
+            {query.trim() ? '검색 결과가 없습니다.' : '등록된 차량이 없습니다.'}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={results}
+          data={filteredVehicles}
           keyExtractor={(item) => item.id}
-          renderItem={renderResult}
+          renderItem={renderItem}
           contentContainerStyle={styles.listContent}
         />
       )}
@@ -136,16 +121,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7',
   },
   searchBar: {
-    flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
-    gap: 10,
   },
   searchInput: {
-    flex: 1,
     height: 46,
     borderWidth: 1,
     borderColor: '#E5E5EA',
@@ -155,21 +137,10 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     backgroundColor: '#F8F9FA',
   },
-  searchButton: {
-    backgroundColor: '#007AFF',
-    height: 46,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  searchButtonDisabled: {
-    backgroundColor: '#A8C7FA',
-  },
-  searchButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
   },
   listContent: {
     padding: 16,
@@ -189,7 +160,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   plateNumber: {
     fontSize: 22,
@@ -212,6 +183,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#3A3A3C',
   },
+  modelName: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginBottom: 6,
+  },
   ownerText: {
     fontSize: 15,
     color: '#3A3A3C',
@@ -221,15 +197,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#FF9500',
     marginTop: 4,
-  },
-  instructionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionText: {
-    fontSize: 16,
-    color: '#8E8E93',
   },
   emptyContainer: {
     flex: 1,

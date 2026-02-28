@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import BoardScreen from './BoardScreen';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 /**
  * CommunityTabScreen is a thin wrapper that resolves villaId and userId

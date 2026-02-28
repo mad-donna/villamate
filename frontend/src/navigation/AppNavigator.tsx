@@ -15,6 +15,8 @@ import CreatePostScreen from '../screens/CreatePostScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import ResidentManagementScreen from '../screens/ResidentManagementScreen';
 import ParkingSearchScreen from '../screens/ParkingSearchScreen';
+import BuildingHistoryScreen from '../screens/BuildingHistoryScreen';
+import CreateBuildingEventScreen from '../screens/CreateBuildingEventScreen';
 import MainTabNavigator from './MainTabNavigator';
 import ResidentTabNavigator from './ResidentTabNavigator';
 
@@ -109,6 +111,16 @@ const AppNavigator = () => {
         name="ParkingSearch"
         component={ParkingSearchScreen}
         options={{ title: '주차 조회' }}
+      />
+      <Stack.Screen
+        name="BuildingHistory"
+        component={BuildingHistoryScreen}
+        options={{ title: '건물 이력 및 계약 관리' }}
+      />
+      <Stack.Screen
+        name="CreateBuildingEvent"
+        component={CreateBuildingEventScreen}
+        options={{ title: '이력 등록' }}
       />
     </Stack.Navigator>
   );

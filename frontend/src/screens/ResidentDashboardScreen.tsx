@@ -14,7 +14,7 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface InvoiceVilla {
   name: string;
@@ -148,7 +148,7 @@ const ResidentDashboardScreen = () => {
         {/* VARIABLE invoice: show per-item breakdown */}
         {invoiceItems && invoiceItems.length > 0 && (
           <View style={styles.itemBreakdown}>
-            <Text style={styles.itemBreakdownHeader}>청구 항목 내역</Text>
+            <Text style={styles.itemBreakdownHeader}>항목 내역</Text>
             {invoiceItems.map((entry, index) => (
               <View key={index} style={styles.itemBreakdownRow}>
                 <Text style={styles.itemBreakdownName}>{entry.name}</Text>
@@ -182,7 +182,7 @@ const ResidentDashboardScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>빌라메이트 (입주민)</Text>
-          <Text style={styles.headerSubtitle}>안녕하세요!</Text>
+          <Text style={styles.headerSubtitle}>안녕하세요</Text>
         </View>
 
         {/* Payment / Invoice list section */}
@@ -193,7 +193,7 @@ const ResidentDashboardScreen = () => {
         {loadingPayments ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.loadingText}>청구 내역 불러오는 중...</Text>
+            <Text style={styles.loadingText}>납부 내역 불러오는 중...</Text>
           </View>
         ) : payments.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -212,7 +212,7 @@ const ResidentDashboardScreen = () => {
           style={styles.ledgerButton}
           onPress={() => navigation.navigate('Ledger')}
         >
-          <Text style={styles.ledgerButtonText}>투명한 공용 장부 및 영수증 확인하기</Text>
+          <Text style={styles.ledgerButtonText}>투명한 공용 장부 및 수금 내역 확인하기</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -240,7 +240,7 @@ const ResidentDashboardScreen = () => {
 
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>* 관리비는 매달 25일에 발행됩니다.</Text>
-          <Text style={styles.infoText}>* 문의사항은 관리자님께 연락주세요.</Text>
+          <Text style={styles.infoText}>* 문의사항은 관리자에게 연락주세요.</Text>
         </View>
 
         <TouchableOpacity

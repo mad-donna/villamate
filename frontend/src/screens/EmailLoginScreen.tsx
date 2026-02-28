@@ -14,7 +14,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 const EmailLoginScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();

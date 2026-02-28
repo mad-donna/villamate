@@ -268,3 +268,96 @@
 4. **API_BASE_URL 공통화**: `config.ts` 환경변수로 추출
 5. **투표 기능**: 주요 안건 모바일 투표
 6. **알림 기능**: 미납자 푸시 알림 또는 카카오 알림톡
+
+---
+
+## 10. MVP 구현 현황 (2026-02-27 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### 버그 수정 및 코드 복구
+
+- **파일 인코딩 오류 전체 복구**: 20개 스크린 파일의 한국어 문자가 `?` 시퀀스로 깨지는 인코딩 오류 일괄 복구
+- **API IP 주소 수정**: `192.168.219.108` → `192.168.219.124` (4개 파일 수정)
+- **관리자 차량 등록 버그 수정**: `GET /api/users/:userId/villa` (입주민 전용) → `GET /api/villas/:userId` (관리자용) 으로 수정
+
+#### 차량 관리 고도화
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Vehicle.expectedDeparture DateTime?` → `String?` (자유 텍스트 허용) |
+| DB | `Vehicle.modelName String?` 추가 (색상+모델명 입력) |
+| 백엔드 | `POST /api/vehicles`: `modelName` 파라미터 추가 |
+| 백엔드 | `GET /api/villas/:villaId/vehicles` 신규 (전체 목록, createdAt desc) |
+| ProfileScreen | 차량 모델 입력 폼 추가, 출차 예정 placeholder 개선 |
+| ParkingSearchScreen | 화면 진입 시 전체 목록 자동 표시, 로컬 필터링으로 전환, 모델명 표시 |
+
+#### 입주민 전출입 관리 (신규)
+
+| 구분 | 내용 |
+|------|------|
+| 백엔드 | `GET /api/villas/:villaId/residents` 개선 (recordId, userId, joinedAt 포함, roomNumber 오름차순) |
+| 백엔드 | `POST /api/villas/:villaId/residents/:residentId/move-out` 신규 (ResidentRecord deleteMany, 청구내역 보존) |
+| 백엔드 | `GET /api/villas/:villaId/detail` 신규 (inviteCode 포함 빌라 정보) |
+| ResidentManagementScreen | 전출 처리 버튼, 확인 Alert, 처리 중 로딩 표시 |
+| ResidentManagementScreen | '+ 새 입주민 초대' 버튼 → inviteCode Alert 표시 |
+| ManagementScreen | 메뉴 라벨 '입주민 및 전출입 관리' 로 변경 |
+
+#### 건물 이력 및 계약 관리 (신규, 기획 요구사항 구현)
+
+초기 기획 문서의 "건물의 수리 이력 및 하자 접수 내역을 영구 기록하는 디지털 아카이빙 기능" MVP 구현.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `BuildingEvent` 모델 신규 (id, title, description?, category, eventDate String, contractorName?, contactNumber?, attachmentUrl?, villaId, creatorId, createdAt) |
+| 백엔드 | `POST/GET /api/villas/:villaId/building-events` 추가 |
+| 백엔드 | `POST /api/upload` 추가 (multer, 로컬 디스크 저장, `/uploads` 정적 서빙) |
+| BuildingHistoryScreen | 이력 목록 표시, 카테고리별 색상 뱃지 (하자보수 주황/정기점검 초록/유지계약 파랑/청소 보라/기타 회색) |
+| CreateBuildingEventScreen | 카테고리 칩 선택, 제목/내용/날짜/업체/연락처 입력, 사진 첨부 |
+| CreateBuildingEventScreen | 날짜: 네이티브 DateTimePicker (Android 달력, iOS 스피너) |
+| CreateBuildingEventScreen | 이미지: expo-image-picker → `POST /api/upload` → URL 전달 |
+| ManagementScreen | '건물 이력 및 계약 관리' 메뉴 항목 추가 |
+
+### 현재 구현된 전체 화면 목록 (2026-02-27 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `ProfileSetupScreen`, `OnboardingScreen`, `ResidentJoinScreen`
+
+#### 관리자 탭 (4개)
+- `DashboardScreen` (홈), `BoardScreen` (커뮤니티), `ManagementScreen` (관리), `ProfileScreen` (프로필)
+
+#### 입주민 탭 (3개)
+- `ResidentDashboardScreen` (홈), `BoardScreen` (커뮤니티), `ProfileScreen` (프로필)
+
+#### 스택 화면
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen` (전출 처리 + 초대코드)
+- `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen`, `CreatePostScreen`
+- `ParkingSearchScreen`
+- `BuildingHistoryScreen` ← NEW
+- `CreateBuildingEventScreen` ← NEW
+
+### 현재 기술 스택 (2026-02-27 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~900+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker |
+| 키보드 처리 | react-native-keyboard-aware-scroll-view |
+| SafeArea | react-native-safe-area-context |
+
+### 다음 개발 우선순위 (2026-02-27 업데이트)
+
+1. **보안 강화**: 비밀번호 해싱(bcrypt), JWT 인증 미들웨어, PG 결제 `imp_uid` 서버 검증
+2. **알림 기능**: 미납자 푸시 알림 또는 카카오 알림톡
+3. **공용 장부 실데이터 연동**: LedgerScreen 더미 데이터 → 실제 DB 연동
+4. **업로드 스토리지 마이그레이션**: 로컬 디스크 → S3 또는 Supabase Storage
+5. **API_BASE_URL 공통화**: 각 스크린 하드코딩 → `config.ts` 환경변수
+6. **투표 기능**: 초기 기획 요구사항 잔여 (전자투표 + 본인인증)

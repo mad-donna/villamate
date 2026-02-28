@@ -4,7 +4,7 @@
 - React Native (Expo) + Node.js/Express + Prisma + Supabase PostgreSQL
 - Frontend: `D:\villamate\frontend\`
 - Backend: `D:\villamate\backend\`
-- API base URL: `http://192.168.219.108:3000`
+- API base URL: `http://192.168.219.124:3000` (updated Feb 2026 — was .108, now .124)
 
 ## Architecture Patterns
 
@@ -86,6 +86,14 @@
 - `residentVillaId` resolved from `AsyncStorage.getItem('user') -> JSON.parse -> storedUser.villa.id`
 - Color for Community buttons: `#5856D6` (indigo/purple)
 - Pre-existing frontend TS errors: `@expo/vector-icons` type declarations missing — safe to ignore
+
+### Resident Move-out & Management System (added Feb 2026)
+- `GET /api/villas/:villaId/residents` — returns `{ recordId, userId, name, roomNumber, joinedAt }[]` ordered by roomNumber asc (updated Feb 2026 — previous version returned different shape with id/phone)
+- `POST /api/villas/:villaId/residents/:residentId/move-out` — deletes ResidentRecord for that user+villa; past InvoicePayment records are preserved
+- `GET /api/villas/:villaId/detail` — fetches full Villa row by numeric villaId (includes inviteCode); registered BEFORE wildcard `GET /api/villas/:adminId` to avoid shadowing
+- ResidentManagementScreen: `useFocusEffect` + `resolveVillaId` helper (checks user.villa.id first, then falls back to `/api/villas/:adminId`); per-row `processingId` state for move-out loading; handleInvite fetches inviteCode via `/api/villas/:id/detail`
+- ManagementScreen: menu item id `'residents'` label updated to '입주민 및 전출입 관리', navigates to `ResidentManagement` stack screen
+- AppNavigator already had ResidentManagementScreen import + registration — no navigator changes needed
 
 ### Vehicle & Parking System (added Feb 2026)
 - Vehicle model: `id` (uuid), `plateNumber`, `isVisitor` (Boolean), `expectedDeparture` (DateTime?), `ownerId` (String -> User), `villaId` (Int -> Villa), `createdAt`

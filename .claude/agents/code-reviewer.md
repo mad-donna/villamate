@@ -275,3 +275,56 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 - **SafeAreaView**: 항상 `react-native-safe-area-context`에서 import할 것
 - **SafeAreaProvider**: `App.tsx` 최상위 필수
 - **하단 고정 버튼 패딩**: `paddingBottom: Math.max(insets.bottom + 16, 24)` 패턴으로 Android 네비게이션 바 처리
+
+---
+
+### 2026-02-27 — 차량 관리 고도화, 입주민 전출입, 건물 이력 세션
+
+#### 이 세션에서 리뷰/진단한 주요 내용
+
+- **파일 인코딩 오류** 전체 20개 스크린 일괄 복구
+- **관리자 villaId 조회 경로 버그** 진단 및 수정
+- **Express 라우트 충돌** 패턴 반복 확인 (세 번째 재발)
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] 관리자용/입주민용 API 엔드포인트 혼용**
+- `GET /api/users/:userId/villa` — 내부에서 `ResidentRecord.findFirst`를 사용하는 입주민 전용 엔드포인트
+- 관리자 계정은 ResidentRecord가 없으므로 항상 `404 + { villa: null }` 반환
+- 관리자에게 올바른 엔드포인트: `GET /api/villas/:adminId` (Villa.adminId로 조회)
+- **교훈**: 같은 "villaId 가져오기" 기능도 역할에 따라 다른 엔드포인트를 사용해야 함을 주석 또는 함수명으로 명시할 것
+
+**[CRITICAL] Express 라우트 순서 — 세 번째 재발**
+- 이번 세션에서도 `/api/villas/:villaId/vehicles`를 추가할 때 순서를 잘못 배치할 뻔함
+- 패턴: 새 라우트 추가 시 기존 `/api/villas/:adminId` 와일드카드 앞에 배치해야 함을 매번 수동으로 확인해야 함
+- **근본 해결**: Express Router를 도메인별로 분리하면 이 문제 자체가 해소됨
+
+**[MAJOR] `useFocusEffect` + `useCallback` 의존성 배열 — villaId 포함 여부**
+- `ResidentManagementScreen`, `BuildingHistoryScreen` 등에서 `villaId` state를 `useCallback` 의존성으로 넣으면 첫 로드 시 null → state 업데이트 → 재호출되는 이중 fetch 발생
+- 해결 패턴: `resolveVillaId` 내부에서 villaId를 직접 로컬 변수로 관리하고 state는 캐시 용도로만 사용
+
+**[MAJOR] `(v as any).modelName` — Prisma 타입 우회**
+- `modelName`을 `schema.prisma`에 추가했지만 Prisma Client 재생성 전에 `(v as any).modelName`으로 우회
+- `npx prisma generate` 실행 후에는 타입 캐스팅 불필요 — `as any` 제거 권장
+- **교훈**: `npx prisma db push`만으로는 클라이언트 타입이 자동 재생성되지 않을 수 있음 (Prisma 버전에 따라 다름)
+
+#### 추가된 코딩 패턴
+
+- **`useFocusEffect` 데이터 로드 표준** (villaId 의존):
+  ```typescript
+  // villaId를 state로 두되, 로드 함수 내에서 null 체크 후 직접 resolve
+  const fetchData = useCallback(async () => {
+    let vid = villaId;
+    if (!vid) { vid = await resolveVillaId(); setVillaId(vid); }
+    // ... fetch
+  }, [villaId, resolveVillaId]);
+  ```
+- **카테고리 칩 UI 패턴**: `flexWrap: 'wrap'` + `gap: 8` 행 배치, 활성 칩은 `backgroundColor: '#007AFF'`
+- **이미지 업로드 전처리** (React Native → multer):
+  - `ImagePicker.launchImageLibraryAsync({ quality: 0.8 })` → `FormData.append('file', { uri, name, type } as any)`
+  - 서버 반환 `fileUrl`을 API 바디에 포함해 전송
+- **DateTimePicker 조건부 표시** (Android/iOS 차이):
+  ```typescript
+  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+  onChange={(_e, date) => { setShowPicker(Platform.OS === 'ios'); if (date) setDate(date); }}
+  ```

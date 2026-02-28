@@ -254,3 +254,48 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 **[RESOLVED] API_BASE_URL 일부 중앙화**
 - IP 변경(112→122)시 모든 파일을 수동 수정했음 (10개 파일)
 - 여전히 각 스크린에 하드코딩 — 공통 `config.ts` 추출 미완료, 다음 개선 필요
+
+---
+
+### 2026-02-27 — 차량 관리 고도화, 입주민 전출입, 건물 이력 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] 관리자 villaId 조회 경로 오류**
+- 기존: `GET /api/users/${uid}/villa` (입주민 전용) → 관리자에게 404, villaId = null → 차량 등록 실패
+- 해결: `GET /api/villas/${uid}` (관리자용) 로 변경. 근본 원인 제거
+
+**[NEW-MEDIUM] multer 파일 업로드 — 입력값 검증 없음**
+- `POST /api/upload`에 파일 타입/크기 외 추가 검증 없음 (악성 파일명, 디렉토리 트래버설 가능성)
+- multer의 `filename` 콜백에서 `Date.now() + random` 으로 원본 파일명을 사용하지 않아 트래버설 위험은 낮음
+- 다음 스프린트: 이미지 MIME 타입 whitelist 검증 (`image/jpeg`, `image/png`만 허용) 추가 필요
+
+**[NEW-MEDIUM] 정적 파일 서빙 — 인증 없이 공개**
+- `app.use('/uploads', express.static(uploadsDir))` — 업로드된 파일 URL을 아는 누구나 접근 가능
+- MVP 단계에서 수용 가능하나, 민감한 계약서/영수증 사진이 포함될 경우 문제
+- 향후: 인증된 사용자만 접근 가능한 presigned URL 방식 (S3 등) 으로 마이그레이션 권장
+
+**[NEW-LOW] ResidentRecord deleteMany — 전출 처리 비가역성**
+- `POST /api/villas/:villaId/residents/:residentId/move-out`이 `deleteMany` 실행 → 복구 불가
+- InvoicePayment 등 이력은 보존되지만 ResidentRecord 자체는 영구 삭제
+- 향후: `status: 'MOVED_OUT'` 소프트 삭제 방식 검토 권장
+
+**[NEW-LOW] ExpectedDeparture 타입 변경 — 기존 데이터**
+- `expectedDeparture DateTime?` → `String?` 마이그레이션 시 기존 DateTime 데이터는 ISO 문자열로 자동 변환됨
+- 신규 입력은 자유 텍스트 ("오후 2시에 나가요") — 정렬·필터 불가, MVP에서 의도적 수용
+
+**[NEW-LOW] Express 라우트 순서 복잡도 증가**
+- 이 세션에서 `/api/villas/:villaId/vehicles`, `/api/villas/:villaId/building-events`, `/api/villas/:villaId/detail`이 모두 와일드카드 `/api/villas/:adminId` 앞에 배치됨
+- 라우트 추가 시 반드시 순서 확인 필요 — 향후 라우터 분리(Express Router) 권장
+
+#### 현재 누적 위험 현황 요약 (2026-02-27 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 | HIGH | 미해결 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| 비밀번호 해싱 없음 | HIGH | 미해결 |
+| API_BASE_URL 하드코딩 | MEDIUM | 미해결 |
+| multer 파일 타입 검증 부재 | MEDIUM | 신규 |
+| 업로드 파일 공개 접근 | MEDIUM | 신규 |
+| ResidentRecord 하드 삭제 | LOW | 신규, 수용 |

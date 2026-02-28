@@ -3,7 +3,11 @@
     "allow": [
       "Bash(cd \"D:/villamate/frontend\" && npx expo install expo-clipboard 2>&1)",
       "Bash(head:*)",
-      "Bash(cd D:/villamate/backend && npx prisma db push 2>&1)"
+      "Bash(cd D:/villamate/backend && npx prisma db push 2>&1)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(npx expo:*)"
     ]
   }
 }

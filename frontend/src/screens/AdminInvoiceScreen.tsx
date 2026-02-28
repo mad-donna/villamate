@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface InvoicePayment {
   id: string;
@@ -103,7 +103,7 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
   const handleSetAutoBilling = async () => {
     const day = parseInt(autoBillingDay, 10);
     if (isNaN(day) || day < 1 || day > 28) {
-      Alert.alert('입력 오류', '자동 발행일은 1~28 사이의 숫자로 입력해주세요.');
+      Alert.alert('입력 오류', '자동 발행일은 1~28 사이의 숫자를 입력해주세요.');
       return;
     }
 
@@ -122,11 +122,11 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
 
       const data = await response.json();
       if (!response.ok) {
-        Alert.alert('오류', data.error || '자동 발행 설정에 실패했습니다.');
+        Alert.alert('오류', data.error || '자동 발행 설정이 실패했습니다.');
         return;
       }
 
-      Alert.alert('완료', `매월 ${day}일에 자동으로 청구서가 발행됩니다.`);
+      Alert.alert('완료', `매월 ${day}일에 자동으로 청구서를 발행합니다`);
       setAutoBillingDay('');
     } catch (err) {
       console.error('handleSetAutoBilling error:', err);
@@ -194,7 +194,7 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
         </View>
 
         <Text style={styles.invoicePerResident}>
-          세대 당: {item.amountPerResident.toLocaleString()} 원
+          세대 당 {item.amountPerResident.toLocaleString()} 원
         </Text>
         {item.memo ? (
           <Text style={styles.invoiceMemo}>{item.memo}</Text>
@@ -235,7 +235,7 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
         <View style={styles.autoBillingCard}>
           <Text style={styles.autoBillingTitle}>자동 발행 설정</Text>
           <Text style={styles.autoBillingDesc}>
-            매월 지정한 날짜에 자동으로 관리비 청구서가 발행됩니다. (1~28일)
+            매월 지정한 날짜에 자동으로 관리비 청구서를 발행합니다. (1~28일)
           </Text>
           <View style={styles.autoBillingRow}>
             <TextInput
@@ -267,7 +267,7 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>청구서 불러오는 중...</Text>
+            <Text style={styles.loadingText}>청구서 불러오는 중..</Text>
           </View>
         ) : invoices.length === 0 ? (
           <View style={styles.emptyCard}>

@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface PaymentRecord {
   id: string;
@@ -88,7 +88,7 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
             ]}
           >
             <Text style={styles.statusBadgeText}>
-              {isPaid ? '완납 ✅' : '미납 🚨'}
+              {isPaid ? '납부 완료' : '미납 대기'}
             </Text>
           </View>
         </View>
@@ -110,7 +110,7 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>납부 현황 불러오는 중...</Text>
+          <Text style={styles.loadingText}>납부 현황 불러오는 중..</Text>
         </View>
       ) : (
         <FlatList

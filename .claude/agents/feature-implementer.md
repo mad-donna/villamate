@@ -301,3 +301,59 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
   ```
 - **PUT /api/invoices/:invoiceId**: 완납 세대 있으면 400, 없으면 수정 허용
 - **roomNumber 위치**: `ResidentRecord`에 있음 (User 모델 아님) — include 시 주의
+
+---
+
+### 2026-02-27 — 차량 관리 고도화, 입주민 전출입, 건물 이력 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **파일 인코딩 복구** (전체 20개 스크린)
+   - 한국어 문자가 `?` 시퀀스로 깨진 인코딩 오류 일괄 복구
+   - IP 주소 `192.168.219.108` → `192.168.219.124` 4개 파일 수정 (sed 사용)
+   - JSX 닫힘 태그 누락 (`텍스트/Text>` → `텍스트</Text>`), placeholder 따옴표 누락 패턴 수정
+
+2. **관리자 차량 등록 버그 수정** (`ProfileScreen.tsx`)
+   - 기존: `GET /api/users/${uid}/villa` → 입주민용 (ResidentRecord 조회), 관리자에게 404
+   - 수정: `GET /api/villas/${uid}` → 관리자용 (Villa.adminId 조회), `data[0].id` 사용
+
+3. **출차 예정 시간 자유 텍스트 전환**
+   - `schema.prisma`: `expectedDeparture DateTime?` → `String?` + `npx prisma db push`
+   - 백엔드: `new Date(expectedDeparture)` → 문자열 그대로 저장
+   - 프론트: placeholder `출차 예정 시간 (예: 오후 2시에 나가요)`, `formatDeparture` 단순 문자열 반환
+
+4. **차량 모델명(modelName) + 전체 목록 기본 표시**
+   - `schema.prisma`: `Vehicle`에 `modelName String?` 추가 + `npx prisma db push`
+   - 백엔드: `GET /api/villas/:villaId/vehicles` 신규 (전체 목록, `/search` 라우트 앞에 배치)
+   - `ProfileScreen`: 차량 모델 입력 폼, POST body, 카드 표시 추가
+   - `ParkingSearchScreen`: 전체 재작성 — 화면 진입 시 `useFocusEffect`로 전체 목록 로드, 로컬 필터링
+
+5. **입주민 전출입 관리** (`ResidentManagementScreen.tsx` 재작성)
+   - 백엔드: `GET /api/villas/:villaId/residents` 업데이트 (roomNumber 오름차순), `POST /api/villas/:villaId/residents/:residentId/move-out` (ResidentRecord deleteMany), `GET /api/villas/:villaId/detail` 추가
+   - 프론트: 전출 처리 버튼(파괴적 Alert), 처리 중 로딩, 초대 코드 Alert 표시
+   - `ManagementScreen`: 메뉴 라벨 → '입주민 및 전출입 관리'
+
+6. **건물 이력 및 계약 관리** (신규 기능)
+   - `schema.prisma`: `BuildingEvent` 모델 추가 (id uuid, title, description?, category, eventDate String, contractorName?, contactNumber?, villaId Int, creatorId String, createdAt)
+   - 백엔드: `POST/GET /api/villas/:villaId/building-events` 추가
+   - 신규 화면: `BuildingHistoryScreen.tsx` (카테고리 색상 뱃지, `useFocusEffect`), `CreateBuildingEventScreen.tsx` (칩 선택, 키보드 UX 표준)
+   - `ManagementScreen`: '건물 이력 및 계약 관리' 메뉴 추가, `AppNavigator`에 두 화면 등록
+
+7. **건물 이력 DatePicker + 이미지 업로드**
+   - 백엔드: `multer` 설치, `POST /api/upload` 추가, `uploads/` 자동 생성, `/uploads` 정적 서빙
+   - `schema.prisma`: `BuildingEvent`에 `attachmentUrl String?` 추가
+   - 프론트: `@react-native-community/datetimepicker`, `expo-image-picker` 설치
+   - `CreateBuildingEventScreen`: 날짜 TextInput → DateTimePicker 버튼, 이미지 선택 + 미리보기, 제출 시 이미지 먼저 업로드 후 URL 전달
+   - `BuildingHistoryScreen`: `attachmentUrl` 있을 경우 카드 내 썸네일 표시
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **관리자 villaId 조회 올바른 경로**: `GET /api/villas/${uid}` (배열 반환, `data[0].id` 사용) — `GET /api/users/${uid}/villa`는 입주민 전용
+- **Express 라우트 순서 원칙 재확인**: `/api/villas/:villaId/vehicles`는 `/api/villas/:villaId/vehicles/search`보다 먼저, `/api/villas/:villaId/detail`은 `/api/villas/:adminId`보다 먼저 등록
+- **전출 처리 방식**: `User` 모델에 `villaId`/`roomNumber` 컬럼 없음 → `ResidentRecord.deleteMany`로 처리 (청구/납부 내역은 그대로 보존)
+- **파일 업로드 multer 경로**: `path.join(__dirname, '..', 'uploads')` — 컴파일 후 `dist/`에서 실행되므로 `..`로 한 단계 위 참조
+- **이미지 업로드 FormData 패턴** (React Native):
+  ```typescript
+  formData.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
+  ```
+- **자유 텍스트 날짜/시간**: MVP 단계에서 DatePicker 대신 자유 텍스트 허용 시 DB 타입도 `String`으로 맞춰야 함

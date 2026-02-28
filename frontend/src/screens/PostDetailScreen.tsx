@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface PostDetail {
   id: string;
@@ -220,7 +220,7 @@ const PostDetailScreen = ({ navigation, route }: any) => {
           {/* Content */}
           <Text style={styles.content}>{post.content}</Text>
 
-          {/* Delete button — inside scroll, below content, author-only */}
+          {/* Delete button - inside scroll, below content, author-only */}
           {canDelete && (
             <TouchableOpacity
               style={styles.deleteButton}
@@ -246,7 +246,7 @@ const PostDetailScreen = ({ navigation, route }: any) => {
           </View>
         </ScrollView>
 
-        {/* Comment input bar — sits above keyboard */}
+        {/* Comment input bar - sits above keyboard */}
         <View style={[styles.commentInputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <TextInput
             style={styles.commentInput}

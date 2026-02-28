@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface Villa {
   id: number;
@@ -41,7 +41,7 @@ const DashboardScreen = ({ navigation }: any) => {
       setLoading(true);
       let userId = await AsyncStorage.getItem('userId');
 
-      // 폴백: userId 키가 없으면 user 객체에서 시도
+      // 폴백: userId 없으면 user 객체에서 시도
       if (!userId) {
         const userStr = await AsyncStorage.getItem('user');
         if (userStr) {
@@ -60,7 +60,7 @@ const DashboardScreen = ({ navigation }: any) => {
 
       console.log(`Fetching villas for adminId: ${userId}`);
       const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
-      
+
       if (!response.ok) {
         throw new Error(`Server returned ${response.status}`);
       }
@@ -75,8 +75,6 @@ const DashboardScreen = ({ navigation }: any) => {
       }
     } catch (err) {
       console.error('Fetch villa error:', err);
-      // 네트워크 오류 시 사용자에게 알림 (개발 중에는 주석 해제하여 확인 가능)
-      // Alert.alert('연결 오류', '서버 주소와 실행 상태를 확인해주세요.');
     } finally {
       setLoading(false);
     }
@@ -169,7 +167,7 @@ const DashboardScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.header}>{villaData.name}</Text>
-        
+
         <View style={styles.card}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>주소</Text>
@@ -180,7 +178,7 @@ const DashboardScreen = ({ navigation }: any) => {
             <Text style={styles.infoValue}>{villaData.totalUnits}세대</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>관리 중인 세대</Text>
+            <Text style={styles.infoLabel}>관리중인 세대</Text>
             <Text style={styles.infoValue}>{villaData._count?.residents || 0}세대</Text>
           </View>
         </View>
@@ -212,7 +210,7 @@ const DashboardScreen = ({ navigation }: any) => {
             style={[styles.actionButton, styles.settleButton]}
             onPress={() => navigation.navigate('Ledger')}
           >
-            <Text style={styles.actionButtonText}>장부 내역 확인</Text>
+            <Text style={styles.actionButtonText}>납부 내역 확인</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -240,14 +238,14 @@ const DashboardScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
 
-        {/* 입주민 명부 섹션 */}
+        {/* 입주민 명단 섹션 */}
         <View style={styles.residentSection}>
-          <Text style={styles.sectionTitle}>입주민 명부</Text>
+          <Text style={styles.sectionTitle}>입주민 명단</Text>
           {loadingResidents ? (
             <ActivityIndicator size="small" color="#007AFF" style={styles.residentLoader} />
           ) : residents.length === 0 ? (
             <View style={styles.card}>
-              <Text style={styles.emptyResidentText}>아직 연동된 입주민이 없습니다.</Text>
+              <Text style={styles.emptyResidentText}>아직 등록된 입주민이 없습니다.</Text>
             </View>
           ) : (
             <FlatList

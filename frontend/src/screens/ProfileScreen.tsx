@@ -13,11 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CommonActions, useFocusEffect } from '@react-navigation/native';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface Vehicle {
   id: string;
   plateNumber: string;
+  modelName?: string | null;
   isVisitor: boolean;
   expectedDeparture: string | null;
   createdAt: string;
@@ -33,6 +34,7 @@ const ProfileScreen = ({ navigation }: any) => {
   const [plateNumber, setPlateNumber] = useState('');
   const [isVisitor, setIsVisitor] = useState(false);
   const [expectedDeparture, setExpectedDeparture] = useState('');
+  const [modelName, setModelName] = useState('');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehicleLoading, setVehicleLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
@@ -52,16 +54,16 @@ const ProfileScreen = ({ navigation }: any) => {
         await AsyncStorage.setItem('userId', uid);
       }
 
-      // Resolve villaId — residents store villa in AsyncStorage; admins do not
+      // Resolve villaId - residents store villa in AsyncStorage; admins do not
       if (user?.villa?.id) {
         setVillaId(user.villa.id);
       } else if (uid) {
-        // Admin users have no villa in AsyncStorage — fetch from API
+        // Admin users: fetch via /api/villas/:adminId (returns array of managed villas)
         try {
-          const res = await fetch(`${API_BASE_URL}/api/users/${uid}/villa`);
+          const res = await fetch(`${API_BASE_URL}/api/villas/${uid}`);
           if (res.ok) {
             const data = await res.json();
-            if (data?.villa?.id) setVillaId(data.villa.id);
+            if (Array.isArray(data) && data.length > 0) setVillaId(data[0].id);
           }
         } catch (e) {
           console.error('Failed to fetch villa for user:', e);
@@ -131,6 +133,7 @@ const ProfileScreen = ({ navigation }: any) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plateNumber: plateNumber.trim(),
+          modelName: modelName.trim() || null,
           ownerId: uid,
           villaId: vid,
           isVisitor,
@@ -144,6 +147,7 @@ const ProfileScreen = ({ navigation }: any) => {
       }
 
       setPlateNumber('');
+      setModelName('');
       setIsVisitor(false);
       setExpectedDeparture('');
       await fetchVehicles();
@@ -194,16 +198,7 @@ const ProfileScreen = ({ navigation }: any) => {
 
   const formatDeparture = (dt: string | null) => {
     if (!dt) return '';
-    try {
-      const d = new Date(dt);
-      const month = d.getMonth() + 1;
-      const day = d.getDate();
-      const hours = String(d.getHours()).padStart(2, '0');
-      const mins = String(d.getMinutes()).padStart(2, '0');
-      return `${month}/${day} ${hours}:${mins} 출발 예정`;
-    } catch {
-      return dt;
-    }
+    return `출차 예정: ${dt}`;
   };
 
   return (
@@ -215,7 +210,7 @@ const ProfileScreen = ({ navigation }: any) => {
           <Text style={styles.label}>이름</Text>
           <Text style={styles.value}>{userName}</Text>
 
-          <Text style={[styles.label, { marginTop: 20 }]}>연락처/이메일</Text>
+          <Text style={[styles.label, { marginTop: 20 }]}>연락처 / 이메일</Text>
           <Text style={styles.value}>{userEmail}</Text>
         </View>
 
@@ -229,6 +224,14 @@ const ProfileScreen = ({ navigation }: any) => {
             placeholderTextColor="#C7C7CC"
             value={plateNumber}
             onChangeText={setPlateNumber}
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="차량 모델 (예: 하얀색 아반떼, 검은색 싼타페)"
+            placeholderTextColor="#C7C7CC"
+            value={modelName}
+            onChangeText={setModelName}
             autoCapitalize="none"
           />
 
@@ -261,7 +264,7 @@ const ProfileScreen = ({ navigation }: any) => {
           {isVisitor && (
             <TextInput
               style={styles.input}
-              placeholder="출발 예정 시간 (예: 2026-02-26 18:00)"
+              placeholder="출차 예정 시간 (예: 오후 2시에 나가요)"
               placeholderTextColor="#C7C7CC"
               value={expectedDeparture}
               onChangeText={setExpectedDeparture}
@@ -294,6 +297,9 @@ const ProfileScreen = ({ navigation }: any) => {
             <View key={v.id} style={styles.vehicleCard}>
               <View style={styles.vehicleCardLeft}>
                 <Text style={styles.vehiclePlate}>{v.plateNumber}</Text>
+                {v.modelName ? (
+                  <Text style={styles.vehicleModel}>{v.modelName}</Text>
+                ) : null}
                 <View style={styles.vehicleBadgeRow}>
                   <View style={[styles.badge, v.isVisitor ? styles.badgeVisitor : styles.badgeRegular]}>
                     <Text style={styles.badgeText}>
@@ -477,6 +483,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1C1C1E',
     marginBottom: 6,
+  },
+  vehicleModel: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginBottom: 4,
   },
   vehicleBadgeRow: {
     flexDirection: 'row',

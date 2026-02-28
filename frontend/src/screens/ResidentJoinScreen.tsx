@@ -14,7 +14,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 const ResidentJoinScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
@@ -29,7 +29,7 @@ const ResidentJoinScreen = ({ navigation }: any) => {
 
   const handleJoin = async () => {
     if (!inviteCode || !roomNumber) {
-      Alert.alert('알림', '초대 코드와 동/호수를 모두 입력해주세요.');
+      Alert.alert('알림', '초대 코드와 호수를 모두 입력해주세요.');
       return;
     }
 
@@ -54,7 +54,7 @@ const ResidentJoinScreen = ({ navigation }: any) => {
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert('오류', data.error || '빌라 입장에 실패했습니다.');
+        Alert.alert('오류', data.error || '빌라 가입에 실패했습니다.');
         return;
       }
 
@@ -79,8 +79,8 @@ const ResidentJoinScreen = ({ navigation }: any) => {
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>빌라 입장하기</Text>
-            <Text style={styles.subtitle}>관리자님께 받은 초대 코드를 입력해주세요.</Text>
+            <Text style={styles.title}>빌라 가입하기</Text>
+            <Text style={styles.subtitle}>관리자에게 받은 초대 코드를 입력해주세요.</Text>
           </View>
 
           <View style={styles.inputSection}>
@@ -94,7 +94,7 @@ const ResidentJoinScreen = ({ navigation }: any) => {
               maxLength={6}
             />
 
-            <Text style={styles.label}>동/호수 (예: 101호)</Text>
+            <Text style={styles.label}>호수 (예: 101호)</Text>
             <TextInput
               style={styles.input}
               placeholder="예: 101호"
@@ -126,7 +126,7 @@ const ResidentJoinScreen = ({ navigation }: any) => {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.joinButtonText}>빌라 입장하기</Text>
+              <Text style={styles.joinButtonText}>빌라 가입하기</Text>
             )}
           </TouchableOpacity>
         </View>

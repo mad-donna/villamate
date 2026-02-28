@@ -22,7 +22,7 @@ import * as AuthSession from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 const KAKAO_CLIENT_ID = 'ba8af524bbb28a9f74ce4ed088398fdb';
 const GOOGLE_CLIENT_ID = '540282711889-b5l2sg8hpnqim3a6gaoqht2o61ee4mko.apps.googleusercontent.com';
 const googleRedirectUri = 'https://villamate-proxy.loca.lt/api/auth/proxy';
@@ -80,12 +80,12 @@ const LoginScreen = ({ navigation }: any) => {
               provider: 'GOOGLE',
               providerId: String(googleUser.id),
               email: googleUser.email,
-              name: googleUser.name || '구글 유저',
+              name: googleUser.name || '구글 사용자',
             }),
           });
 
           const user = await backendResponse.json();
-          if (!backendResponse.ok) throw new Error(user.error || '백엔드 연동 실패');
+          if (!backendResponse.ok) throw new Error(user.error || '백엔드 동작 실패');
           await navigateAfterLogin(user);
         } catch (error: any) {
           Alert.alert('구글 로그인 실패', error.message);
@@ -102,9 +102,9 @@ const LoginScreen = ({ navigation }: any) => {
   useEffect(() => {
     const handleResponse = async () => {
       if (!response) return;
-      
+
       console.log('Full Kakao response type:', response.type);
-      
+
       if (response.type === 'success') {
         console.log('Kakao success params:', response.params);
         const { access_token } = response.params;
@@ -131,10 +131,10 @@ const LoginScreen = ({ navigation }: any) => {
     try {
       const userId = await AsyncStorage.getItem('userId');
       const userJson = await AsyncStorage.getItem('user');
-      
+
       if (userId && userJson) {
         const user = JSON.parse(userJson);
-        
+
         // 1. Check if profile setup is complete
         if (!user.phone) {
           navigation.replace('ProfileSetup');
@@ -230,7 +230,7 @@ const LoginScreen = ({ navigation }: any) => {
 
   const handleLogin = async (role: 'ADMIN' | 'RESIDENT') => {
     if (!phone) {
-      Alert.alert('알림', '휴대폰 번호를 입력해주세요.');
+      Alert.alert('알림', '전화번호를 입력해주세요.');
       return;
     }
 
@@ -241,10 +241,10 @@ const LoginScreen = ({ navigation }: any) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          phone, 
+        body: JSON.stringify({
+          phone,
           role,
-          name: role === 'ADMIN' ? '동대표' : '입주민'
+          name: role === 'ADMIN' ? '관리자' : '입주민'
         }),
       });
 
@@ -304,7 +304,7 @@ const LoginScreen = ({ navigation }: any) => {
   const handleSocialLogin = async (provider: string) => {
     if (provider === 'Kakao') {
       if (!request) {
-        Alert.alert('알림', '로그인 세션을 초기화하는 중입니다. 잠시 후 다시 시도해주세요.');
+        Alert.alert('알림', '로그인 옵션이 초기화하는 중입니다. 잠시 후 다시 시도해주세요.');
         return;
       }
       setKakaoLoading(true);
@@ -325,7 +325,7 @@ const LoginScreen = ({ navigation }: any) => {
         Alert.alert('구글 로그인 오류', err.message);
       });
     } else {
-      Alert.alert('알림', `소셜 로그인(${provider}) 연동 준비 중입니다.`);
+      Alert.alert('알림', `소셜 로그인(${provider}) 준비 중입니다.`);
     }
   };
 
@@ -342,7 +342,7 @@ const LoginScreen = ({ navigation }: any) => {
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>빌라메이트</Text>
-          <Text style={styles.subtitle}>우리가 만드는 스마트한 빌라 생활</Text>
+          <Text style={styles.subtitle}>우리가 만드는 아담한 빌라 생활</Text>
         </View>
 
         <View style={styles.socialButtonsContainer}>
@@ -354,7 +354,7 @@ const LoginScreen = ({ navigation }: any) => {
             <Text style={[styles.socialButtonText, { color: '#191919' }]}>이메일로 시작하기</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.socialButton, { backgroundColor: '#FEE500' }]}
             onPress={() => handleSocialLogin('Kakao')}
             disabled={kakaoLoading}
@@ -369,7 +369,7 @@ const LoginScreen = ({ navigation }: any) => {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.socialButton, { backgroundColor: '#03C75A' }]}
             onPress={() => handleSocialLogin('Naver')}
           >
@@ -393,7 +393,7 @@ const LoginScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.testModeButton}
           onPress={() => setIsTestModalVisible(true)}
         >
@@ -420,7 +420,7 @@ const LoginScreen = ({ navigation }: any) => {
 
               <ScrollView>
                 <View style={styles.inputContainer}>
-                  <Text style={styles.label}>휴대폰 번호</Text>
+                  <Text style={styles.label}>전화번호</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="01012345678"
@@ -435,14 +435,14 @@ const LoginScreen = ({ navigation }: any) => {
                   <ActivityIndicator size="large" color="#007AFF" style={{ marginVertical: 20 }} />
                 ) : (
                   <View style={styles.testButtonsRow}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.testActionButton, { backgroundColor: '#007AFF' }]}
                       onPress={() => handleLogin('ADMIN')}
                     >
                       <Text style={styles.testActionButtonText}>관리자 로그인</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.testActionButton, { backgroundColor: '#34C759' }]}
                       onPress={() => handleLogin('RESIDENT')}
                     >
@@ -450,9 +450,9 @@ const LoginScreen = ({ navigation }: any) => {
                     </TouchableOpacity>
                   </View>
                 )}
-                
+
                 <Text style={styles.modalNote}>
-                  * 실제 개발 환경에서 빠른 테스트를 위한 세션 우회용 로그인입니다.
+                  * 실제 개발 환경에서 빠른 테스트를 위한 일회성 로그인입니다.
                 </Text>
               </ScrollView>
             </View>

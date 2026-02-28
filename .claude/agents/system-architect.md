@@ -342,3 +342,97 @@ AppNavigator (Stack)
   </View>
 </SafeAreaView>
 ```
+
+---
+
+### 2026-02-27 — 차량 관리 고도화, 입주민 전출입, 건물 이력 세션
+
+#### 데이터 모델 변경 사항
+
+**Vehicle 모델 업데이트**
+```
+Vehicle
+  ├── plateNumber String
+  ├── modelName String?         ← NEW (색상+모델 자유 텍스트)
+  ├── isVisitor Boolean
+  ├── expectedDeparture String? ← 변경: DateTime? → String? (자유 텍스트)
+  ├── ownerId String → User
+  └── villaId Int → Villa
+```
+
+**BuildingEvent 모델 추가 (신규)**
+```
+BuildingEvent
+  ├── id String @id @default(uuid())
+  ├── title String
+  ├── description String?
+  ├── category String            (하자보수|정기점검|유지계약|청소|기타)
+  ├── eventDate String           (자유 텍스트, 예: "2024-05-20")
+  ├── contractorName String?
+  ├── contactNumber String?
+  ├── attachmentUrl String?      ← multer 업로드 URL
+  ├── villaId Int → Villa
+  ├── creatorId String → User
+  └── createdAt DateTime
+```
+
+#### 신규 엔드포인트 (2026-02-27 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `GET` | `/api/villas/:villaId/vehicles` | 빌라 전체 차량 목록 (createdAt desc) |
+| `GET` | `/api/villas/:villaId/residents` | 입주민 목록 (roomNumber asc, recordId 포함) |
+| `POST` | `/api/villas/:villaId/residents/:residentId/move-out` | 전출 처리 (ResidentRecord deleteMany) |
+| `GET` | `/api/villas/:villaId/detail` | 빌라 상세 (inviteCode 포함) |
+| `POST` | `/api/villas/:villaId/building-events` | 건물 이력 생성 |
+| `GET` | `/api/villas/:villaId/building-events` | 건물 이력 목록 (eventDate desc) |
+| `POST` | `/api/upload` | 파일 업로드 (multer, 10MB 제한) |
+
+#### 신규 화면 및 네비게이션 업데이트
+
+```
+AppNavigator (Stack) — 2026-02-27 추가분
+├── BuildingHistory (Stack)       ← NEW: 건물 이력 목록
+└── CreateBuildingEvent (Stack)   ← NEW: 건물 이력 등록
+
+ManagementScreen 메뉴 구성 (현재):
+  ├── 새 청구서 발행하기        → CreateInvoice
+  ├── 입주민 및 전출입 관리     → ResidentManagement (갱신)
+  ├── 납부 내역 확인            → AdminInvoice
+  └── 건물 이력 및 계약 관리   → BuildingHistory (NEW)
+```
+
+#### 파일 업로드 아키텍처
+
+```
+클라이언트 (expo-image-picker)
+  └── FormData POST /api/upload
+        └── multer (diskStorage)
+              └── backend/uploads/{timestamp}-{random}.{ext}
+                    └── app.use('/uploads', express.static())
+                          → fileUrl: http://192.168.219.124:3000/uploads/...
+```
+
+- **현재**: 로컬 디스크 저장, 서버 재시작 시 파일 보존 (uploads/ 디렉토리)
+- **향후**: S3 등 오브젝트 스토리지로 마이그레이션 필요 (서버 이전 시 파일 소실 위험)
+
+#### Express 라우트 등록 순서 (현재 기준, 구체적 → 와일드카드)
+
+```
+/api/villas/:villaId/vehicles          (구체적 — 전체 목록)
+/api/villas/:villaId/vehicles/search   (구체적 — 검색)
+/api/villas/:villaId/residents         (구체적)
+/api/villas/:villaId/residents/:id/move-out (구체적)
+/api/villas/:villaId/building-events   (구체적)
+/api/villas/:villaId/detail            (구체적)
+/api/villas/:adminId                   (와일드카드 ← 항상 마지막)
+```
+
+#### 알려진 기술 부채 (2026-02-27 업데이트)
+
+- API_BASE_URL 각 스크린에 하드코딩 → 공통 config 필요
+- 인증 미들웨어 없음 → JWT + Express middleware 필요
+- 비밀번호 미저장 → bcrypt + password 컬럼 추가 필요
+- 단일 index.ts (~900+ 라인) → 도메인별 라우터 분리 필요 (auth, villas, invoices, vehicles, events, upload)
+- 업로드 파일 로컬 저장 → 오브젝트 스토리지(S3) 마이그레이션
+- multer 파일 타입 검증 부재 → MIME whitelist 추가 필요

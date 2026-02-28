@@ -15,7 +15,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 type InvoiceType = 'FIXED' | 'VARIABLE';
 
@@ -80,7 +80,7 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
         setVillaId(villas[0].id);
       } catch (err) {
         console.error('Resolve villaId error:', err);
-        Alert.alert('오류', '빌라 정보를 불러오지 못했습니다.');
+        Alert.alert('오류', '빌라 정보를 불러오지 못했습니다');
         navigation.goBack();
       } finally {
         setResolving(false);
@@ -142,7 +142,7 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
 
     if (invoiceType === 'FIXED') {
       if (!fixedAmount.trim() || isNaN(Number(fixedAmount)) || Number(fixedAmount) <= 0) {
-        Alert.alert('알림', '세대 당 청구 금액을 올바르게 입력해주세요.');
+        Alert.alert('알림', '세대 당 관리비 금액을 올바르게 입력해주세요.');
         return;
       }
     } else {
@@ -192,7 +192,7 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
         throw new Error(errorData.error || '발행 실패');
       }
 
-      Alert.alert('발행 완료', '청구서가 성공적으로 발행되었습니다.', [
+      Alert.alert('발행 완료', '청구서를 성공적으로 발행했습니다', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {
@@ -208,7 +208,7 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>빌라 정보 불러오는 중...</Text>
+          <Text style={styles.loadingText}>빌라 정보 불러오는 중..</Text>
         </View>
       </SafeAreaView>
     );
@@ -224,7 +224,7 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
       >
         <View style={styles.headerSection}>
           <Text style={styles.screenTitle}>관리비 청구서 발행</Text>
-          <Text style={styles.subtitle}>입주민에게 발행할 청구서 정보를 입력해주세요.</Text>
+          <Text style={styles.subtitle}>입주민에게 발행할 청구서의 정보를 입력해주세요.</Text>
         </View>
 
         {/* Segmented Control */}
@@ -312,7 +312,7 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
           {/* FIXED: single amount input */}
           {invoiceType === 'FIXED' && (
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>세대 당 청구 금액</Text>
+              <Text style={styles.label}>세대 당 관리비 금액</Text>
               <TextInput
                 style={styles.input}
                 placeholder="예: 50000"
@@ -378,13 +378,13 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
             {/* Totals summary */}
             <View style={styles.totalsSummary}>
               <Text style={styles.totalsText}>
-                총 청구 금액:{' '}
+                총 합산 금액:{' '}
                 <Text style={styles.totalsHighlight}>
                   {variableTotal.toLocaleString()} 원
                 </Text>
               </Text>
               <Text style={styles.totalsSubText}>
-                예상 1/N 청구 금액: 입주민 수 확인 중...
+                예상 1/N 세대 금액: 입주민 수 확인 중..
               </Text>
             </View>
           </View>

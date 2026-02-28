@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 const BANKS = [
   { id: '1', name: '국민은행' },
@@ -64,7 +64,7 @@ const OnboardingScreen = ({ navigation }: any) => {
   const [totalUnits, setTotalUnits] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [bankName, setBankName] = useState('');
-  
+
   const [loading, setLoading] = useState(false);
   const [isPostcodeVisible, setIsPostcodeVisible] = useState(false);
   const [isBankModalVisible, setIsBankModalVisible] = useState(false);
@@ -99,7 +99,7 @@ const OnboardingScreen = ({ navigation }: any) => {
     }
 
     if (!adminId) {
-      Alert.alert('오류', '로그인 정보가 없습니다. 다시 로그인 해주세요.');
+      Alert.alert('오류', '로그인 정보가 없습니다. 다시 로그인해주세요.');
       navigation.navigate('Login');
       return;
     }
@@ -125,7 +125,7 @@ const OnboardingScreen = ({ navigation }: any) => {
         const villa = await response.json();
         Alert.alert(
           '등록 완료',
-          `빌라 등록이 완료되었습니다!\n\n초대 코드: ${villa.inviteCode}\n\n입주민에게 이 코드를 공유해주세요.`,
+          `빌라 등록이 완료되었습니다.\n\n초대 코드: ${villa.inviteCode}\n\n입주민에게 이 코드를 공유해주세요.`,
           [{ text: '확인', onPress: () => navigation.navigate('Main') }]
         );
       } else {
@@ -150,7 +150,7 @@ const OnboardingScreen = ({ navigation }: any) => {
   };
 
   const showGuide = () => {
-    Alert.alert('안내', '서비스 가이드 노션 페이지로 이동합니다.');
+    Alert.alert('안내', '서비스 가이드 안내 페이지로 이동합니다');
   };
 
   return (
@@ -161,7 +161,7 @@ const OnboardingScreen = ({ navigation }: any) => {
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <Text style={styles.title}>빌라 등록</Text>
-          <Text style={styles.subtitle}>대표자 정보를 입력하여 서비스를 시작하세요.</Text>
+          <Text style={styles.subtitle}>관리자 정보를 입력하여 서비스를 시작하세요</Text>
 
           <View style={styles.form}>
             <Text style={styles.label}>빌라 주소</Text>
@@ -172,8 +172,8 @@ const OnboardingScreen = ({ navigation }: any) => {
                 value={address}
                 editable={false}
               />
-              <TouchableOpacity 
-                style={styles.searchButton} 
+              <TouchableOpacity
+                style={styles.searchButton}
                 onPress={() => setIsPostcodeVisible(true)}
               >
                 <Text style={styles.searchButtonText}>주소 검색</Text>
@@ -183,7 +183,7 @@ const OnboardingScreen = ({ navigation }: any) => {
             <Text style={styles.label}>빌라 이름</Text>
             <TextInput
               style={styles.input}
-              placeholder="예: 테헤란 팰리스"
+              placeholder="예: 해피 빌라"
               value={buildingName}
               onChangeText={setBuildingName}
             />
@@ -198,8 +198,8 @@ const OnboardingScreen = ({ navigation }: any) => {
             />
 
             <Text style={styles.label}>은행 선택</Text>
-            <TouchableOpacity 
-              style={styles.input} 
+            <TouchableOpacity
+              style={styles.input}
               onPress={() => setIsBankModalVisible(true)}
             >
               <Text style={[styles.inputText, !bankName && styles.placeholderText]}>
@@ -218,7 +218,7 @@ const OnboardingScreen = ({ navigation }: any) => {
 
             <View style={styles.infoBox}>
               <Text style={styles.infoText}>
-                💡 팁: 세무서에서 '고유번호증'을 발급받아 빌라 명의의 통장을 만들면 관리가 투명해져요!
+                세무서에서 &apos;고유번호증&apos;을 발급받아 빌라 명의의 통장을 만들면 관리가 편해져요
               </Text>
               <TouchableOpacity onPress={showGuide}>
                 <Text style={styles.guideLink}>[발급 가이드 보기]</Text>
@@ -285,9 +285,9 @@ const OnboardingScreen = ({ navigation }: any) => {
         animationType="slide"
         onRequestClose={() => setIsBankModalVisible(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPress={() => setIsBankModalVisible(false)}
         >
           <View style={styles.bottomSheet}>
@@ -299,7 +299,7 @@ const OnboardingScreen = ({ navigation }: any) => {
               data={BANKS}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.bankItem}
                   onPress={() => {
                     setBankName(item.name);

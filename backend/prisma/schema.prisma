@@ -29,6 +29,7 @@ model User {
   posts           Post[]
   comments        Comment[]
   vehicles        Vehicle[]
+  buildingEvents  BuildingEvent[]
 }
 
 model Villa {
@@ -48,6 +49,7 @@ model Villa {
   invoices        Invoice[]
   posts           Post[]
   vehicles        Vehicle[]
+  buildingEvents  BuildingEvent[]
 }
 
 enum InvoiceType {
@@ -128,11 +130,28 @@ model Comment {
 model Vehicle {
   id                String    @id @default(uuid())
   plateNumber       String
+  modelName         String?
   isVisitor         Boolean   @default(false)
-  expectedDeparture DateTime?
+  expectedDeparture String?
   ownerId           String
   villaId           Int
   createdAt         DateTime  @default(now())
   owner             User      @relation(fields: [ownerId], references: [id])
   villa             Villa     @relation(fields: [villaId], references: [id])
+}
+
+model BuildingEvent {
+  id             String   @id @default(uuid())
+  title          String
+  description    String?
+  category       String
+  eventDate      String
+  contractorName String?
+  contactNumber  String?
+  attachmentUrl  String?
+  villaId        Int
+  villa          Villa    @relation(fields: [villaId], references: [id])
+  creatorId      String
+  creator        User     @relation(fields: [creatorId], references: [id])
+  createdAt      DateTime @default(now())
 }

@@ -13,7 +13,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 const CreatePostScreen = ({ navigation, route }: any) => {
   const insets = useSafeAreaInsets();

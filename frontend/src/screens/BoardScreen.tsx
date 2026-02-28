@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface PostAuthor {
   name: string;
@@ -135,7 +135,7 @@ const BoardScreen = ({ navigation, route }: any) => {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={styles.noticeToggleButtonText}>
-                  {item.isNotice ? '공지 내리기' : '공지 등록'}
+                  {item.isNotice ? '공지 해제' : '공지 등록'}
                 </Text>
               )}
             </TouchableOpacity>

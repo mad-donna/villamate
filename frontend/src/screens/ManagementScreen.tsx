@@ -13,7 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
-const API_BASE_URL = 'http://192.168.219.108:3000';
+const API_BASE_URL = 'http://192.168.219.124:3000';
 
 interface MenuItem {
   id: string;
@@ -74,19 +74,27 @@ const ManagementScreen = () => {
     },
     {
       id: 'residents',
-      label: '입주민 관리',
-      sublabel: '입주민 정보 및 초대 코드를 확인합니다',
+      label: '입주민 및 전출입 관리',
+      sublabel: '입주민 전출 처리 및 초대 코드를 관리합니다',
       icon: 'people-outline',
       color: '#34C759',
       onPress: () => navigation.navigate('ResidentManagement'),
     },
     {
       id: 'ledger',
-      label: '장부 내역 확인',
-      sublabel: '공용 장부 및 영수증을 확인합니다',
+      label: '납부 내역 확인',
+      sublabel: '공용 납부 및 영수증을 확인합니다',
       icon: 'book-outline',
       color: '#007AFF',
       onPress: () => navigation.navigate('Ledger'),
+    },
+    {
+      id: 'building',
+      label: '건물 이력 및 계약 관리',
+      sublabel: '하자보수, 정기점검, 계약 이력을 기록합니다',
+      icon: 'construct-outline',
+      color: '#5856D6',
+      onPress: () => navigation.navigate('BuildingHistory'),
     },
   ];
 
@@ -95,7 +103,7 @@ const ManagementScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>관리</Text>
-          <Text style={styles.headerSubtitle}>빌라 운영에 필요한 기능들을 이용하세요</Text>
+          <Text style={styles.headerSubtitle}>빌라 운영의 주요 기능들을 이용하세요</Text>
         </View>
 
         {loading ? (
