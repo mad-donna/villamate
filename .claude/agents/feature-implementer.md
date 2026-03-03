@@ -412,3 +412,99 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 - **1세대1표 패턴**: Vote 모델에 `@@unique([pollId, roomNumber])` + 백엔드에서 `findUnique({ where: { pollId_roomNumber: { pollId, roomNumber } } })`
 - **투표 결과 바**: `barBg`(flex row) + `barFill`(flex: pct) + 나머지(flex: 100-pct) — React Native에서 퍼센트 바 구현
 - **DateTimePicker (투표)**: iOS `inline`, Android `default`; `minimumDate={new Date()}` 으로 과거 날짜 차단
+
+---
+
+### 2026-03-01 — 전자투표 Admin 버그 수정, CS 티켓/민원 시스템, UX 정리 세션
+
+#### 이 세션에서 구현/수정한 기능
+
+1. **Admin 전자투표 버그 수정**
+   - 근본 원인: 투표 라우트가 `ResidentRecord` 없으면 즉시 403 반환 → Admin은 항상 차단됨
+   - 백엔드: ResidentRecord 없을 때 `villa.findFirst`로 Admin 여부 확인 후 `'admin'` sentinel roomNumber 사용
+   - 1세대 1표는 `@@unique([pollId, roomNumber])` 그대로 적용 (`'admin'` sentinel 포함)
+   - 프론트: `PollDetailScreen`에 `userRole` 파라미터 추가, `hasVoted`/`myOptionId` Admin 판별 로직 추가
+   - `PollListScreen`, `DashboardScreen`, `ResidentDashboardScreen`에서 `userRole` 전달 추가
+   - 테스트: 23개 모두 통과 (Admin 투표 201 + 중복 투표 409 케이스 추가)
+
+2. **CS 티켓 / 민원 시스템 구현** (이후 커뮤니티 게시판으로 통합 결정으로 제거됨)
+   - DB: `Ticket` 모델 추가 (id, title, description, imageUrl?, status, creatorId, villaId, createdAt)
+   - 백엔드: `POST/GET /api/villas/:villaId/tickets`, `PATCH .../tickets/:ticketId/status`
+   - 프론트: `CreateTicketScreen.tsx`, `TicketListScreen.tsx` 신규 생성
+   - Admin 상태 변경 버튼, 컬러 상태 배지 (PENDING=빨강/IN_PROGRESS=주황/RESOLVED=초록)
+
+3. **민원 기능을 커뮤니티 게시판(Post)에 통합** (중복 UX 제거 결정)
+   - DB: `Post` 모델에 `category String @default("GENERAL")`, `status String?` 추가
+   - 백엔드: `POST /api/villas/:villaId/posts`에 category 처리 추가 (ISSUE면 status='PENDING' 자동 설정)
+   - 백엔드: `PATCH /api/villas/:villaId/posts/:postId/status` 신규 (ADMIN만 상태 변경 가능)
+   - `CreatePostScreen`: 게시 유형 칩 선택 UI ('일반 게시글' / '민원·하자 접수')
+   - `BoardScreen`: ISSUE 게시글에 상태 배지 렌더링
+   - `PostDetailScreen`: Admin에게 상태 변경 버튼 3개 표시 (접수 대기/처리 중/처리 완료), 변경 즉시 UI 반영
+
+4. **독립형 티켓 시스템 제거 및 코드 정리**
+   - `TicketListScreen.tsx`, `CreateTicketScreen.tsx` 파일 삭제
+   - `AppNavigator.tsx`에서 Ticket 관련 import 2개, Stack.Screen 2개 제거
+   - `DashboardScreen`, `ResidentDashboardScreen`에서 '민원 접수' 버튼 제거
+
+5. **홈 화면 퀵액션 버튼 정리**
+   - Admin 대시보드: 7개 → 3개 ('청구서 발행', '주차 조회', '전자투표') 단일 행 배치
+   - `actionRows` 동적 분할 로직 제거 → 단순 단일 행 렌더링으로 교체
+   - Resident 대시보드: 4개 pill → 2개 ('주차 조회', '전자투표') 가운데 정렬
+   - `flex: 1` 제거 → `paddingHorizontal: 32` 고정 너비, `justifyContent: 'center'`
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **Admin sentinel roomNumber 패턴**: ResidentRecord가 없는 Admin 사용자에게 `'admin'` 문자열을 roomNumber로 사용 → 기존 `@@unique` 제약 재사용하여 중복 투표 방지
+- **게시글 카테고리 확장 패턴**: 기존 모델에 `category` + `status` 컬럼 추가로 기능 분기 — 별도 모델 신규 생성 없이 기존 CRUD 재활용
+- **Admin 전용 인라인 컨트롤 패턴**: `userRole === 'ADMIN'` 조건으로 동일 상세 화면에서 관리 기능 인라인 렌더링 (별도 화면 불필요)
+- **퀵액션 버튼 수와 레이아웃 원칙**: 3개 이하는 단일 행 `flex: 1`, 2개는 `justifyContent: 'center'` + 고정 padding 방식이 더 자연스러운 UX
+
+---
+
+### 2026-03-02 — Expo 푸시 알림, iOS 키보드 UX, ProfileScreen 개편, 마이페이지 고도화 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **Expo 푸시 알림 시스템 구현** (풀스택)
+   - DB: `User` 모델에 `expoPushToken String?` 추가, `npx prisma db push` 적용
+   - 백엔드 패키지: `expo-server-sdk` 설치
+   - 백엔드: `PATCH /api/users/:userId/push-token` — 디바이스 토큰 저장 엔드포인트
+   - 백엔드: `POST /api/villas/:villaId/posts/:postId/send-push` — 관리자가 수동으로 공지 푸시 발송
+     - 알림 제목: `'새롭게 공지사항 등록된 글이 있습니다. 확인해보실까요?'`
+     - 알림 본문: 게시글 제목
+     - `Expo.isExpoPushToken()`으로 유효 토큰만 필터링, 청크 단위 발송
+   - 프론트: `App.tsx`에 `Notifications.setNotificationHandler` 포그라운드 알림 표시 설정
+   - 프론트: 앱 마운트 시 권한 요청 → 토큰 획득 → `PATCH /api/users/:userId/push-token` 호출
+   - 프론트: `PostDetailScreen`에 `isNotice === true && userRole === 'ADMIN'` 조건으로 초록색 '공지사항 푸시 발송' 버튼 추가
+   - 테스트: `api.spec.ts` — `expo-server-sdk` mock 추가, 32개 전체 통과
+
+2. **iOS 키보드 겹침 UX 수정** (2개 화면)
+   - `EmailLoginScreen.tsx`: `react-native-keyboard-aware-scroll-view` (서드파티) 제거 → 표준 RN `KeyboardAvoidingView` + `ScrollView`로 교체
+   - `LoginScreen.tsx`: 테스트 로그인 모달 내부에 `KeyboardAvoidingView` 추가 (모달 내 TextInput 키보드 겹침 해소)
+
+3. **ProfileScreen 전면 개편** (iOS Settings 스타일)
+   - DB: `User` 모델에 `password String?` 추가, `bcryptjs` 설치
+   - 백엔드: `DELETE /api/users/:userId` — 회원 탈퇴 (이름 익명화, 연락처·토큰 null, `status='DELETED'`)
+   - 백엔드: `PATCH /api/users/:userId/password` — bcrypt 기반 비밀번호 변경 (`bcrypt.compare` 검증 → `bcrypt.hash(10)` 저장)
+   - `ProfileScreen.tsx` 완전 재작성: 원형 아바타(이름 첫 글자), 역할/호수 칩, iOS 설정 스타일 카드 섹션
+     - 섹션 구성: 내 집 / 계정 정보 / 앱 설정(푸시 Switch) / 계정 관리(로그아웃+탈퇴)
+   - `VehicleManagementScreen.tsx` 신규 생성: 기존 ProfileScreen 차량 관리 로직 분리
+   - `ChangePasswordScreen.tsx` 신규 생성: 현재/새/확인 비밀번호 입력 폼, 클라이언트 검증(6자 이상, 일치 확인)
+   - `AppNavigator.tsx`: `VehicleManagement`, `ChangePassword` 스택 화면 등록
+
+4. **마이페이지 Perfectionist Profile 고도화**
+   - 백엔드: `GET /api/users/:userId/posts` — 유저가 작성한 모든 게시글 (createdAt desc)
+   - `MyPostsScreen.tsx` 신규 생성: BoardScreen 카드 UI 재사용, 공지/민원/상태 배지 포함, `PostDetail` 이동
+   - `ProfileScreen.tsx` 업데이트:
+     - '내가 쓴 글 / 민원 내역' 행 추가 → `MyPosts` 화면 이동
+     - '고객센터 & 약관' 섹션 추가 (이용약관, 개인정보처리방침 — Alert 플레이스홀더)
+   - `AppNavigator.tsx`: `MyPosts` 스택 화면 등록
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **Expo Push Token 등록 패턴**: `Device.isDevice` 가드 → 권한 요청 → `getExpoPushTokenAsync()` → `PATCH /api/users/:userId/push-token`으로 저장, Android 채널 선행 설정
+- **수동 트리거 푸시 패턴**: 자동 발송 대신 관리자가 직접 버튼으로 발송 (`send-push` 엔드포인트 분리) → UX 제어권 관리자에게 부여
+- **bcrypt 비밀번호 패턴**: 기존 비밀번호 없으면 `oldPassword` 검증 스킵 (최초 설정 허용), 있으면 `bcrypt.compare` 검증 후 `bcrypt.hash(salt=10)` 저장
+- **회원 탈퇴 소프트 처리**: `User` 레코드를 DELETE하지 않고 이름 익명화 + 연락처 null + `status='DELETED'`로 처리 → 연관 InvoicePayment, Comment 등 외래키 보존
+- **모달 내 키보드 처리**: 바텀시트 스타일 모달(`justifyContent: 'flex-end'`)에서 `TouchableWithoutFeedback` > `View.modalOverlay` > `KeyboardAvoidingView` > `View.modalContent` 구조
+- **Jest에서 expo-server-sdk mock**: `jest.mock()` 팩토리 내부에 `__mockInstance` 참조를 `MockExpo`에 부착 → `clearAllMocks()` 후에도 mock 함수 참조 유지

@@ -24,7 +24,7 @@ interface Poll {
 }
 
 const PollListScreen = ({ navigation, route }: any) => {
-  const { villaId, userId } = route.params ?? {};
+  const { villaId, userId, userRole } = route.params ?? {};
   const [polls, setPolls] = useState<Poll[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -69,7 +69,7 @@ const PollListScreen = ({ navigation, route }: any) => {
               <TouchableOpacity
                 key={poll.id}
                 style={styles.card}
-                onPress={() => navigation.navigate('PollDetail', { pollId: poll.id, villaId, userId })}
+                onPress={() => navigation.navigate('PollDetail', { pollId: poll.id, villaId, userId, userRole })}
                 activeOpacity={0.75}
               >
                 <View style={styles.cardHeader}>

@@ -480,3 +480,216 @@
 3. **공용 장부 실데이터 연동**: LedgerScreen 더미 데이터 → 실제 LedgerTransaction DB 연동
 4. **외부 청구 SMS 자동화**: 수동 복사 → 카카오 알림톡 자동 발송 연결
 5. **업로드 스토리지 마이그레이션**: 로컬 디스크 → S3 또는 Supabase Storage
+
+---
+
+## 12. MVP 구현 현황 (2026-03-01 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### Admin 전자투표 버그 수정
+
+- 버그: Admin 사용자는 `ResidentRecord`가 없어 투표 라우트에서 항상 403 반환
+- 수정: ResidentRecord 없을 때 `villa.findFirst`로 Admin 여부 2차 확인, `'admin'` sentinel roomNumber 사용
+- 1세대 1표(`@@unique([pollId, roomNumber])`) 제약은 Admin에게도 동일 적용 → 중복 투표 방지 유지
+- 프론트: `PollDetailScreen`에 `userRole` 파라미터 추가, Admin 투표 후 결과 화면 정상 표시
+- `DashboardScreen`, `ResidentDashboardScreen`, `PollListScreen`에서 `userRole` 전달 일괄 추가
+
+#### 민원/하자 접수 — 게시판(Post) 통합 (UX 통합 결정)
+
+**제품 결정 배경**: 독립 Ticket 시스템은 별도 메뉴/화면으로 인한 UX 분산, 댓글 기능 부재 등 단점 존재. 커뮤니티 게시판에 카테고리를 추가하는 방식으로 통합하여 공개적 투명성 확보 및 앱 UX 단순화.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Post` 모델에 `category String @default("GENERAL")`, `status String?` 컬럼 추가 |
+| 백엔드 | `POST /api/villas/:villaId/posts` — `category` 파라미터 추가, ISSUE이면 `status='PENDING'` 자동 설정 |
+| 백엔드 | `PATCH /api/villas/:villaId/posts/:postId/status` 신규 — ADMIN만 상태 변경 가능 (PENDING / IN_PROGRESS / RESOLVED) |
+| CreatePostScreen | 게시 유형 칩 선택 UI 추가: '일반 게시글' / '민원·하자 접수' |
+| BoardScreen | ISSUE 게시글에 상태 배지 표시 (접수 대기=빨강 / 처리 중=주황 / 처리 완료=초록) |
+| PostDetailScreen | Admin에게 상태 변경 버튼 3개 인라인 표시, 변경 즉시 UI 반영 (로컬 state 업데이트) |
+
+#### 독립형 티켓 시스템 제거
+
+| 구분 | 내용 |
+|------|------|
+| 삭제 | `frontend/src/screens/TicketListScreen.tsx` |
+| 삭제 | `frontend/src/screens/CreateTicketScreen.tsx` |
+| AppNavigator | `TicketList`, `CreateTicket` Stack.Screen 및 import 제거 |
+| DashboardScreen | '민원 접수' 퀵액션 버튼 제거 |
+| ResidentDashboardScreen | '민원 접수' pill 버튼 제거 |
+
+#### 홈 화면 퀵액션 정리 (중복 제거)
+
+**Admin 대시보드 (`DashboardScreen.tsx`)**
+- 7개 → 3개로 축소 (제거: 커뮤니티, 공용 장부, 입주민 관리, 외부 청구)
+- 남긴 항목: '청구서 발행', '주차 조회', '전자투표'
+- `actionRows` 동적 분할 로직 제거 → 단순 단일 행 렌더링
+
+**Resident 대시보드 (`ResidentDashboardScreen.tsx`)**
+- 4개 → 2개로 축소 (제거: 커뮤니티, 공용 장부)
+- 남긴 항목: '주차 조회', '전자투표' (레이블 '투표' → '전자투표' 변경)
+- 스타일: `justifyContent: 'center'`, `flex: 1` 제거, `paddingHorizontal: 32` 고정
+
+### 현재 구현된 전체 화면 목록 (2026-03-01 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `ProfileSetupScreen`, `OnboardingScreen`, `ResidentJoinScreen`
+
+#### 관리자 탭 (4개)
+- `DashboardScreen` (홈 — 위젯 + 퀵액션 3개), `BoardScreen` (커뮤니티+민원), `ManagementScreen` (관리), `ProfileScreen` (프로필)
+
+#### 입주민 탭 (3개)
+- `ResidentDashboardScreen` (홈 — 위젯 + 퀵액션 2개), `BoardScreen` (커뮤니티+민원), `ProfileScreen` (프로필)
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen` (전출 처리 + 초대코드)
+- `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen` (Admin 민원 상태 변경 인라인), `CreatePostScreen` (게시 유형 선택)
+- `ParkingSearchScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen` (Admin 투표 가능)
+
+### 현재 기술 스택 (2026-03-01 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~1300+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| API 설정 | `frontend/src/config.ts` (API_BASE_URL 중앙화) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker v8.4.4 |
+| 키보드 처리 | react-native-keyboard-aware-scroll-view |
+| SafeArea | react-native-safe-area-context |
+
+### 다음 개발 우선순위 (2026-03-01 업데이트)
+
+1. **보안 강화**: 비밀번호 해싱(bcrypt), JWT 인증 미들웨어, PG 결제 `imp_uid` 서버 검증
+2. **알림 기능**: 미납자 푸시 알림 또는 카카오 알림톡 (핵심 기획 요구사항, 계속 미구현)
+3. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
+4. **외부 청구 SMS 자동화**: 수동 복사 → 카카오 알림톡 자동 발송
+5. **업로드 스토리지 마이그레이션**: 로컬 디스크 → S3 또는 Supabase Storage
+6. **Ticket 모델 정리**: schema.prisma에 잔존하는 미사용 Ticket 모델 제거
+
+---
+
+## 13. MVP 구현 현황 (2026-03-02 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### Expo 푸시 알림 시스템 (신규)
+
+초기 기획의 "미납자 자동 알림" 요구사항의 1단계 인프라 구축.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `User.expoPushToken String?` 필드 추가 |
+| 백엔드 패키지 | `expo-server-sdk` 설치 |
+| 백엔드 | `PATCH /api/users/:userId/push-token` 신규 (토큰 저장) |
+| 백엔드 | `POST /api/villas/:villaId/posts/:postId/send-push` 신규 (전 입주민 수동 푸시 발송) |
+| 프론트 패키지 | `expo-notifications`, `expo-device` 설치 |
+| App.tsx | 앱 시작 시 알림 권한 요청 + Expo 토큰 획득 + 서버 저장 |
+| PostDetailScreen | '공지사항 푸시 발송' 버튼 추가 (공지 글 + ADMIN 전용, 녹색) |
+
+- **UX 결정**: 공지 등록 시 자동 발송 → 관리자 수동 발송 버튼으로 변경 (관리자 컨트롤 강화)
+- 발송 내용: 제목 `'새롭게 공지사항 등록된 글이 있습니다. 확인해보실까요?'`, 본문: 게시글 제목
+
+#### bcrypt 비밀번호 보안 적용 (보안 강화)
+
+| 구분 | 내용 |
+|------|------|
+| DB | `User.password String?` 필드 추가 |
+| 백엔드 패키지 | `bcryptjs`, `@types/bcryptjs` 설치 |
+| 백엔드 | `PATCH /api/users/:userId/password` 신규 — `bcrypt.compare(old)` 검증 후 `bcrypt.hash(new, 10)` 저장 |
+| ChangePasswordScreen | 현재 비밀번호 / 새 비밀번호 / 확인 입력, 클라이언트 유효성 검사 |
+
+#### 회원 탈퇴 기능 (신규)
+
+| 구분 | 내용 |
+|------|------|
+| 백엔드 | `DELETE /api/users/:userId` 신규 — 소프트 삭제 (익명화: name='탈퇴한 사용자', 이메일/전화 null, status='DELETED') |
+| ProfileScreen | 회원 탈퇴 버튼 + 이중 Alert 확인 → API 호출 → AsyncStorage.clear() → 로그인 화면 이동 |
+
+#### ProfileScreen iOS 설정 앱 스타일 전면 개편
+
+기존 혼잡한 레이아웃 → iOS 설정 앱 스타일의 섹션 카드 기반 구조로 완전 재설계.
+
+| 섹션 | 항목 |
+|------|------|
+| 내 집 | 내 차량 관리 → VehicleManagementScreen, 내가 쓴 글/민원 내역 → MyPostsScreen |
+| 계정 정보 | 비밀번호 변경 → ChangePasswordScreen |
+| 앱 설정 | 푸시 알림 Switch 토글 |
+| 고객센터 & 약관 | 이용약관, 개인정보처리방침 (플레이스홀더) |
+| 계정 관리 | 로그아웃 (빨강), 회원 탈퇴 (회색) |
+
+- 헤더: 이름 첫 글자 아바타, 이름, 역할 칩(ADMIN=파랑, RESIDENT=보라), 호수 칩
+
+#### 차량 관리 전용 화면 분리 (신규)
+
+- 기존 ProfileScreen에 내장 → `VehicleManagementScreen.tsx` 독립 화면으로 분리
+- `useFocusEffect` + `useCallback` 패턴으로 진입 시 자동 새로고침
+- ADMIN / RESIDENT 역할에 따라 villaId 조회 경로 분기 유지
+
+#### 내가 쓴 글 / 민원 내역 (신규)
+
+| 구분 | 내용 |
+|------|------|
+| 백엔드 | `GET /api/users/:userId/posts` 신규 — 작성자 기준 게시글 목록 (최신순) |
+| MyPostsScreen | FlatList 카드 목록 — 공지 뱃지(파랑), 민원 뱃지(보라), 상태 뱃지 표시 |
+| 네비게이션 | 카드 탭 → `PostDetailScreen`으로 이동 |
+
+### 현재 구현된 전체 화면 목록 (2026-03-02 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `ProfileSetupScreen`, `OnboardingScreen`, `ResidentJoinScreen`
+
+#### 관리자 탭 (4개)
+- `DashboardScreen` (홈), `BoardScreen` (커뮤니티+민원), `ManagementScreen` (관리), `ProfileScreen` (iOS 설정 스타일)
+
+#### 입주민 탭 (3개)
+- `ResidentDashboardScreen` (홈), `BoardScreen` (커뮤니티+민원), `ProfileScreen` (iOS 설정 스타일)
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen`, `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen` (공지 푸시 발송 버튼 포함), `CreatePostScreen`
+- `ParkingSearchScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen`
+- `VehicleManagementScreen` ← NEW (차량 관리 독립 화면)
+- `ChangePasswordScreen` ← NEW (비밀번호 변경)
+- `MyPostsScreen` ← NEW (내가 쓴 글/민원 내역)
+
+### 현재 기술 스택 (2026-03-02 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~1400+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| API 설정 | `frontend/src/config.ts` (API_BASE_URL 중앙화) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker v8.4.4 |
+| 키보드 처리 | react-native-keyboard-aware-scroll-view (일부), 표준 KeyboardAvoidingView (일부) |
+| SafeArea | react-native-safe-area-context |
+| 푸시 알림 | expo-notifications + expo-device + expo-server-sdk |
+| 비밀번호 | bcryptjs (hash rounds: 10) |
+| 테스트 | Jest + supertest (32개 테스트) |
+
+### 다음 개발 우선순위 (2026-03-02 업데이트)
+
+1. **알림 고도화**: 미납자 개인 대상 자동 푸시 알림 (핵심 기획 요구사항 — 아직 미구현)
+2. **JWT 인증 미들웨어**: API 보안 + 신규 push-token/send-push 엔드포인트 보호
+3. **PG 결제 서버 검증**: `imp_uid` → PortOne API 서버 검증 (보안 필수)
+4. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
+5. **외부 청구 SMS 자동화**: 수동 복사 → 카카오 알림톡 자동 발송
+6. **업로드 스토리지 마이그레이션**: 로컬 디스크 → S3 또는 Supabase Storage

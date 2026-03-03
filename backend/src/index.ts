@@ -6,11 +6,14 @@ import cron from 'node-cron';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { Expo } from 'expo-server-sdk';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
 const prisma = new PrismaClient();
 const app = express();
+const expo = new Expo();
 const port = process.env.PORT || 3000;
 
 // Ensure uploads directory exists
@@ -94,6 +97,98 @@ app.post('/api/auth/email-login', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Email login error:', error);
     res.status(500).json({ error: 'Email login failed' });
+  }
+});
+
+// Register or update Expo push token for a user
+app.patch('/api/users/:userId/push-token', async (req: Request, res: Response) => {
+  const userId = String(req.params.userId);
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ error: 'token is required' });
+  }
+
+  try {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { expoPushToken: String(token) },
+    });
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Push token update error:', error);
+    res.status(500).json({ error: 'Failed to update push token' });
+  }
+});
+
+// Account deletion — anonymizes the user record
+app.delete('/api/users/:userId', async (req: Request, res: Response) => {
+  const userId = String(req.params.userId);
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: '탈퇴한 사용자',
+        email: null,
+        phone: null,
+        profileImage: null,
+        expoPushToken: null,
+        status: 'DELETED',
+      },
+    });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Fetch all posts created by a user
+app.get('/api/users/:userId/posts', async (req: Request, res: Response) => {
+  const userId = String(req.params.userId);
+  try {
+    const posts = await prisma.post.findMany({
+      where: { authorId: userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        author: {
+          select: { name: true },
+        },
+      },
+    });
+    res.status(200).json(posts);
+  } catch (error) {
+    console.error('Fetch user posts error:', error);
+    res.status(500).json({ error: 'Failed to fetch user posts' });
+  }
+});
+
+// Password change
+app.patch('/api/users/:userId/password', async (req: Request, res: Response) => {
+  const userId = String(req.params.userId);
+  const { oldPassword, newPassword } = req.body;
+
+  if (!newPassword) {
+    return res.status(400).json({ error: 'newPassword is required' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // If user has an existing password, verify the old one
+    if (user.password) {
+      if (!oldPassword) return res.status(400).json({ error: 'oldPassword is required' });
+      const match = await bcrypt.compare(String(oldPassword), user.password);
+      if (!match) return res.status(401).json({ error: '현재 비밀번호가 올바르지 않습니다.' });
+    }
+
+    const hashed = await bcrypt.hash(String(newPassword), 10);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 });
 
@@ -771,7 +866,7 @@ app.post('/api/villas/:villaId/posts', async (req: Request, res: Response) => {
   const villaId = parseInt(String(req.params.villaId), 10);
   if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
 
-  const { title, content, authorId, isNotice } = req.body;
+  const { title, content, authorId, isNotice, category } = req.body;
 
   if (!title || !content || !authorId) {
     return res.status(400).json({ error: 'title, content, and authorId are required' });
@@ -785,12 +880,54 @@ app.post('/api/villas/:villaId/posts', async (req: Request, res: Response) => {
         isNotice: Boolean(isNotice) || false,
         authorId: String(authorId),
         villaId,
+        category: category === 'ISSUE' ? 'ISSUE' : 'GENERAL',
+        status: category === 'ISSUE' ? 'PENDING' : null,
       },
     });
+
     res.status(201).json(post);
   } catch (error) {
     console.error('Create post error:', error);
     res.status(500).json({ error: 'Failed to create post' });
+  }
+});
+
+// Manual push notification for a specific post (admin-triggered)
+app.post('/api/villas/:villaId/posts/:postId/send-push', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  const postId = String(req.params.postId);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  try {
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    const records = await prisma.residentRecord.findMany({
+      where: { villaId },
+      include: { user: true },
+    });
+    const tokens = records
+      .map((r: any) => r.user.expoPushToken)
+      .filter((t: any): t is string => !!t && Expo.isExpoPushToken(t));
+
+    if (tokens.length > 0) {
+      const messages = tokens.map((pushToken: string) => ({
+        to: pushToken,
+        sound: 'default' as const,
+        title: '새롭게 공지사항 등록된 글이 있습니다. 확인해보실까요?',
+        body: post.title,
+        data: { postId: post.id, villaId },
+      }));
+      const chunks = expo.chunkPushNotifications(messages);
+      for (const chunk of chunks) {
+        await expo.sendPushNotificationsAsync(chunk);
+      }
+    }
+
+    res.status(200).json({ success: true, sent: tokens.length });
+  } catch (error) {
+    console.error('Send push error:', error);
+    res.status(500).json({ error: 'Failed to send push notifications' });
   }
 });
 
@@ -822,6 +959,35 @@ app.put('/api/posts/:postId/notice', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Toggle notice error:', error);
     res.status(500).json({ error: 'Failed to update notice status' });
+  }
+});
+
+// Update issue status (ADMIN only)
+app.patch('/api/villas/:villaId/posts/:postId/status', async (req: Request, res: Response) => {
+  const postId = String(req.params.postId);
+  const { status, userRole } = req.body;
+
+  const validStatuses = ['PENDING', 'IN_PROGRESS', 'RESOLVED'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status. Must be PENDING, IN_PROGRESS, or RESOLVED' });
+  }
+  if (userRole !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only admins can update issue status' });
+  }
+
+  try {
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (post.category !== 'ISSUE') return res.status(400).json({ error: 'Only ISSUE posts have a status' });
+
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: { status },
+    });
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Update status error:', err);
+    res.status(500).json({ error: 'Failed to update status' });
   }
 });
 
@@ -1368,12 +1534,25 @@ app.post('/api/villas/:villaId/polls/:pollId/vote', async (req: Request, res: Re
   }
 
   try {
-    // Verify the voter is a resident of this villa and retrieve their roomNumber
+    // Verify the voter is a resident of this villa and retrieve their roomNumber.
+    // Admins (villa owners) are also allowed to vote — they use 'admin' as their roomNumber
+    // so the 1-house-1-vote constraint still applies to them as a single seat.
     const record = await prisma.residentRecord.findFirst({
       where: { userId: String(voterId), villaId },
     });
-    if (!record) return res.status(403).json({ error: '해당 빌라의 입주민이 아닙니다.' });
-    const roomNumber = record.roomNumber;
+
+    let roomNumber: string;
+    if (record) {
+      roomNumber = record.roomNumber;
+    } else {
+      // Check if the voter is the admin of this villa
+      const villa = await prisma.villa.findFirst({
+        where: { id: villaId, adminId: String(voterId) },
+      });
+      if (!villa) return res.status(403).json({ error: '해당 빌라의 입주민이 아닙니다.' });
+      // Admin uses a fixed sentinel roomNumber for deduplication
+      roomNumber = 'admin';
+    }
 
     // Verify the poll exists and is still active
     const poll = await prisma.poll.findUnique({ where: { id: pollId } });
@@ -1394,6 +1573,87 @@ app.post('/api/villas/:villaId/polls/:pollId/vote', async (req: Request, res: Re
   } catch (error) {
     console.error('Cast vote error:', error);
     res.status(500).json({ error: 'Failed to cast vote' });
+  }
+});
+
+// ─── Ticket / CS Routes ────────────────────────────────────────────────────
+
+// POST /api/villas/:villaId/tickets — create a new ticket
+app.post('/api/villas/:villaId/tickets', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  const { title, description, imageUrl, creatorId } = req.body;
+  if (!title || !description || !creatorId) {
+    return res.status(400).json({ error: '제목, 내용, 작성자는 필수입니다.' });
+  }
+  try {
+    const ticket = await prisma.ticket.create({
+      data: {
+        title: String(title),
+        description: String(description),
+        imageUrl: imageUrl ? String(imageUrl) : undefined,
+        creatorId: String(creatorId),
+        villaId,
+      },
+    });
+    res.status(201).json(ticket);
+  } catch (error) {
+    console.error('Create ticket error:', error);
+    res.status(500).json({ error: 'Failed to create ticket' });
+  }
+});
+
+// GET /api/villas/:villaId/tickets — list tickets for a villa
+app.get('/api/villas/:villaId/tickets', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  try {
+    const tickets = await prisma.ticket.findMany({
+      where: { villaId },
+      orderBy: { createdAt: 'desc' },
+      include: { creator: { select: { name: true } } },
+    });
+
+    // Efficiently attach roomNumber: build a userId→roomNumber map from ResidentRecords
+    const records = await prisma.residentRecord.findMany({
+      where: { villaId },
+      select: { userId: true, roomNumber: true },
+    });
+    const roomMap: Record<string, string> = {};
+    for (const r of records) {
+      roomMap[r.userId] = r.roomNumber;
+    }
+
+    const result = tickets.map((t) => ({
+      ...t,
+      roomNumber: roomMap[t.creatorId] ?? null,
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Get tickets error:', error);
+    res.status(500).json({ error: 'Failed to fetch tickets' });
+  }
+});
+
+// PATCH /api/villas/:villaId/tickets/:ticketId/status — update ticket status
+app.patch('/api/villas/:villaId/tickets/:ticketId/status', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  const ticketId = String(req.params.ticketId);
+  const { status } = req.body;
+
+  const VALID_STATUSES = ['PENDING', 'IN_PROGRESS', 'RESOLVED'];
+  if (!VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `유효하지 않은 상태입니다. 허용: ${VALID_STATUSES.join(', ')}` });
+  }
+
+  try {
+    const ticket = await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { status: String(status) },
+    });
+    res.json(ticket);
+  } catch (error) {
+    console.error('Update ticket status error:', error);
+    res.status(500).json({ error: 'Failed to update ticket status' });
   }
 });
 

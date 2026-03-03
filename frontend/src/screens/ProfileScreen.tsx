@@ -1,186 +1,47 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   Alert,
-  TextInput,
   ScrollView,
-  ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import { API_BASE_URL } from '../config';
 
-
-interface Vehicle {
-  id: string;
-  plateNumber: string;
-  modelName?: string | null;
-  isVisitor: boolean;
-  expectedDeparture: string | null;
-  createdAt: string;
-}
-
 const ProfileScreen = ({ navigation }: any) => {
   const [userName, setUserName] = useState('');
-  const [userEmail, setUserEmail] = useState('');
+  const [userContact, setUserContact] = useState('');
+  const [userRole, setUserRole] = useState('');
+  const [roomNumber, setRoomNumber] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
-  const [villaId, setVillaId] = useState<number | null>(null);
-
-  // Vehicle form state
-  const [plateNumber, setPlateNumber] = useState('');
-  const [isVisitor, setIsVisitor] = useState(false);
-  const [expectedDeparture, setExpectedDeparture] = useState('');
-  const [modelName, setModelName] = useState('');
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [vehicleLoading, setVehicleLoading] = useState(false);
-  const [registering, setRegistering] = useState(false);
-
-  const loadUserData = useCallback(async () => {
-    const userJson = await AsyncStorage.getItem('user');
-    if (userJson) {
-      const user = JSON.parse(userJson);
-      setUserName(user.name);
-      setUserEmail(user.email || user.phone || '정보 없음');
-
-      // Resolve userId
-      let uid = await AsyncStorage.getItem('userId');
-      if (!uid) uid = user.id;
-      if (uid) {
-        setUserId(uid);
-        await AsyncStorage.setItem('userId', uid);
-      }
-
-      // Resolve villaId - residents store villa in AsyncStorage; admins do not
-      if (user?.villa?.id) {
-        setVillaId(user.villa.id);
-      } else if (uid) {
-        // Admin users: fetch via /api/villas/:adminId (returns array of managed villas)
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/villas/${uid}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) setVillaId(data[0].id);
-          }
-        } catch (e) {
-          console.error('Failed to fetch villa for user:', e);
-        }
-      }
-    }
-  }, []);
-
-  const fetchVehicles = useCallback(async () => {
-    let uid = await AsyncStorage.getItem('userId');
-    if (!uid) {
-      const userJson = await AsyncStorage.getItem('user');
-      if (userJson) uid = JSON.parse(userJson).id;
-    }
-    if (!uid) return;
-
-    try {
-      setVehicleLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/users/${uid}/vehicles`);
-      if (!res.ok) throw new Error('fetch failed');
-      const data = await res.json();
-      setVehicles(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('Fetch vehicles error:', e);
-    } finally {
-      setVehicleLoading(false);
-    }
-  }, []);
+  const [pushEnabled, setPushEnabled] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      loadUserData();
-      fetchVehicles();
-    }, [loadUserData, fetchVehicles])
+      const load = async () => {
+        const userJson = await AsyncStorage.getItem('user');
+        if (!userJson) return;
+        const user = JSON.parse(userJson);
+        setUserName(user.name || '');
+        setUserContact(user.email || user.phone || '');
+        setUserRole(user.role || 'RESIDENT');
+        setRoomNumber(user.roomNumber || user.villa?.roomNumber || '');
+
+        let uid = await AsyncStorage.getItem('userId');
+        if (!uid) uid = user.id;
+        if (uid) setUserId(uid);
+      };
+      load();
+    }, [])
   );
 
-  const handleRegisterVehicle = async () => {
-    if (!plateNumber.trim()) {
-      Alert.alert('입력 오류', '차량 번호를 입력해주세요.');
-      return;
-    }
-
-    let uid = userId;
-    if (!uid) {
-      const userJson = await AsyncStorage.getItem('user');
-      if (userJson) uid = JSON.parse(userJson).id;
-    }
-
-    let vid = villaId;
-    if (!vid) {
-      const userJson = await AsyncStorage.getItem('user');
-      if (userJson) {
-        const storedUser = JSON.parse(userJson);
-        vid = storedUser?.villa?.id ?? null;
-      }
-    }
-
-    if (!uid || !vid) {
-      Alert.alert('오류', '사용자 또는 빌라 정보를 찾을 수 없습니다.');
-      return;
-    }
-
-    try {
-      setRegistering(true);
-      const res = await fetch(`${API_BASE_URL}/api/vehicles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plateNumber: plateNumber.trim(),
-          modelName: modelName.trim() || null,
-          ownerId: uid,
-          villaId: vid,
-          isVisitor,
-          expectedDeparture: isVisitor && expectedDeparture.trim() ? expectedDeparture.trim() : null,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || '등록 실패');
-      }
-
-      setPlateNumber('');
-      setModelName('');
-      setIsVisitor(false);
-      setExpectedDeparture('');
-      await fetchVehicles();
-      Alert.alert('등록 완료', '차량이 등록되었습니다.');
-    } catch (e: any) {
-      Alert.alert('오류', e.message || '차량 등록에 실패했습니다.');
-    } finally {
-      setRegistering(false);
-    }
-  };
-
-  const handleDeleteVehicle = async (vehicleId: string) => {
-    Alert.alert('차량 삭제', '이 차량을 삭제하시겠습니까?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const res = await fetch(`${API_BASE_URL}/api/vehicles/${vehicleId}`, {
-              method: 'DELETE',
-            });
-            if (!res.ok) throw new Error('삭제 실패');
-            await fetchVehicles();
-          } catch (e: any) {
-            Alert.alert('오류', e.message || '차량 삭제에 실패했습니다.');
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Alert.alert('로그아웃', '정말 로그아웃 하시겠습니까?', [
       { text: '취소', style: 'cancel' },
       {
@@ -188,358 +49,220 @@ const ProfileScreen = ({ navigation }: any) => {
         style: 'destructive',
         onPress: async () => {
           await AsyncStorage.clear();
-          navigation.dispatch(
-            CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] })
-          );
+          navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] }));
         },
       },
     ]);
   };
 
-  const formatDeparture = (dt: string | null) => {
-    if (!dt) return '';
-    return `출차 예정: ${dt}`;
+  const handleWithdraw = () => {
+    Alert.alert(
+      '회원 탈퇴',
+      '정말로 탈퇴하시겠습니까? 모든 데이터가 삭제됩니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '탈퇴하기',
+          style: 'destructive',
+          onPress: async () => {
+            if (!userId) return;
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, { method: 'DELETE' });
+              if (!res.ok) throw new Error('탈퇴 처리 실패');
+              await AsyncStorage.clear();
+              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] }));
+            } catch (e: any) {
+              Alert.alert('오류', e.message || '탈퇴 처리에 실패했습니다.');
+            }
+          },
+        },
+      ]
+    );
   };
+
+  const roleLabel = userRole === 'ADMIN' ? '관리자' : '입주민';
+  const avatarInitial = userName ? userName.charAt(0) : '?';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Profile section */}
-        <Text style={styles.title}>내 정보</Text>
-        <View style={styles.profileCard}>
-          <Text style={styles.label}>이름</Text>
-          <Text style={styles.value}>{userName}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-          <Text style={[styles.label, { marginTop: 20 }]}>연락처 / 이메일</Text>
-          <Text style={styles.value}>{userEmail}</Text>
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{avatarInitial}</Text>
+          </View>
+          <Text style={styles.headerName}>{userName || '이름 없음'}</Text>
+          <View style={styles.headerMeta}>
+            {roomNumber ? (
+              <View style={styles.chip}>
+                <Text style={styles.chipText}>{roomNumber}호</Text>
+              </View>
+            ) : null}
+            <View style={[styles.chip, userRole === 'ADMIN' ? styles.chipAdmin : styles.chipResident]}>
+              <Text style={[styles.chipText, { color: '#fff' }]}>{roleLabel}</Text>
+            </View>
+          </View>
+          {userContact ? <Text style={styles.headerContact}>{userContact}</Text> : null}
         </View>
 
-        {/* Vehicle management section */}
-        <Text style={styles.sectionTitle}>내 차량 관리</Text>
+        {/* ── Section 2: My Home ── */}
+        <Text style={styles.sectionLabel}>내 집</Text>
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => navigation.navigate('VehicleManagement')}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: '#007AFF' }]}>
+              <Ionicons name="car" size={18} color="#fff" />
+            </View>
+            <Text style={styles.rowLabel}>내 차량 관리</Text>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+          </TouchableOpacity>
 
-        <View style={styles.vehicleFormCard}>
-          <TextInput
-            style={styles.input}
-            placeholder="차량 번호 입력 (예: 12가3456)"
-            placeholderTextColor="#C7C7CC"
-            value={plateNumber}
-            onChangeText={setPlateNumber}
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="차량 모델 (예: 하얀색 아반떼, 검은색 싼타페)"
-            placeholderTextColor="#C7C7CC"
-            value={modelName}
-            onChangeText={setModelName}
-            autoCapitalize="none"
-          />
-
-          {/* Vehicle type toggle */}
-          <View style={styles.toggleRow}>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                !isVisitor && styles.toggleButtonActive,
-              ]}
-              onPress={() => setIsVisitor(false)}
-            >
-              <Text style={[styles.toggleButtonText, !isVisitor && styles.toggleButtonTextActive]}>
-                일반 차량
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                isVisitor && styles.toggleButtonVisitorActive,
-              ]}
-              onPress={() => setIsVisitor(true)}
-            >
-              <Text style={[styles.toggleButtonText, isVisitor && styles.toggleButtonTextActive]}>
-                방문 차량
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {isVisitor && (
-            <TextInput
-              style={styles.input}
-              placeholder="출차 예정 시간 (예: 오후 2시에 나가요)"
-              placeholderTextColor="#C7C7CC"
-              value={expectedDeparture}
-              onChangeText={setExpectedDeparture}
-              autoCapitalize="none"
-            />
-          )}
+          <View style={styles.separator} />
 
           <TouchableOpacity
-            style={[styles.registerButton, registering && styles.registerButtonDisabled]}
-            onPress={handleRegisterVehicle}
-            disabled={registering}
+            style={styles.row}
+            onPress={() => navigation.navigate('MyPosts', { userId, userRole })}
           >
-            {registering ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.registerButtonText}>차량 등록</Text>
-            )}
+            <View style={[styles.rowIcon, { backgroundColor: '#5856D6' }]}>
+              <Ionicons name="document-text" size={18} color="#fff" />
+            </View>
+            <Text style={styles.rowLabel}>내가 쓴 글 / 민원 내역</Text>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
           </TouchableOpacity>
         </View>
 
-        {/* Registered vehicles list */}
-        {vehicleLoading ? (
-          <ActivityIndicator size="small" color="#007AFF" style={styles.loader} />
-        ) : vehicles.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>등록된 차량이 없습니다.</Text>
-          </View>
-        ) : (
-          vehicles.map((v) => (
-            <View key={v.id} style={styles.vehicleCard}>
-              <View style={styles.vehicleCardLeft}>
-                <Text style={styles.vehiclePlate}>{v.plateNumber}</Text>
-                {v.modelName ? (
-                  <Text style={styles.vehicleModel}>{v.modelName}</Text>
-                ) : null}
-                <View style={styles.vehicleBadgeRow}>
-                  <View style={[styles.badge, v.isVisitor ? styles.badgeVisitor : styles.badgeRegular]}>
-                    <Text style={styles.badgeText}>
-                      {v.isVisitor ? '방문차량' : '일반차량'}
-                    </Text>
-                  </View>
-                </View>
-                {v.isVisitor && v.expectedDeparture ? (
-                  <Text style={styles.vehicleDeparture}>{formatDeparture(v.expectedDeparture)}</Text>
-                ) : null}
-              </View>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDeleteVehicle(v.id)}
-              >
-                <Text style={styles.deleteButtonText}>삭제</Text>
-              </TouchableOpacity>
+        {/* ── Section 3: Account Info ── */}
+        <Text style={styles.sectionLabel}>계정 정보</Text>
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => navigation.navigate('ChangePassword', { userId })}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: '#34C759' }]}>
+              <Ionicons name="lock-closed" size={18} color="#fff" />
             </View>
-          ))
-        )}
+            <Text style={styles.rowLabel}>비밀번호 변경</Text>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+          </TouchableOpacity>
+        </View>
 
-        {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>로그아웃</Text>
-        </TouchableOpacity>
+        {/* ── Section 4: App Settings ── */}
+        <Text style={styles.sectionLabel}>앱 설정</Text>
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: '#FF9500' }]}>
+              <Ionicons name="notifications" size={18} color="#fff" />
+            </View>
+            <Text style={styles.rowLabel}>푸시 알림 설정</Text>
+            <Switch
+              value={pushEnabled}
+              onValueChange={setPushEnabled}
+              trackColor={{ false: '#E5E5EA', true: '#007AFF' }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
+
+        {/* ── Section 5: Support & Legal ── */}
+        <Text style={styles.sectionLabel}>고객센터 & 약관</Text>
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => Alert.alert('준비 중입니다. (웹사이트 연동 예정)')}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: '#8E8E93' }]}>
+              <Ionicons name="document" size={18} color="#fff" />
+            </View>
+            <Text style={styles.rowLabel}>이용약관</Text>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => Alert.alert('준비 중입니다. (웹사이트 연동 예정)')}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: '#8E8E93' }]}>
+              <Ionicons name="shield-checkmark" size={18} color="#fff" />
+            </View>
+            <Text style={styles.rowLabel}>개인정보처리방침</Text>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Section 6: Danger Zone ── */}
+        <Text style={styles.sectionLabel}>계정 관리</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.row} onPress={handleLogout}>
+            <View style={[styles.rowIcon, { backgroundColor: '#FF3B30' }]}>
+              <Ionicons name="log-out" size={18} color="#fff" />
+            </View>
+            <Text style={[styles.rowLabel, { color: '#FF3B30' }]}>로그아웃</Text>
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity style={styles.row} onPress={handleWithdraw}>
+            <View style={[styles.rowIcon, { backgroundColor: '#8E8E93' }]}>
+              <Ionicons name="person-remove" size={18} color="#fff" />
+            </View>
+            <Text style={[styles.rowLabel, { color: '#8E8E93' }]}>회원 탈퇴</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.version}>Villamate v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F7F7F7',
+  container: { flex: 1, backgroundColor: '#F2F2F7' },
+  scrollContent: { paddingBottom: 48 },
+
+  // Header
+  header: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 24 },
+  avatar: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', marginBottom: 14,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+  avatarText: { fontSize: 32, fontWeight: '700', color: '#fff' },
+  headerName: { fontSize: 22, fontWeight: '800', color: '#1C1C1E', marginBottom: 10 },
+  headerMeta: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: '#E5E5EA',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
+  chipAdmin: { backgroundColor: '#007AFF' },
+  chipResident: { backgroundColor: '#5856D6' },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#3A3A3C' },
+  headerContact: { fontSize: 14, color: '#8E8E93', marginTop: 4 },
+
+  // Sections
+  sectionLabel: {
+    fontSize: 13, fontWeight: '600', color: '#8E8E93',
+    paddingHorizontal: 20, paddingTop: 24, paddingBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  profileCard: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: 30,
+  card: {
+    backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
   },
-  label: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginBottom: 4,
+  row: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
   },
-  value: {
-    fontSize: 18,
-    color: '#1C1C1E',
-    fontWeight: '500',
+  rowIcon: {
+    width: 32, height: 32, borderRadius: 8,
+    justifyContent: 'center', alignItems: 'center', marginRight: 14,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 14,
-  },
-  vehicleFormCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: '#1C1C1E',
-    backgroundColor: '#F8F9FA',
-    marginBottom: 12,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    gap: 10,
-  },
-  toggleButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    backgroundColor: '#F8F9FA',
-  },
-  toggleButtonActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  toggleButtonVisitorActive: {
-    backgroundColor: '#FF9500',
-    borderColor: '#FF9500',
-  },
-  toggleButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#8E8E93',
-  },
-  toggleButtonTextActive: {
-    color: '#fff',
-  },
-  registerButton: {
-    backgroundColor: '#007AFF',
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  registerButtonDisabled: {
-    backgroundColor: '#A8C7FA',
-  },
-  registerButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  loader: {
-    marginVertical: 20,
-  },
-  emptyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#8E8E93',
-  },
-  vehicleCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  vehicleCardLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  vehiclePlate: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    marginBottom: 6,
-  },
-  vehicleModel: {
-    fontSize: 13,
-    color: '#8E8E93',
-    marginBottom: 4,
-  },
-  vehicleBadgeRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeRegular: {
-    backgroundColor: '#E3F2FD',
-  },
-  badgeVisitor: {
-    backgroundColor: '#FFF3E0',
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#3A3A3C',
-  },
-  vehicleDeparture: {
-    fontSize: 12,
-    color: '#FF9500',
-    marginTop: 2,
-  },
-  deleteButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-  },
-  deleteButtonText: {
-    color: '#FF3B30',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  logoutButton: {
-    backgroundColor: '#fff',
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    marginTop: 10,
-  },
-  logoutButtonText: {
-    color: '#FF3B30',
-    fontSize: 16,
-    fontWeight: '600',
+  rowLabel: { flex: 1, fontSize: 16, color: '#1C1C1E', fontWeight: '500' },
+  separator: { height: 1, backgroundColor: '#F2F2F7', marginLeft: 62 },
+
+  version: {
+    textAlign: 'center', fontSize: 12, color: '#C7C7CC', marginTop: 32,
   },
 });
 

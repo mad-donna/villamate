@@ -11,7 +11,8 @@
       "Bash(xargs grep:*)",
       "Bash(xargs sed:*)",
       "Bash(python3:*)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Bash(npm test:*)"
     ]
   }
 }

@@ -23,6 +23,8 @@ interface Post {
   title: string;
   content: string;
   isNotice: boolean;
+  category: string;
+  status: string | null;
   authorId: string;
   villaId: number;
   createdAt: string;
@@ -96,6 +98,13 @@ const BoardScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const getStatusBadge = (status: string | null) => {
+    if (status === 'PENDING') return { label: '접수 대기', color: '#FF3B30' };
+    if (status === 'IN_PROGRESS') return { label: '처리 중', color: '#FF9500' };
+    if (status === 'RESOLVED') return { label: '처리 완료', color: '#34C759' };
+    return null;
+  };
+
   const renderPost = ({ item }: { item: Post }) => {
     const isToggling = togglingId === item.id;
     return (
@@ -117,6 +126,14 @@ const BoardScreen = ({ navigation, route }: any) => {
                 <Text style={styles.noticeBadgeText}>공지</Text>
               </View>
             )}
+            {item.category === 'ISSUE' && item.status && (() => {
+              const badge = getStatusBadge(item.status);
+              return badge ? (
+                <View style={[styles.noticeBadge, { backgroundColor: badge.color }]}>
+                  <Text style={styles.noticeBadgeText}>{badge.label}</Text>
+                </View>
+              ) : null;
+            })()}
             <Text style={styles.postTitle} numberOfLines={2}>
               {item.title}
             </Text>

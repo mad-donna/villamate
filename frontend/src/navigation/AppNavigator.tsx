@@ -21,6 +21,9 @@ import ExternalBillingScreen from '../screens/ExternalBillingScreen';
 import CreatePollScreen from '../screens/CreatePollScreen';
 import PollListScreen from '../screens/PollListScreen';
 import PollDetailScreen from '../screens/PollDetailScreen';
+import VehicleManagementScreen from '../screens/VehicleManagementScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import MyPostsScreen from '../screens/MyPostsScreen';
 import MainTabNavigator from './MainTabNavigator';
 import ResidentTabNavigator from './ResidentTabNavigator';
 
@@ -145,6 +148,21 @@ const AppNavigator = () => {
         name="PollDetail"
         component={PollDetailScreen}
         options={{ title: '투표 상세' }}
+      />
+      <Stack.Screen
+        name="VehicleManagement"
+        component={VehicleManagementScreen}
+        options={{ title: '내 차량 관리' }}
+      />
+      <Stack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{ title: '비밀번호 변경' }}
+      />
+      <Stack.Screen
+        name="MyPosts"
+        component={MyPostsScreen}
+        options={{ title: '내가 쓴 글 / 민원 내역' }}
       />
     </Stack.Navigator>
   );

@@ -20,6 +20,8 @@ interface PostDetail {
   title: string;
   content: string;
   isNotice: boolean;
+  category: string;
+  status: string | null;
   authorId: string;
   villaId: number;
   createdAt: string;
@@ -55,6 +57,8 @@ const PostDetailScreen = ({ navigation, route }: any) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [sendingPush, setSendingPush] = useState(false);
 
   const fetchPost = async () => {
     try {
@@ -155,6 +159,54 @@ const PostDetailScreen = ({ navigation, route }: any) => {
 
   const canDelete = post && userId === post.authorId;
 
+  const getStatusInfo = (status: string | null) => {
+    if (status === 'PENDING') return { label: '접수 대기', color: '#FF3B30' };
+    if (status === 'IN_PROGRESS') return { label: '처리 중', color: '#FF9500' };
+    if (status === 'RESOLVED') return { label: '처리 완료', color: '#34C759' };
+    return null;
+  };
+
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!post) return;
+    setUpdatingStatus(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/villas/${post.villaId}/posts/${post.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, userRole }),
+      });
+      if (res.ok) {
+        setPost({ ...post, status: newStatus });
+      } else {
+        Alert.alert('오류', '상태 변경에 실패했습니다.');
+      }
+    } catch {
+      Alert.alert('오류', '서버와 통신 중 문제가 발생했습니다.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleSendPush = async () => {
+    if (!post) return;
+    setSendingPush(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/villas/${post.villaId}/posts/${post.id}/send-push`,
+        { method: 'POST' }
+      );
+      if (res.ok) {
+        Alert.alert('푸시 알림이 발송되었습니다.');
+      } else {
+        Alert.alert('오류', '푸시 발송에 실패했습니다.');
+      }
+    } catch {
+      Alert.alert('오류', '서버와 통신 중 문제가 발생했습니다.');
+    } finally {
+      setSendingPush(false);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -199,6 +251,44 @@ const PostDetailScreen = ({ navigation, route }: any) => {
             </View>
           )}
 
+          {/* Issue status badge */}
+          {post.category === 'ISSUE' && post.status && (() => {
+            const info = getStatusInfo(post.status);
+            return info ? (
+              <View style={[styles.noticeBadge, { backgroundColor: info.color, marginBottom: 14 }]}>
+                <Text style={styles.noticeBadgeText}>민원 · {info.label}</Text>
+              </View>
+            ) : null;
+          })()}
+
+          {/* Admin status update controls */}
+          {post.category === 'ISSUE' && userRole === 'ADMIN' && (
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+              <TouchableOpacity
+                style={{ backgroundColor: '#FF3B30', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, opacity: post.status === 'PENDING' ? 0.4 : 1 }}
+                onPress={() => handleStatusUpdate('PENDING')}
+                disabled={updatingStatus || post.status === 'PENDING'}
+              >
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>접수 대기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ backgroundColor: '#FF9500', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, opacity: post.status === 'IN_PROGRESS' ? 0.4 : 1 }}
+                onPress={() => handleStatusUpdate('IN_PROGRESS')}
+                disabled={updatingStatus || post.status === 'IN_PROGRESS'}
+              >
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>처리 중</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ backgroundColor: '#34C759', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, opacity: post.status === 'RESOLVED' ? 0.4 : 1 }}
+                onPress={() => handleStatusUpdate('RESOLVED')}
+                disabled={updatingStatus || post.status === 'RESOLVED'}
+              >
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>처리 완료</Text>
+              </TouchableOpacity>
+              {updatingStatus && <ActivityIndicator size="small" color="#007AFF" />}
+            </View>
+          )}
+
           {/* Title */}
           <Text style={styles.title}>{post.title}</Text>
 
@@ -228,6 +318,22 @@ const PostDetailScreen = ({ navigation, route }: any) => {
               activeOpacity={0.8}
             >
               <Text style={styles.deleteButtonText}>삭제하기</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Push notification button — admin only, notices only */}
+          {post.isNotice && userRole === 'ADMIN' && (
+            <TouchableOpacity
+              style={styles.pushButton}
+              onPress={handleSendPush}
+              disabled={sendingPush}
+              activeOpacity={0.8}
+            >
+              {sendingPush ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.pushButtonText}>공지사항 푸시 발송</Text>
+              )}
             </TouchableOpacity>
           )}
 
@@ -374,6 +480,24 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   deleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  pushButton: {
+    marginTop: 12,
+    backgroundColor: '#34C759',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: '#34C759',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  pushButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',

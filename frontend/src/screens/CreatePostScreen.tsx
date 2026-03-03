@@ -19,6 +19,7 @@ const CreatePostScreen = ({ navigation, route }: any) => {
   const insets = useSafeAreaInsets();
   const { villaId, userId, userRole } = route.params ?? {};
 
+  const [category, setCategory] = useState<'GENERAL' | 'ISSUE'>('GENERAL');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,6 +44,7 @@ const CreatePostScreen = ({ navigation, route }: any) => {
           title: title.trim(),
           content: content.trim(),
           authorId: userId,
+          category,
         }),
       });
 
@@ -76,6 +78,25 @@ const CreatePostScreen = ({ navigation, route }: any) => {
         </View>
 
         <View style={styles.formCard}>
+          {/* Category selection */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>게시 유형</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.chipButton, category === 'GENERAL' && styles.chipButtonActive]}
+                onPress={() => setCategory('GENERAL')}
+              >
+                <Text style={[styles.chipText, category === 'GENERAL' && styles.chipTextActive]}>일반 게시글</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.chipButton, category === 'ISSUE' && styles.chipButtonIssue]}
+                onPress={() => setCategory('ISSUE')}
+              >
+                <Text style={[styles.chipText, category === 'ISSUE' && styles.chipTextActive]}>민원/하자 접수</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Title field */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>제목</Text>
@@ -208,6 +229,30 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  chipButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E5E5EA',
+    backgroundColor: '#FAFAFA',
+  },
+  chipButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  chipButtonIssue: {
+    backgroundColor: '#FF3B30',
+    borderColor: '#FF3B30',
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  chipTextActive: {
+    color: '#fff',
   },
 });
 

@@ -603,3 +603,218 @@ ManagementScreen 메뉴 구성 (현재):
 - 업로드 파일 로컬 저장 → 오브젝트 스토리지(S3) 마이그레이션
 - `POST /api/public/pay/:billId/notify` 인증 없이 공개 — 악의적 상태 변경 가능
 - 전자투표 법적 증거력 → 본인인증 + 타임스탬프 암호화 미적용 (기획 요구사항 잔여)
+
+---
+
+### 2026-03-01 — 전자투표 Admin 버그 수정, 민원 시스템 게시판 통합, UX 정리 세션
+
+#### 데이터 모델 변경 사항
+
+**Post 모델 확장 (기존 모델 컬럼 추가)**
+```
+Post (기존)
+  ├── ... (기존 필드 유지)
+  ├── category String @default("GENERAL")  ← NEW ('GENERAL' | 'ISSUE')
+  └── status   String?                     ← NEW (ISSUE일 때만 사용: PENDING | IN_PROGRESS | RESOLVED)
+```
+- 민원/하자 접수 게시글은 `category='ISSUE'`, 초기 `status='PENDING'`으로 생성
+- 일반 게시글은 `category='GENERAL'`, `status=null`
+
+**Ticket 모델 (schema.prisma에 잔존, 미사용)**
+```
+Ticket — 추가했다가 Post 통합으로 역할 소멸. 향후 마이그레이션으로 제거 권장
+```
+
+**Vote 모델 — Admin sentinel 처리**
+```
+Vote
+  ├── roomNumber String  ← Admin 투표 시 'admin' 고정값 사용
+  └── @@unique([pollId, roomNumber])  ← 'admin'도 동일하게 적용 → Admin 중복 투표 방지
+```
+
+#### 신규 엔드포인트 (2026-03-01 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `PATCH` | `/api/villas/:villaId/posts/:postId/status` | 게시글 상태 변경 (ADMIN만, ISSUE 게시글만) |
+
+#### 변경된 엔드포인트
+
+| 메서드 | 경로 | 변경 내용 |
+|--------|------|-----------|
+| `POST` | `/api/villas/:villaId/posts` | `category` 파라미터 추가, ISSUE이면 `status='PENDING'` 자동 설정 |
+| `POST` | `/api/villas/:villaId/polls/:pollId/vote` | ResidentRecord 없을 때 `villa.findFirst`로 Admin 2차 확인 → `roomNumber: 'admin'` sentinel 처리 |
+
+#### 삭제된 화면 및 라우트
+
+```
+삭제된 파일:
+  frontend/src/screens/TicketListScreen.tsx
+  frontend/src/screens/CreateTicketScreen.tsx
+
+AppNavigator에서 제거:
+  - import CreateTicketScreen, TicketListScreen
+  - Stack.Screen name="TicketList"
+  - Stack.Screen name="CreateTicket"
+```
+
+#### 현재 홈 화면 퀵액션 구성 (정리 후)
+
+```
+DashboardScreen (Admin 홈) — 퀵액션 3개 (단일 행):
+  ├── 청구서 발행   → CreateInvoice
+  ├── 주차 조회     → ParkingSearch
+  └── 전자투표      → PollList
+
+ResidentDashboardScreen (Resident 홈) — 퀵액션 2개 (가운데 정렬):
+  ├── 주차 조회     → ParkingSearch
+  └── 전자투표      → PollList
+```
+
+#### 현재 Express 라우트 등록 순서 (2026-03-01 기준 추가분 포함)
+
+```
+/api/villas/:villaId/posts/:postId/status  ← NEW (구체적, 먼저 등록)
+/api/villas/:villaId/posts                 (기존)
+/api/villas/:villaId/polls/:pollId/vote    (기존)
+/api/villas/:villaId/polls                 (기존)
+/api/villas/:villaId/tickets/:id/status   (미사용, Ticket 모델 잔존)
+... (기존 순서 유지)
+/api/villas/:adminId                       (와일드카드 ← 항상 마지막)
+```
+
+#### 알려진 기술 부채 (2026-03-01 업데이트)
+
+- 인증 미들웨어 없음 → JWT + Express middleware 필요
+- 비밀번호 미저장 → bcrypt + password 컬럼 추가 필요
+- 단일 index.ts (~1300+ 라인) → 도메인별 라우터 분리 필요
+- 업로드 파일 로컬 저장 → 오브젝트 스토리지(S3) 마이그레이션
+- `Ticket` 모델 schema.prisma에 잔존 → 사용하지 않으므로 마이그레이션으로 제거 권장
+- `PATCH .../posts/:postId/status`의 userRole 클라이언트 전달 → JWT 적용 시 `req.user.role`로 대체
+- ~~API_BASE_URL 각 스크린에 하드코딩~~ → **[RESOLVED]**
+
+---
+
+### 2026-03-02 — Expo 푸시 알림, iOS 키보드 UX, ProfileScreen 개편, 마이페이지 고도화 세션
+
+#### 데이터 모델 변경 사항
+
+**User 모델 필드 추가**
+```
+User
+  ├── ... (기존 필드 유지)
+  ├── expoPushToken String?  ← NEW (Expo 푸시 토큰)
+  └── password      String?  ← NEW (bcrypt 해시, nullable: 소셜 로그인 호환)
+```
+- `npx prisma db push` 및 `npx prisma generate` 실행으로 적용
+
+#### 신규 엔드포인트 (2026-03-02 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `PATCH` | `/api/users/:userId/push-token` | Expo 푸시 토큰 저장 |
+| `POST` | `/api/villas/:villaId/posts/:postId/send-push` | 공지 게시글 수동 푸시 발송 (전 입주민) |
+| `DELETE` | `/api/users/:userId` | 회원 탈퇴 (소프트 삭제: 익명화) |
+| `PATCH` | `/api/users/:userId/password` | 비밀번호 변경 (bcrypt 검증 + 재해시) |
+| `GET` | `/api/users/:userId/posts` | 특정 유저의 작성 게시글 목록 |
+
+#### 신규 화면 및 네비게이션 업데이트
+
+```
+AppNavigator (Stack) — 2026-03-02 추가분
+├── VehicleManagement (Stack)  ← 기존 ProfileScreen에서 차량 관리 분리
+├── ChangePassword (Stack)     ← 비밀번호 변경 전용 화면
+└── MyPosts (Stack)            ← 내가 쓴 글 / 민원 내역
+```
+
+#### 푸시 알림 아키텍처
+
+```
+[프론트엔드 — App.tsx]
+  앱 시작 시:
+    registerForPushNotificationsAsync()
+      ├── Device.isDevice 체크 (시뮬레이터 제외)
+      ├── Android 알림 채널 생성 (importance: MAX)
+      ├── 알림 권한 요청
+      └── Expo.getExpoPushTokenAsync() → token
+
+  token + userId 있으면:
+    PATCH /api/users/:userId/push-token
+
+[백엔드 — index.ts]
+  POST /api/villas/:villaId/posts/:postId/send-push:
+    1. post 조회 (isNotice 확인)
+    2. 해당 빌라 ResidentRecord.findMany → expoPushToken 수집
+    3. Expo.isExpoPushToken() 필터링
+    4. chunkPushNotifications() → sendPushNotificationsAsync()
+    5. { success: true, sent: count } 반환
+
+[알림 내용]
+  title: '새롭게 공지사항 등록된 글이 있습니다. 확인해보실까요?'
+  body: post.title
+```
+
+#### iOS 키보드 처리 아키텍처 변경
+
+```
+변경 전 (EmailLoginScreen):
+  <View>
+    <KeyboardAwareScrollView>  ← 서드파티
+      {/* 폼 */}
+    </KeyboardAwareScrollView>
+    <KeyboardAvoidingView>     ← 버튼용
+      <Button />
+    </KeyboardAvoidingView>
+  </View>
+
+변경 후 (표준 RN 조합):
+  <KeyboardAvoidingView behavior={ios:'padding', android:'height'}>
+    <ScrollView keyboardShouldPersistTaps="handled">
+      {/* 폼 + 버튼 모두 포함 */}
+    </ScrollView>
+  </KeyboardAvoidingView>
+```
+
+#### 계정 삭제 아키텍처 (소프트 삭제 패턴)
+
+```
+DELETE /api/users/:userId
+  prisma.user.update({
+    where: { id: userId },
+    data: {
+      name: '탈퇴한 사용자',
+      email: null,
+      phone: null,
+      expoPushToken: null,
+      password: null,
+      status: 'DELETED',
+    }
+  })
+  → FK 연관 테이블 보존 (InvoicePayment, Comment 등)
+  → 앱 재로그인 차단은 email=null + status 체크 조합으로 구현 가능
+```
+
+#### 현재 Express 라우트 등록 순서 (2026-03-02 추가분)
+
+```
+/api/villas/:villaId/posts/:postId/send-push  ← NEW (구체적, 먼저 등록)
+/api/villas/:villaId/posts/:postId/status     (기존)
+/api/villas/:villaId/posts                    (기존)
+/api/users/:userId/push-token                 ← NEW (PATCH)
+/api/users/:userId/password                   ← NEW (PATCH)
+/api/users/:userId/posts                      ← NEW (GET)
+/api/users/:userId                            ← NEW (DELETE)
+... (기존 순서 유지)
+/api/villas/:adminId                          (와일드카드 ← 항상 마지막)
+```
+
+#### 알려진 기술 부채 (2026-03-02 업데이트)
+
+- ~~비밀번호 미저장~~ → **[RESOLVED]** `password String?` + bcrypt 적용
+- 인증 미들웨어 없음 → JWT + Express middleware 필요
+- 단일 index.ts (~1400+ 라인) → 도메인별 라우터 분리 필요 (auth, users, villas, posts, polls, vehicles, events, billing, upload)
+- 업로드 파일 로컬 저장 → 오브젝트 스토리지(S3) 마이그레이션
+- `Ticket` 모델 schema.prisma에 잔존 → 마이그레이션으로 제거 권장
+- expoPushToken 인증 없이 덮어쓰기 가능 → JWT 적용 시 해소
+- send-push 인증 없이 대량 발송 → JWT + ADMIN 역할 체크 필요
+- ~~API_BASE_URL 각 스크린에 하드코딩~~ → **[RESOLVED]**

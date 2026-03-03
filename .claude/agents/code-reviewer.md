@@ -397,3 +397,147 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
   display={Platform.OS === 'ios' ? 'inline' : 'default'}
   minimumDate={new Date()}
   ```
+
+---
+
+### 2026-03-01 — 전자투표 Admin 버그 수정, CS 티켓/민원 시스템, UX 정리 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **Admin 투표 불가 버그** 원인 진단 및 수정 (백엔드 + 프론트엔드)
+- **CS 티켓 시스템 구현 → 게시판 통합** 방향 전환 결정 및 구현
+- **홈 화면 퀵액션 버튼 중복 제거** UX 정리
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] ResidentRecord 없는 사용자(Admin)에 대한 투표 완전 차단**
+- 파일: `backend/src/index.ts` — 투표 라우트
+- 문제: 투표 시 `residentRecord.findFirst`가 null이면 즉시 `403` 반환 → Admin은 ResidentRecord가 없으므로 항상 투표 불가
+- 해결: null일 때 `villa.findFirst({ where: { adminId: voterId } })`로 Admin 여부 2차 확인, `roomNumber: 'admin'` sentinel 사용
+- **교훈**: Admin과 Resident가 공유하는 기능(투표, 게시글 작성 등)에서 ResidentRecord를 단순 null 체크 후 즉시 실패하는 패턴은 항상 Admin 접근을 차단함
+
+**[PATTERN] 역할별 조건부 UI 렌더링 — 동일 화면 내 Admin 컨트롤**
+- Admin 전용 기능(상태 변경 버튼 등)을 별도 화면으로 분리하면 내비게이션 복잡도 증가
+- `userRole === 'ADMIN'` 조건으로 동일 상세 화면에 인라인 렌더링하는 것이 UX, 코드 모두 간결함
+- `PostDetailScreen`, `PollDetailScreen` 모두 동일 패턴 적용
+
+**[GOOD] 민원 시스템의 게시판 통합 결정**
+- 독립 티켓 시스템은 `Ticket` 모델, `TicketListScreen`, `CreateTicketScreen`, 전용 라우트 등 중복 코드 발생
+- `Post` 모델에 `category` + `status` 컬럼만 추가하면 기존 게시판 CRUD 재활용 가능
+- **교훈**: MVP 단계에서 기능이 겹치는 경우 별도 모델/화면 신설보다 기존 모델 확장이 유지보수 부채를 줄임
+
+#### 이 세션에서 확인된 주의사항
+
+- **코드 정리 순서**: 독립 스크린 삭제 전 반드시 `AppNavigator.tsx` import와 `Stack.Screen` 제거를 먼저 처리 (삭제 후 import 에러 방지)
+- **퀵액션 레이아웃**: 2개 버튼에 `flex: 1` 적용 시 각각 50% 폭으로 너무 넓어짐 → `justifyContent: 'center'` + 고정 padding 방식 권장
+- **pill 버튼 아이콘 크기**: 버튼 수가 줄어들수록 아이콘(16→18)과 텍스트(13→15) 크기를 키워 시각적 밀도 유지
+
+---
+
+### 2026-03-02 — Expo 푸시 알림, iOS 키보드 UX, ProfileScreen 개편, 마이페이지 고도화 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **Expo Push Notifications** 전체 구현 (DB + 백엔드 + 프론트엔드)
+- **Jest에서 expo-server-sdk 모킹** 패턴 문제 진단 및 해결
+- **iOS 키보드 겹침 버그** (`EmailLoginScreen`, `LoginScreen`) 수정
+- **ProfileScreen** iOS 설정 앱 스타일 전면 개편
+- **ChangePasswordScreen**, **VehicleManagementScreen**, **MyPostsScreen** 신규 화면 리뷰
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] `clearAllMocks()` 로 인해 Jest mock instance 참조 소실**
+- 파일: `backend/src/api.spec.ts` — expo-server-sdk 모킹
+- 문제: `MockedExpo.mock.instances[MockedExpo.mock.instances.length - 1]` 로 인스턴스 참조 시 `clearAllMocks()` 실행 후 `.mock.instances` 배열이 초기화되어 참조 불가
+- 해결: factory 레벨에서 shared `mockInstance` 객체를 생성하고 `MockExpo.__mockInstance`에 붙인 뒤, 테스트에서 `(MockedExpo as any).__mockInstance`로 접근
+- **교훈**: Jest `clearAllMocks()`는 `.mock.calls`, `.mock.instances`, `.mock.results`를 모두 초기화함 — factory 외부에서 생성한 shared singleton은 살아남음
+
+```typescript
+jest.mock('expo-server-sdk', () => {
+  const mockInstance = {
+    chunkPushNotifications: jest.fn((msgs: any[]) => [msgs]),
+    sendPushNotificationsAsync: jest.fn().mockResolvedValue([]),
+  };
+  const MockExpo = jest.fn().mockImplementation(() => mockInstance);
+  (MockExpo as any).isExpoPushToken = (token: string) =>
+    typeof token === 'string' && token.startsWith('ExponentPushToken[');
+  (MockExpo as any).__mockInstance = mockInstance;
+  return { Expo: MockExpo };
+});
+```
+
+**[PATTERN] 표준 키보드 처리 — `KeyboardAvoidingView` + `ScrollView`**
+- 기존: `react-native-keyboard-aware-scroll-view` (서드파티) 사용
+- 개선: 표준 RN `KeyboardAvoidingView` + `ScrollView` 조합으로 전환 (`EmailLoginScreen`)
+- 패턴:
+  ```tsx
+  <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+    <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+      {/* 폼 내용 */}
+    </ScrollView>
+  </KeyboardAvoidingView>
+  ```
+- Modal 내부 입력폼(`LoginScreen`)에도 동일 패턴 적용
+
+**[GOOD] 계정 삭제 소프트 삭제 패턴**
+- `DELETE /api/users/:userId` — 하드 삭제 대신 익명화:
+  - `name = '탈퇴한 사용자'`, `email = null`, `phone = null`, `status = 'DELETED'`
+  - 기존 `InvoicePayment`, `Comment` 등 연관 레코드 FK 무결성 보존
+- **교훈**: 사용자 데이터가 타 테이블과 연관된 경우 하드 DELETE는 FK 제약 오류 발생 → 소프트 삭제 필수
+
+**[GOOD] `useFocusEffect` + `useCallback` 패턴 일관 적용**
+- `VehicleManagementScreen`, `ChangePasswordScreen`, `MyPostsScreen`, `ProfileScreen` 모두 동일 패턴으로 데이터 로드
+- 탭 포커스 시 자동 새로고침 보장, 의존성 배열 `[]` 사용 (villaId는 함수 내부에서 직접 resolve)
+
+#### 이 세션에서 추가된 코딩 패턴
+
+- **bcrypt 비밀번호 관리**:
+  ```typescript
+  // 저장 시
+  const hashed = await bcrypt.hash(newPassword, 10);
+  // 검증 시
+  const isMatch = await bcrypt.compare(oldPassword, user.password);
+  if (!isMatch) return res.status(400).json({ error: '현재 비밀번호가 올바르지 않습니다.' });
+  ```
+
+- **iOS Settings 스타일 화면 구조**:
+  ```tsx
+  <SafeAreaView style={{ flex: 1, backgroundColor: '#F2F2F7' }}>
+    <ScrollView>
+      <Text style={styles.sectionLabel}>섹션명</Text>  {/* uppercase, #8E8E93 */}
+      <View style={styles.card}>  {/* white, borderRadius: 14, marginHorizontal: 16 */}
+        <TouchableOpacity style={styles.row}>  {/* icon + label + chevron */}
+        <View style={styles.separator} />  {/* height: 1, marginLeft: 62 */}
+      </View>
+    </ScrollView>
+  </SafeAreaView>
+  ```
+
+- **Expo Push Token 저장 패턴** (App.tsx):
+  ```typescript
+  registerForPushNotificationsAsync().then(async (token) => {
+    if (!token) return;
+    let userId = await AsyncStorage.getItem('userId');
+    // fallback: 'user' JSON 파싱
+    await fetch(`${API_BASE_URL}/api/users/${userId}/push-token`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+  });
+  ```
+
+- **수동 푸시 발송 버튼 패턴** (PostDetailScreen — ADMIN + isNotice 조건):
+  ```tsx
+  {post.isNotice && userRole === 'ADMIN' && (
+    <TouchableOpacity onPress={handleSendPush} disabled={sendingPush}>
+      {sendingPush ? <ActivityIndicator /> : <Text>공지사항 푸시 발송</Text>}
+    </TouchableOpacity>
+  )}
+  ```
+
+#### 현재 테스트 현황
+
+- `backend/src/api.spec.ts` — 총 32개 테스트 모두 통과
+- expo-server-sdk mock: `__mockInstance` singleton 패턴으로 `clearAllMocks()` 내성 확보
+- 커버리지 영역: push-token 저장 (3), send-push (5), 기존 테스트 (24)

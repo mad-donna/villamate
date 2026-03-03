@@ -345,3 +345,104 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 | 업로드 파일 공개 접근 | MEDIUM | 미해결 |
 | vote userId 클라이언트 전달 | LOW | 신규, JWT 적용 시 해소 |
 | ResidentRecord 하드 삭제 | LOW | 수용 |
+
+---
+
+### 2026-03-01 — 전자투표 Admin 버그 수정, CS 티켓/민원 통합, UX 정리 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] Admin 투표 차단 버그**
+- 기존: ResidentRecord 없으면 403 즉시 반환 → Admin 투표 완전 불가
+- 해결: `villa.findFirst` 2차 확인 + `'admin'` sentinel roomNumber 사용
+- 1세대 1표 무결성은 기존 `@@unique` 제약으로 동일하게 보장
+
+**[NEW-LOW] `'admin'` sentinel roomNumber 처리**
+- Vote 테이블에 `roomNumber = 'admin'`인 행이 생성됨
+- 향후 통계(세대별 투표율 등) 집계 시 `'admin'` 행을 필터링해야 함
+- 현재 PollDetailScreen에서 `isAnonymous === false`일 때 투표자 호수를 표시하는 로직에서 `'admin'` 처리 필요
+
+**[RESOLVED] 중복 CS 티켓 코드베이스 제거**
+- `TicketListScreen.tsx`, `CreateTicketScreen.tsx` 삭제
+- `AppNavigator`에서 관련 라우트 제거 → 불필요한 화면 등록 제거
+- `Ticket` 모델은 schema.prisma에 남아 있으나 사용하지 않음 (향후 마이그레이션으로 제거 권장)
+
+**[NEW-MEDIUM] PATCH /api/villas/:villaId/posts/:postId/status — userRole 클라이언트 전달**
+- 상태 변경 API가 req.body의 `userRole`으로 Admin 여부를 판단
+- 인증 미들웨어 없는 현재 구조에서 누구든 `userRole: 'ADMIN'`으로 바디 위조 가능
+- 기존 전체 API 인증 부재 문제와 동일 수준 — JWT 적용 시 함께 해소됨
+
+#### 현재 누적 위험 현황 요약 (2026-03-01 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 | HIGH | 미해결 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| 비밀번호 해싱 없음 | HIGH | 미해결 |
+| 공개 notify 엔드포인트 (상태 변경) | MEDIUM | 수용 |
+| dashboard 통계 인증 없이 조회 | MEDIUM | JWT 적용 시 해소 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| PATCH status userRole 클라이언트 전달 | MEDIUM | 신규, JWT 적용 시 해소 |
+| 'admin' sentinel roomNumber 통계 필터링 미적용 | LOW | 신규, 수용 |
+| vote userId 클라이언트 전달 | LOW | JWT 적용 시 해소 |
+| ResidentRecord 하드 삭제 | LOW | 수용 |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+
+---
+
+### 2026-03-02 — Expo 푸시 알림, iOS 키보드 UX, ProfileScreen 개편, 마이페이지 고도화 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] 비밀번호 해싱 없음**
+- 기존: 이메일 로그인 시 비밀번호 평문 저장 또는 미저장 (MVP 한계)
+- 해결: `bcrypt.hash(password, 10)` 저장, `bcrypt.compare` 검증 — `PATCH /api/users/:userId/password` 구현
+- `schema.prisma`에 `password String?` 컬럼 추가 (nullable: 소셜 로그인 등 비밀번호 없는 계정 호환)
+- **[RESOLVED]** 2026-02-24부터 누적된 HIGH 위험 해소
+
+**[GOOD] 계정 삭제 소프트 삭제 방식**
+- `DELETE /api/users/:userId` — 하드 삭제 대신 익명화 처리:
+  - `name = '탈퇴한 사용자'`, `email = null`, `phone = null`, `status = 'DELETED'`
+  - FK 제약 오류 없이 연관 데이터(청구서, 댓글 등) 보존
+- 운영 측면 긍정: 회계/감사 목적의 히스토리 데이터 무결성 유지
+
+**[NEW-MEDIUM] expoPushToken DB 저장 — 인증 없는 토큰 덮어쓰기 가능**
+- `PATCH /api/users/:userId/push-token`: userId를 아는 누구든 다른 사용자의 pushToken 덮어쓰기 가능
+- 결과: 피해자 기기에는 알림이 가지 않고, 공격자 기기로 알림 수신 가능 (알림 하이재킹)
+- 현재 전체 API 인증 미들웨어 없음과 동일 수준 — JWT 적용 시 함께 해소됨
+- MVP 단계 수용
+
+**[NEW-MEDIUM] POST /api/villas/:villaId/posts/:postId/send-push — 인증 없이 대량 푸시 발송 가능**
+- 인증 없이 villaId + postId만 알면 해당 빌라 전체 입주민에게 푸시 발송 가능
+- 현재 MVP 구조 특성상 수용. 스팸 알림 발송의 도구로 악용 가능
+- JWT + 관리자 권한 체크 적용 시 해소됨
+
+**[NEW-LOW] GET /api/users/:userId/posts — 인증 없이 타인 게시글 목록 조회**
+- 개인정보 노출보다는 읽기 전용 조작이라 위험도 낮음
+- 전체 API 인증 부재와 동일 수준
+
+**[GOOD] 푸시 발송 실패 시 앱 비크래시 처리**
+- `App.tsx`의 push token 등록 실패는 try/catch로 잡고 console.error만 출력 → 앱 시작 실패 없음
+- 올바른 운영 패턴: 알림은 핵심 기능이 아니므로 실패를 graceful하게 처리
+
+#### 현재 누적 위험 현황 요약 (2026-03-02 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 | HIGH | 미해결 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** (bcrypt 적용) |
+| expoPushToken 인증 없이 덮어쓰기 | MEDIUM | 신규, JWT 적용 시 해소 |
+| send-push 인증 없이 대량 발송 | MEDIUM | 신규, JWT 적용 시 해소 |
+| 공개 notify 엔드포인트 (상태 변경) | MEDIUM | 수용 |
+| dashboard 통계 인증 없이 조회 | MEDIUM | JWT 적용 시 해소 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| PATCH status userRole 클라이언트 전달 | MEDIUM | JWT 적용 시 해소 |
+| 'admin' sentinel roomNumber 통계 필터링 | LOW | 수용 |
+| vote userId 클라이언트 전달 | LOW | JWT 적용 시 해소 |
+| ResidentRecord 하드 삭제 | LOW | 수용 |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |

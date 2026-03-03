@@ -164,47 +164,12 @@ const DashboardScreen = ({ navigation }: any) => {
       onPress: () => navigation.navigate('ParkingSearch', { villaId: villaData.id }),
     },
     {
-      label: '입주민 관리',
-      icon: 'people-outline' as const,
-      color: '#34C759',
-      onPress: () => navigation.navigate('ResidentManagement'),
-    },
-    {
-      label: '외부 청구',
-      icon: 'link-outline' as const,
-      color: '#FF3B30',
-      onPress: () => navigation.navigate('ExternalBilling'),
-    },
-    {
-      label: '공용 장부',
-      icon: 'book-outline' as const,
-      color: '#007AFF',
-      onPress: () => navigation.navigate('Ledger'),
-    },
-    {
-      label: '커뮤니티',
-      icon: 'chatbubbles-outline' as const,
-      color: '#5856D6',
-      onPress: () =>
-        navigation.navigate('Board', {
-          villaId: villaData.id,
-          userId: adminUserId,
-          userRole: 'ADMIN',
-        }),
-    },
-    {
       label: '전자투표',
       icon: 'checkbox-outline' as const,
       color: '#FF2D55',
-      onPress: () => navigation.navigate('PollList', { villaId: villaData.id, userId: adminUserId }),
+      onPress: () => navigation.navigate('PollList', { villaId: villaData.id, userId: adminUserId, userRole: 'ADMIN' }),
     },
   ];
-
-  // Split quick actions into rows of 3
-  const actionRows: (typeof quickActions)[] = [];
-  for (let i = 0; i < quickActions.length; i += 3) {
-    actionRows.push(quickActions.slice(i, i + 3));
-  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -269,7 +234,7 @@ const DashboardScreen = ({ navigation }: any) => {
         {/* Active polls widget */}
         <TouchableOpacity
           style={styles.widget}
-          onPress={() => navigation.navigate('PollList', { villaId: villaData.id, userId: adminUserId })}
+          onPress={() => navigation.navigate('PollList', { villaId: villaData.id, userId: adminUserId, userRole: 'ADMIN' })}
           activeOpacity={0.7}
         >
           <View style={styles.widgetHeader}>
@@ -283,23 +248,21 @@ const DashboardScreen = ({ navigation }: any) => {
 
         {/* Quick Actions */}
         <Text style={styles.sectionLabel}>바로가기</Text>
-        {actionRows.map((row, rowIndex) => (
-          <View key={rowIndex} style={styles.actionRow}>
-            {row.map((action, colIndex) => (
-              <TouchableOpacity
-                key={colIndex}
-                style={styles.actionCard}
-                onPress={action.onPress}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.actionIconCircle, { backgroundColor: action.color + '1A' }]}>
-                  <Ionicons name={action.icon} size={24} color={action.color} />
-                </View>
-                <Text style={styles.actionLabel}>{action.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ))}
+        <View style={styles.actionRow}>
+          {quickActions.map((action, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.actionCard}
+              onPress={action.onPress}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.actionIconCircle, { backgroundColor: action.color + '1A' }]}>
+                <Ionicons name={action.icon} size={24} color={action.color} />
+              </View>
+              <Text style={styles.actionLabel}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* Resident list */}
         <Text style={styles.sectionLabel}>입주민 명단</Text>

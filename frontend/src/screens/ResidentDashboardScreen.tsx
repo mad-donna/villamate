@@ -324,7 +324,7 @@ const ResidentDashboardScreen = () => {
         {/* Active polls widget */}
         <TouchableOpacity
           style={styles.widget}
-          onPress={() => navigation.navigate('PollList', { villaId: residentVillaId, userId: residentUserId })}
+          onPress={() => navigation.navigate('PollList', { villaId: residentVillaId, userId: residentUserId, userRole: 'RESIDENT' })}
           activeOpacity={0.7}
         >
           <View style={styles.widgetHeader}>
@@ -349,41 +349,17 @@ const ResidentDashboardScreen = () => {
             }}
             activeOpacity={0.8}
           >
-            <Ionicons name="car-outline" size={16} color="#fff" style={styles.pillIcon} />
+            <Ionicons name="car-outline" size={18} color="#fff" style={styles.pillIcon} />
             <Text style={styles.pillText}>주차 조회</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.pillButton, { backgroundColor: '#5856D6' }]}
-            onPress={() =>
-              navigation.navigate('Board', {
-                villaId: residentVillaId,
-                userId: residentUserId,
-                userRole: 'RESIDENT',
-              })
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chatbubbles-outline" size={16} color="#fff" style={styles.pillIcon} />
-            <Text style={styles.pillText}>커뮤니티</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.pillButton, { backgroundColor: '#007AFF' }]}
-            onPress={() => navigation.navigate('Ledger')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="book-outline" size={16} color="#fff" style={styles.pillIcon} />
-            <Text style={styles.pillText}>공용 장부</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[styles.pillButton, { backgroundColor: '#FF2D55' }]}
-            onPress={() => navigation.navigate('PollList', { villaId: residentVillaId, userId: residentUserId })}
+            onPress={() => navigation.navigate('PollList', { villaId: residentVillaId, userId: residentUserId, userRole: 'RESIDENT' })}
             activeOpacity={0.8}
           >
-            <Ionicons name="checkbox-outline" size={16} color="#fff" style={styles.pillIcon} />
-            <Text style={styles.pillText}>투표</Text>
+            <Ionicons name="checkbox-outline" size={18} color="#fff" style={styles.pillIcon} />
+            <Text style={styles.pillText}>전자투표</Text>
           </TouchableOpacity>
         </View>
 
@@ -527,16 +503,17 @@ const styles = StyleSheet.create({
   // Quick actions
   quickActionsRow: {
     flexDirection: 'row',
-    gap: 10,
+    justifyContent: 'center',
+    gap: 16,
     marginBottom: 24,
   },
   pillButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -544,12 +521,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   pillIcon: {
-    marginRight: 4,
+    marginRight: 6,
   },
   pillText: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
+    letterSpacing: 0.2,
   },
 
   // Loading

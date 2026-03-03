@@ -96,6 +96,22 @@ jest.mock('@prisma/client', () => {
   };
 });
 
+// ─── Mock expo-server-sdk ────────────────────────────────────────────────────
+// The shared instance object is created once inside the factory so the same
+// jest.fn() references are returned on every `new Expo()` call.  This lets
+// tests reach the methods via jest.requireMock after jest.clearAllMocks().
+jest.mock('expo-server-sdk', () => {
+  const mockInstance = {
+    chunkPushNotifications: jest.fn((msgs: any[]) => [msgs]),
+    sendPushNotificationsAsync: jest.fn().mockResolvedValue([]),
+  };
+  const MockExpo = jest.fn().mockImplementation(() => mockInstance);
+  (MockExpo as any).isExpoPushToken = (token: string) =>
+    typeof token === 'string' && token.startsWith('ExponentPushToken[');
+  (MockExpo as any).__mockInstance = mockInstance;
+  return { Expo: MockExpo };
+});
+
 // ─── Import app AFTER the mock is in place ────────────────────────────────────
 import { app } from './index';
 import { PrismaClient } from '@prisma/client';
@@ -506,9 +522,11 @@ describe('POST /api/villas/:villaId/polls/:pollId/vote — 1세대 1표', () => 
 // 11. Vote — non-resident cannot vote
 // =============================================================================
 describe('POST /api/villas/:villaId/polls/:pollId/vote — non-resident', () => {
-  it('returns 403 when the voter is not a resident of the villa', async () => {
+  it('returns 403 when the voter is neither a resident nor the admin of the villa', async () => {
     // residentRecord.findFirst returns null → not a resident
     prisma.residentRecord.findFirst.mockResolvedValue(null);
+    // villa.findFirst returns null → not the admin either
+    prisma.villa.findFirst.mockResolvedValue(null);
 
     const res = await request(app)
       .post('/api/villas/1/polls/poll-uuid-001/vote')
@@ -520,5 +538,209 @@ describe('POST /api/villas/:villaId/polls/:pollId/vote — non-resident', () => 
     // Should not proceed to check the poll or create a vote
     expect(prisma.poll.findUnique).not.toHaveBeenCalled();
     expect(prisma.vote.create).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// 12. Vote — admin can vote using the 'admin' sentinel roomNumber
+// =============================================================================
+describe('POST /api/villas/:villaId/polls/:pollId/vote — admin voter', () => {
+  const pollId = 'poll-uuid-002';
+  const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  it('returns 201 when the villa admin casts their first vote', async () => {
+    // No ResidentRecord for admin
+    prisma.residentRecord.findFirst.mockResolvedValue(null);
+    // villa.findFirst confirms admin owns this villa
+    prisma.villa.findFirst.mockResolvedValue({ id: 1, adminId: 'admin-user' });
+    // Poll is active
+    prisma.poll.findUnique.mockResolvedValue({ id: pollId, villaId: 1, endDate: futureDate });
+    // No existing vote for the 'admin' sentinel roomNumber
+    prisma.vote.findUnique.mockResolvedValue(null);
+    // Vote created successfully
+    prisma.vote.create.mockResolvedValue({
+      id: 'vote-admin-001',
+      pollId,
+      optionId: 'opt-001',
+      voterId: 'admin-user',
+      roomNumber: 'admin',
+    });
+
+    const res = await request(app)
+      .post(`/api/villas/1/polls/${pollId}/vote`)
+      .send({ voterId: 'admin-user', optionId: 'opt-001' });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ pollId, roomNumber: 'admin', voterId: 'admin-user' });
+    expect(prisma.vote.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 409 when the admin tries to vote a second time', async () => {
+    // No ResidentRecord for admin
+    prisma.residentRecord.findFirst.mockResolvedValue(null);
+    // villa.findFirst confirms admin owns this villa
+    prisma.villa.findFirst.mockResolvedValue({ id: 1, adminId: 'admin-user' });
+    // Poll is active
+    prisma.poll.findUnique.mockResolvedValue({ id: pollId, villaId: 1, endDate: futureDate });
+    // Existing vote already present for the 'admin' sentinel
+    prisma.vote.findUnique.mockResolvedValue({ id: 'vote-admin-001', pollId, roomNumber: 'admin' });
+
+    const res = await request(app)
+      .post(`/api/villas/1/polls/${pollId}/vote`)
+      .send({ voterId: 'admin-user', optionId: 'opt-002' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/이미 투표한 세대입니다/);
+    expect(prisma.vote.create).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// N. Push Token Registration — PATCH /api/users/:userId/push-token
+// =============================================================================
+describe('PATCH /api/users/:userId/push-token', () => {
+  const userId = 'user-uuid-001';
+  const validToken = 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxx]';
+
+  it('returns 200 and updates the expoPushToken', async () => {
+    const mockUser = { id: userId, name: '홍길동', expoPushToken: validToken };
+    prisma.user.update.mockResolvedValue(mockUser);
+
+    const res = await request(app)
+      .patch(`/api/users/${userId}/push-token`)
+      .send({ token: validToken });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: userId, expoPushToken: validToken });
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: userId },
+        data: { expoPushToken: validToken },
+      })
+    );
+  });
+
+  it('returns 400 when token is missing', async () => {
+    const res = await request(app)
+      .patch(`/api/users/${userId}/push-token`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error', 'token is required');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 when prisma throws', async () => {
+    prisma.user.update.mockRejectedValue(new Error('DB error'));
+
+    const res = await request(app)
+      .patch(`/api/users/${userId}/push-token`)
+      .send({ token: validToken });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toHaveProperty('error');
+  });
+});
+
+// =============================================================================
+// N+1. POST /api/villas/:villaId/posts — no longer sends push notifications
+// =============================================================================
+describe('POST /api/villas/:villaId/posts — no auto-push', () => {
+  const validBody = {
+    title: '단지 공지사항',
+    content: '공지 내용입니다.',
+    authorId: 'user-uuid-001',
+    isNotice: true,
+  };
+
+  it('returns 201 and does NOT call expo push even when isNotice is true', async () => {
+    const mockPost = { id: 'post-001', ...validBody, villaId: 1, createdAt: new Date().toISOString() };
+    prisma.post.create.mockResolvedValue(mockPost);
+
+    const res = await request(app)
+      .post('/api/villas/1/posts')
+      .send(validBody);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ id: 'post-001' });
+    // No push — residentRecord should never be queried
+    expect(prisma.residentRecord.findMany).not.toHaveBeenCalled();
+    const { Expo: MockedExpo } = jest.requireMock('expo-server-sdk');
+    const expoInstance = new MockedExpo();
+    expect(expoInstance.sendPushNotificationsAsync).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// N+2. Manual Push — POST /api/villas/:villaId/posts/:postId/send-push
+// =============================================================================
+describe('POST /api/villas/:villaId/posts/:postId/send-push', () => {
+  const postId = 'post-uuid-001';
+  const PUSH_TITLE = '새롭게 공지사항 등록된 글이 있습니다. 확인해보실까요?';
+
+  it('returns 200 and sends push to all residents with valid tokens', async () => {
+    const mockPost = { id: postId, title: '단지 공지사항', villaId: 1 };
+    prisma.post.findUnique.mockResolvedValue(mockPost);
+    prisma.residentRecord.findMany.mockResolvedValue([
+      { user: { id: 'user-001', expoPushToken: 'ExponentPushToken[aaaaaaaaaaaaaaaaaaa]' } },
+      { user: { id: 'user-002', expoPushToken: 'ExponentPushToken[bbbbbbbbbbbbbbbbbbb]' } },
+      { user: { id: 'user-003', expoPushToken: null } },
+    ]);
+
+    const res = await request(app).post(`/api/villas/1/posts/${postId}/send-push`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, sent: 2 });
+    expect(prisma.post.findUnique).toHaveBeenCalledWith({ where: { id: postId } });
+    expect(prisma.residentRecord.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { villaId: 1 }, include: { user: true } })
+    );
+    const { Expo: MockedExpo } = jest.requireMock('expo-server-sdk');
+    const expoInstance = (MockedExpo as any).__mockInstance;
+    expect(expoInstance.sendPushNotificationsAsync).toHaveBeenCalledTimes(1);
+    const sentMessages = expoInstance.chunkPushNotifications.mock.calls[0][0];
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[0]).toMatchObject({ title: PUSH_TITLE, body: mockPost.title });
+  });
+
+  it('returns 200 with sent: 0 when no residents have a push token', async () => {
+    const mockPost = { id: postId, title: '공지', villaId: 1 };
+    prisma.post.findUnique.mockResolvedValue(mockPost);
+    prisma.residentRecord.findMany.mockResolvedValue([
+      { user: { id: 'user-001', expoPushToken: null } },
+    ]);
+
+    const res = await request(app).post(`/api/villas/1/posts/${postId}/send-push`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, sent: 0 });
+    const { Expo: MockedExpo } = jest.requireMock('expo-server-sdk');
+    const expoInstance = (MockedExpo as any).__mockInstance;
+    expect(expoInstance.sendPushNotificationsAsync).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the post does not exist', async () => {
+    prisma.post.findUnique.mockResolvedValue(null);
+
+    const res = await request(app).post(`/api/villas/1/posts/nonexistent-id/send-push`);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error', 'Post not found');
+  });
+
+  it('returns 400 for non-numeric villaId', async () => {
+    const res = await request(app).post(`/api/villas/abc/posts/${postId}/send-push`);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error', 'Invalid villaId');
+  });
+
+  it('returns 500 when prisma throws', async () => {
+    prisma.post.findUnique.mockRejectedValue(new Error('DB error'));
+
+    const res = await request(app).post(`/api/villas/1/posts/${postId}/send-push`);
+
+    expect(res.status).toBe(500);
+    expect(res.body).toHaveProperty('error');
   });
 });

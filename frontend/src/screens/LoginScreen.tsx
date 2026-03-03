@@ -410,6 +410,9 @@ const LoginScreen = ({ navigation }: any) => {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>테스트 로그인</Text>
@@ -456,6 +459,7 @@ const LoginScreen = ({ navigation }: any) => {
                 </Text>
               </ScrollView>
             </View>
+            </KeyboardAvoidingView>
           </View>
         </TouchableWithoutFeedback>
       </Modal>

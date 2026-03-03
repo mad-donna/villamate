@@ -23,7 +23,7 @@ interface Poll {
 }
 
 const PollDetailScreen = ({ navigation, route }: any) => {
-  const { pollId, villaId, userId } = route.params ?? {};
+  const { pollId, villaId, userId, userRole } = route.params ?? {};
   const [poll, setPoll] = useState<Poll | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
@@ -48,8 +48,15 @@ const PollDetailScreen = ({ navigation, route }: any) => {
   useFocusEffect(useCallback(() => { fetchPoll(); }, [fetchPoll]));
 
   const isActive = poll ? new Date(poll.endDate) > new Date() : false;
-  const hasVoted = poll ? poll.options.some(o => o.votes.some(v => v.voterId === userId)) : false;
-  const myOptionId = poll?.options.find(o => o.votes.some(v => v.voterId === userId))?.id ?? null;
+  // hasVoted: match by voterId (works for residents) OR by the 'admin' sentinel roomNumber (for admins)
+  const hasVoted = poll
+    ? poll.options.some(o =>
+        o.votes.some(v => v.voterId === userId || (userRole === 'ADMIN' && v.roomNumber === 'admin'))
+      )
+    : false;
+  const myOptionId = poll?.options.find(o =>
+    o.votes.some(v => v.voterId === userId || (userRole === 'ADMIN' && v.roomNumber === 'admin'))
+  )?.id ?? null;
   const totalVotes = poll ? poll.options.reduce((s, o) => s + o._count.votes, 0) : 0;
 
   const handleVote = async () => {
@@ -63,6 +70,8 @@ const PollDetailScreen = ({ navigation, route }: any) => {
       });
       if (res.status === 409) {
         Alert.alert('알림', '이미 투표한 세대입니다. (1세대 1표)');
+      } else if (res.status === 403) {
+        Alert.alert('투표 불가', '해당 빌라의 구성원이 아닙니다. 빌라 등록 상태를 확인해 주세요.');
       } else if (!res.ok) {
         const err = await res.json();
         Alert.alert('오류', err.error || '투표에 실패했습니다.');

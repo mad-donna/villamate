@@ -143,6 +143,40 @@
 - `frontend/src/screens/ParkingSearchScreen.tsx` — vehicle search by plate number; receives `{ villaId }` from route.params
 - `frontend/src/screens/ProfileScreen.tsx` — now includes vehicle management section (register/list/delete); uses ScrollView wrapper
 
+### ProfileScreen Overhaul (added Mar 2026)
+- ProfileScreen is now an iOS Settings-style page — avatar header + section cards with row items and chevrons
+- Vehicle management extracted to `VehicleManagementScreen.tsx` (registered as `VehicleManagement` stack route)
+- `ChangePasswordScreen.tsx` registered as `ChangePassword` stack route; receives `{ userId }` param
+- Backend: `DELETE /api/users/:userId` anonymizes user (sets name='탈퇴한 사용자', nulls PII, status='DELETED')
+- Backend: `PATCH /api/users/:userId/password` — bcryptjs hash/compare; skips old-password check if `user.password` is null
+- `password String?` field added to User model in schema.prisma
+- bcryptjs import: `import bcrypt from 'bcryptjs'` (no `* as` needed)
+- Both new routes sit between push-token route and the Social Login proxy route in index.ts
+
+### CS Ticketing System (added Mar 2026)
+- Ticket model: `id` (uuid), `title`, `description`, `imageUrl` (String?), `status` (String, default "PENDING"), `creatorId` (String -> User), `villaId` (Int -> Villa), `createdAt`
+- Status values: `PENDING` (접수 대기), `IN_PROGRESS` (처리 중), `RESOLVED` (처리 완료)
+- POST `/api/villas/:villaId/tickets` — body: `{ title, description, imageUrl?, creatorId }` → 201
+- GET `/api/villas/:villaId/tickets` — returns tickets with `creator.name` + `roomNumber` (null for admin); uses ResidentRecord map for efficient roomNumber lookup
+- PATCH `/api/villas/:villaId/tickets/:ticketId/status` — body: `{ status }`; validates against VALID_STATUSES array
+- TicketListScreen registered as `TicketList` (headerShown: false); CreateTicketScreen as `CreateTicket` (title: '민원/하자 접수')
+- Navigation to TicketList: `navigation.navigate('TicketList', { villaId, userId, userRole })`
+- Admin quickActions color for 민원 접수: `#AF52DE` (purple); uses `alert-circle-outline` Ionicons icon
+- Resident pill button color: `#AF52DE` (purple)
+- TicketListScreen: admin sees status update buttons (처리 중으로 변경, 처리 완료) only when ticket is not RESOLVED; buttons hidden for RESOLVED tickets
+- Image upload in CreateTicketScreen uses same FormData pattern as BuildingEvent/other screens
+
+### Push Notifications (added Mar 2026)
+- User model has `expoPushToken String?` — saved by App.tsx on launch via `PATCH /api/users/:userId/push-token`
+- Backend uses `expo-server-sdk`: `import { Expo } from 'expo-server-sdk'`; singleton `const expo = new Expo()` at module scope
+- Tokens saved with `Expo.isExpoPushToken(t)` validation filter before sending
+- Push sent only when `isNotice === true` in `POST /api/villas/:villaId/posts`; wrapped in inner try/catch so push failure never breaks post creation
+- Frontend: `expo-notifications` + `expo-device`; `Notifications.setNotificationHandler` called at module level (outside component); registration inside `useEffect` with empty deps
+- `Device.isDevice` guard: skip token request on emulator/simulator
+- Android requires `setNotificationChannelAsync('default', ...)` before requesting permissions
+- UserId lookup order: `AsyncStorage.getItem('userId')` first, then fallback to `AsyncStorage.getItem('user') -> JSON.parse -> .id`
+- PATCH push-token route placed between email-login route and the Social Login proxy route in index.ts
+
 ### Testing (added Feb 2026)
 - Test file: `backend/src/api.spec.ts` — Jest + supertest integration tests (no real DB)
 - Jest config in `backend/package.json`: `rootDir: "src"`, `testRegex: ".*\\.spec\\.ts$"`, `transform: ts-jest`; tsconfig uses `module: CommonJS` — no extra ts-jest globals needed

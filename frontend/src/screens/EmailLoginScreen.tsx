@@ -9,8 +9,8 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
@@ -110,11 +110,12 @@ const EmailLoginScreen = ({ navigation }: any) => {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <KeyboardAwareScrollView
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: '#fff' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
         contentContainerStyle={{ flexGrow: 1, padding: 16 }}
-        enableOnAndroid={true}
-        extraHeight={120}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.inner}>
@@ -147,25 +148,22 @@ const EmailLoginScreen = ({ navigation }: any) => {
             <Text style={styles.backButtonText}>← 다른 방법으로 로그인</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAwareScrollView>
+      </ScrollView>
 
-      {/* Bottom Fixed Button */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={{ padding: 16, paddingBottom: Math.max(insets.bottom + 16, 24), backgroundColor: '#fff' }}>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>로그인 / 회원가입</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </View>
+      <View style={{ padding: 16, paddingBottom: Math.max(insets.bottom + 16, 24), backgroundColor: '#fff' }}>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>로그인 / 회원가입</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
