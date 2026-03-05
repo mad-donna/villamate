@@ -45,7 +45,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 // File upload endpoint — returns a public URL for the uploaded file
 app.post('/api/upload', upload.single('file'), (req: Request, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const fileUrl = `http://192.168.219.178:3000/uploads/${req.file.filename}`;
+  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
   res.json({ fileUrl });
 });
 
@@ -428,6 +428,47 @@ app.post('/api/villas/join', async (req: Request, res: Response) => {
   }
 });
 
+// Join villa by villaId (no invite code) — sets role to RESIDENT
+app.post('/api/villas/:villaId/join', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  const { userId, roomNumber } = req.body;
+  if (!userId || !roomNumber) {
+    return res.status(400).json({ error: 'userId and roomNumber are required' });
+  }
+
+  try {
+    const villa = await prisma.villa.findUnique({ where: { id: villaId } });
+    if (!villa) return res.status(404).json({ error: '빌라를 찾을 수 없습니다.' });
+
+    const existingRecord = await prisma.residentRecord.findFirst({
+      where: { userId: String(userId), villaId },
+    });
+
+    if (existingRecord) {
+      await prisma.residentRecord.update({
+        where: { id: existingRecord.id },
+        data: { roomNumber: String(roomNumber) },
+      });
+    } else {
+      await prisma.residentRecord.create({
+        data: { userId: String(userId), villaId, roomNumber: String(roomNumber) },
+      });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: String(userId) },
+      data: { role: 'RESIDENT' },
+    });
+
+    res.status(200).json({ user, villa });
+  } catch (error) {
+    console.error('Villa join by ID error:', error);
+    res.status(500).json({ error: 'Failed to join villa' });
+  }
+});
+
 // Create invoice — supports FIXED (per-resident amount) and VARIABLE (itemised split)
 app.post('/api/villas/:villaId/invoices', async (req: Request, res: Response) => {
   const villaId = parseInt(String(req.params.villaId), 10);
@@ -533,7 +574,7 @@ app.get('/api/residents/:residentId/payments', async (req: Request, res: Respons
       include: {
         invoice: {
           include: {
-            villa: { select: { name: true } },
+            villa: { select: { name: true, bankName: true, accountNumber: true } },
           },
         },
       },
@@ -561,6 +602,105 @@ app.put('/api/payments/:paymentId/status', async (req: Request, res: Response) =
   } catch (error) {
     console.error('Update payment error:', error);
     res.status(500).json({ error: 'Failed to update payment' });
+  }
+});
+
+// Mark payment as TRANSFERRED (resident has notified admin of bank transfer)
+app.patch('/api/payments/:paymentId/transfer', async (req: Request, res: Response) => {
+  const paymentId = String(req.params.paymentId);
+  try {
+    const payment = await prisma.invoicePayment.update({
+      where: { id: paymentId },
+      data: { status: 'TRANSFERRED' },
+    });
+    res.status(200).json(payment);
+  } catch (error) {
+    console.error('Transfer payment error:', error);
+    res.status(500).json({ error: 'Failed to update payment status' });
+  }
+});
+
+// Mark payment as COMPLETED (admin confirms receipt)
+app.patch('/api/payments/:paymentId/confirm', async (req: Request, res: Response) => {
+  const paymentId = String(req.params.paymentId);
+  try {
+    const payment = await prisma.invoicePayment.update({
+      where: { id: paymentId },
+      data: { status: 'COMPLETED' },
+    });
+    res.status(200).json(payment);
+  } catch (error) {
+    console.error('Confirm payment error:', error);
+    res.status(500).json({ error: 'Failed to confirm payment' });
+  }
+});
+
+// SaaS subscription: activate free trial for a villa
+app.patch('/api/villas/:villaId/subscribe', async (req: Request, res: Response) => {
+  const villaId = Number(req.params.villaId);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+  try {
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
+    const villa = await prisma.villa.update({
+      where: { id: villaId },
+      data: {
+        subscriptionStatus: 'ACTIVE',
+        subscriptionExpiry: expiry,
+      },
+    });
+    res.json(villa);
+  } catch (error) {
+    console.error('Subscribe error:', error);
+    res.status(500).json({ error: 'Failed to activate subscription' });
+  }
+});
+
+// Resident marks their invoice payment as TRANSFERRED (bank transfer sent)
+app.patch('/api/invoices/:invoiceId/transfer', async (req: Request, res: Response) => {
+  const invoiceId = String(req.params.invoiceId);
+  const { residentId } = req.body;
+  if (!residentId) return res.status(400).json({ error: 'residentId is required' });
+  try {
+    const payment = await prisma.invoicePayment.updateMany({
+      where: { invoiceId, residentId },
+      data: { status: 'TRANSFERRED' },
+    });
+    // Also update Invoice.status to TRANSFERRED if not already PAID
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { status: 'TRANSFERRED' },
+    }).catch(() => {}); // ignore if already PAID
+    res.json({ updated: payment.count });
+  } catch (error) {
+    console.error('Invoice transfer error:', error);
+    res.status(500).json({ error: 'Failed to update payment status' });
+  }
+});
+
+// Admin confirms a specific resident's payment (TRANSFERRED → COMPLETED)
+app.patch('/api/invoices/:invoiceId/confirm', async (req: Request, res: Response) => {
+  const invoiceId = String(req.params.invoiceId);
+  const { paymentId } = req.body;
+  if (!paymentId) return res.status(400).json({ error: 'paymentId is required' });
+  try {
+    // Mark this specific payment as COMPLETED
+    await prisma.invoicePayment.update({
+      where: { id: paymentId },
+      data: { status: 'COMPLETED' },
+    });
+
+    // Check if ALL payments for this invoice are COMPLETED → mark invoice as PAID
+    const allPayments = await prisma.invoicePayment.findMany({ where: { invoiceId } });
+    const allDone = allPayments.length > 0 && allPayments.every((p) => p.status === 'COMPLETED');
+    if (allDone) {
+      await prisma.invoice.update({ where: { id: invoiceId }, data: { status: 'PAID' } });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Invoice confirm error:', error);
+    res.status(500).json({ error: 'Failed to confirm payment' });
   }
 });
 
@@ -815,7 +955,7 @@ app.get('/api/villas/:villaId/vehicles/search', async (req: Request, res: Respon
 // Create a building event for a villa (history/contract record)
 app.post('/api/villas/:villaId/building-events', async (req: Request, res: Response) => {
   const { villaId } = req.params;
-  const { title, description, category, eventDate, contractorName, contactNumber, creatorId, attachmentUrl } = req.body;
+  const { title, description, category, eventDate, contractorName, contactNumber, creatorId, attachmentUrl, isPublic, cost } = req.body;
   if (!title || !category || !eventDate || !creatorId) {
     return res.status(400).json({ error: 'title, category, eventDate, creatorId are required' });
   }
@@ -831,6 +971,8 @@ app.post('/api/villas/:villaId/building-events', async (req: Request, res: Respo
         villaId: Number(villaId),
         creatorId: String(creatorId),
         attachmentUrl: attachmentUrl || null,
+        isPublic: Boolean(isPublic) ?? false,
+        cost: cost !== undefined ? Number(cost) : 0,
       },
     });
     res.status(201).json(event);
@@ -841,11 +983,17 @@ app.post('/api/villas/:villaId/building-events', async (req: Request, res: Respo
 });
 
 // Get all building events for a villa (ordered by eventDate desc)
+// If role=RESIDENT query param is provided, only return isPublic=true records
 app.get('/api/villas/:villaId/building-events', async (req: Request, res: Response) => {
   const { villaId } = req.params;
+  const role = String(req.query.role || '').toUpperCase();
   try {
+    const where: any = { villaId: Number(villaId) };
+    if (role === 'RESIDENT') {
+      where.isPublic = true;
+    }
     const events = await prisma.buildingEvent.findMany({
-      where: { villaId: Number(villaId) },
+      where,
       orderBy: { eventDate: 'desc' },
     });
     res.json(events);
@@ -869,6 +1017,31 @@ app.get('/api/villas/:villaId/detail', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Fetch villa detail error:', error);
     res.status(500).json({ error: 'Failed to fetch villa' });
+  }
+});
+
+// Search villas by name or address (public)
+// NOTE: Must be registered before /api/villas/:adminId to avoid wildcard shadowing.
+app.get('/api/villas/search', async (req: Request, res: Response) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) {
+    return res.status(400).json({ error: '검색어를 2자 이상 입력해주세요.' });
+  }
+  try {
+    const villas = await prisma.villa.findMany({
+      where: {
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { address: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, name: true, address: true, totalUnits: true },
+      take: 20,
+    });
+    res.status(200).json(villas);
+  } catch (error) {
+    console.error('Villa search error:', error);
+    res.status(500).json({ error: 'Failed to search villas' });
   }
 });
 
@@ -1868,6 +2041,36 @@ app.get('/api/admin/villas', async (req: Request, res: Response) => {
     res.status(200).json(villas);
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// Admin: update villa approval status (PENDING → APPROVED | REJECTED)
+app.patch('/api/admin/villas/:villaId/status', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    const villaId = parseInt(String(req.params.villaId), 10);
+    if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+    const { status } = req.body;
+    if (status !== 'APPROVED' && status !== 'REJECTED') {
+      return res.status(400).json({ error: 'status must be APPROVED or REJECTED' });
+    }
+
+    const villa = await prisma.villa.update({
+      where: { id: villaId },
+      data: { status },
+    });
+    res.status(200).json(villa);
+  } catch (error) {
+    console.error('Villa status update error:', error);
+    res.status(500).json({ error: 'Failed to update villa status' });
   }
 });
 

@@ -24,6 +24,8 @@ interface BuildingEvent {
   contractorName: string | null;
   contactNumber: string | null;
   attachmentUrl: string | null;
+  isPublic: boolean;
+  cost: number | null;
   createdAt: string;
 }
 
@@ -38,10 +40,17 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 const getCategoryStyle = (category: string) =>
   CATEGORY_COLORS[category] ?? { bg: '#F5F5F5', text: '#424242' };
 
+const resolveImageUrl = (url: string | null): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${API_BASE_URL}${url}`;
+};
+
 const BuildingHistoryScreen = ({ navigation }: any) => {
   const [events, setEvents] = useState<BuildingEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [villaId, setVillaId] = useState<number | null>(null);
+  const [userRole, setUserRole] = useState<'ADMIN' | 'RESIDENT' | null>(null);
 
   const resolveVillaId = useCallback(async (): Promise<number | null> => {
     const userJson = await AsyncStorage.getItem('user');
@@ -73,7 +82,16 @@ const BuildingHistoryScreen = ({ navigation }: any) => {
         }
         setVillaId(vid);
       }
-      const res = await fetch(`${API_BASE_URL}/api/villas/${vid}/building-events`);
+      // Resolve role from AsyncStorage
+      let role: 'ADMIN' | 'RESIDENT' = 'ADMIN';
+      const userJson = await AsyncStorage.getItem('user');
+      if (userJson) {
+        const u = JSON.parse(userJson);
+        if (u?.role === 'RESIDENT') role = 'RESIDENT';
+      }
+      setUserRole(role);
+
+      const res = await fetch(`${API_BASE_URL}/api/villas/${vid}/building-events?role=${role}`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json();
       setEvents(Array.isArray(data) ? data : []);
@@ -106,14 +124,30 @@ const BuildingHistoryScreen = ({ navigation }: any) => {
   const renderEvent = ({ item }: { item: BuildingEvent }) => {
     const catStyle = getCategoryStyle(item.category);
     return (
-      <View style={styles.eventCard}>
+      <TouchableOpacity
+        style={styles.eventCard}
+        onPress={() => navigation.navigate('ContractDetail', { event: item })}
+        activeOpacity={0.75}
+      >
         <View style={styles.eventHeader}>
-          <View style={[styles.categoryBadge, { backgroundColor: catStyle.bg }]}>
-            <Text style={[styles.categoryText, { color: catStyle.text }]}>{item.category}</Text>
+          <View style={styles.badgeRow}>
+            <View style={[styles.categoryBadge, { backgroundColor: catStyle.bg }]}>
+              <Text style={[styles.categoryText, { color: catStyle.text }]}>{item.category}</Text>
+            </View>
+            {userRole === 'ADMIN' && (
+              <View style={[styles.visibilityBadge, item.isPublic ? styles.publicBadge : styles.privateBadge]}>
+                <Text style={[styles.visibilityBadgeText, item.isPublic ? styles.publicBadgeText : styles.privateBadgeText]}>
+                  {item.isPublic ? '공개' : '비공개'}
+                </Text>
+              </View>
+            )}
           </View>
           <Text style={styles.eventDate}>{item.eventDate}</Text>
         </View>
         <Text style={styles.eventTitle}>{item.title}</Text>
+        {item.cost !== null && item.cost !== undefined && item.cost > 0 && (
+          <Text style={styles.eventCost}>💰 {item.cost.toLocaleString()}원</Text>
+        )}
         {item.description ? (
           <Text style={styles.eventDesc}>{item.description}</Text>
         ) : null}
@@ -129,12 +163,12 @@ const BuildingHistoryScreen = ({ navigation }: any) => {
         ) : null}
         {item.attachmentUrl ? (
           <Image
-            source={{ uri: item.attachmentUrl }}
+            source={{ uri: resolveImageUrl(item.attachmentUrl) ?? '' }}
             style={styles.thumbnail}
             resizeMode="cover"
           />
         ) : null}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -142,9 +176,11 @@ const BuildingHistoryScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.headerSection}>
         <Text style={styles.title}>건물 이력 및 계약 관리</Text>
-        <TouchableOpacity style={styles.addButton} onPress={handleAdd} activeOpacity={0.85}>
-          <Text style={styles.addButtonText}>+ 이력 등록</Text>
-        </TouchableOpacity>
+        {userRole === 'ADMIN' && (
+          <TouchableOpacity style={styles.addButton} onPress={handleAdd} activeOpacity={0.85}>
+            <Text style={styles.addButtonText}>+ 이력 등록</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -242,6 +278,27 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 10,
     marginTop: 10,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  visibilityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  publicBadge: { backgroundColor: '#E8F5E9' },
+  privateBadge: { backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: '#E5E5EA' },
+  visibilityBadgeText: { fontSize: 11, fontWeight: '700' },
+  publicBadgeText: { color: '#2E7D32' },
+  privateBadgeText: { color: '#AEAEB2' },
+  eventCost: {
+    fontSize: 13,
+    color: '#5856D6',
+    fontWeight: '600',
+    marginBottom: 4,
   },
 });
 

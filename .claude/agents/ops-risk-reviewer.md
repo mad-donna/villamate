@@ -556,3 +556,53 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 | ResidentRecord 하드 삭제 | LOW | 수용 |
 | ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
 | ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+
+---
+
+### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[NEW-HIGH] 구독 쿠폰 코드 서버 미검증 — SaaS BM 리스크**
+- 쿠폰 코드 입력 시 DB 쿠폰 테이블의 존재 여부, `isUsed` 플래그, 만료일 미검증 시 임의 문자열로 무제한 무료 사용 가능
+- SaaS 수익 모델의 핵심 게이트웨이인 쿠폰 검증이 취약하면 BM 자체가 붕괴
+- **해결 필요**: DB `Coupon` 테이블 (code, isUsed, usedAt) + 서버에서 원자적 `findFirst + update` 처리 (동시 요청 레이스 컨디션 방지)
+
+**[NEW-MEDIUM] 구독 만료 시 API 접근 제한 없음**
+- `subscriptionStatus: EXPIRED` Admin도 청구서 발행, 입주민 관리 등 모든 핵심 API 사용 가능
+- SaaS 수익 전환 유인이 사라짐 — 구독 검증 미들웨어가 없으면 서비스 무단 사용 가능
+- JWT 인증 미들웨어 도입 시 구독 상태 체크 로직 함께 추가 필요
+
+**[NEW-MEDIUM] VillaSearchScreen 입주 신청 — 스팸 신청 가능**
+- 초대 코드 없이 누구나 임의 빌라에 입주 신청 가능
+- 관리자 승인 플로우가 있으나 대량 스팸 신청 시 관리자 부담 증가
+- MVP 단계 수용, 향후 rate limiting 또는 전화번호 인증 추가 권장
+
+**[GOOD] 수동 계좌 송금 BM — 위험 최소화 선택**
+- PG 연동 없이 "입금 완료 알림" 버튼 → 관리자 수동 확인 방식 채택
+- PG 결제 서버 검증 취약점(기존 HIGH 위험) 노출 범위를 구독 BM에서 완전히 회피한 올바른 설계
+- 검증 복잡성 없이 MVP BM 실증에 집중 가능
+
+#### 현재 누적 위험 현황 요약 (2026-03-05 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 (앱 API) | HIGH | 미해결 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| JWT_SECRET 하드코딩 폴백 | HIGH | 배포 전 필수 조치 |
+| termsAgreed 서버 미검증 | HIGH | 법적 리스크 |
+| 구독 쿠폰 서버 미검증 | HIGH | **신규**, SaaS BM 리스크 |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
+| 구독 만료 시 API 접근 제한 없음 | MEDIUM | **신규**, JWT 적용 시 추가 |
+| VillaSearch 스팸 신청 | MEDIUM | **신규**, 수용 |
+| expoPushToken 인증 없이 덮어쓰기 | MEDIUM | JWT 적용 시 해소 |
+| send-push 인증 없이 대량 발송 | MEDIUM | JWT 적용 시 해소 |
+| notifications 조회/읽음처리 인증 없음 | MEDIUM | JWT 적용 시 해소 |
+| Admin 웹 CORS 전체 허용 | MEDIUM | 수용 |
+| 공개 notify 엔드포인트 (상태 변경) | MEDIUM | 수용 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| SystemNotice/FAQ hard delete | LOW | 수용 |
+| notification.createMany 트랜잭션 없음 | LOW | 수용 |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |

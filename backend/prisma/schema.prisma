@@ -51,7 +51,10 @@ model Villa {
   bankName        String
   inviteCode      String?             @unique
   autoBillingDay  Int?
-  createdAt       DateTime            @default(now())
+  status                String              @default("PENDING")
+  subscriptionStatus    String              @default("NONE")
+  subscriptionExpiry    DateTime?
+  createdAt             DateTime            @default(now())
   residents        ResidentRecord[]
   transactions     LedgerTransaction[]
   invoices         Invoice[]
@@ -77,6 +80,7 @@ model Invoice {
   amountPerResident Int
   items             Json?
   createdAt         DateTime         @default(now())
+  status            String           @default("UNPAID")
   villaId           Int
   villa             Villa            @relation(fields: [villaId], references: [id])
   payments          InvoicePayment[]
@@ -162,6 +166,8 @@ model BuildingEvent {
   contractorName String?
   contactNumber  String?
   attachmentUrl  String?
+  isPublic       Boolean  @default(false)
+  cost           Int?     @default(0)
   villaId        Int
   villa          Villa    @relation(fields: [villaId], references: [id])
   creatorId      String

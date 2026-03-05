@@ -97,8 +97,8 @@ const SignupProfileScreen = ({ navigation, route }: any) => {
       await AsyncStorage.setItem('user', JSON.stringify(data));
       await AsyncStorage.setItem('userId', data.id);
 
-      // New admin user → go to villa setup (Onboarding)
-      navigation.replace('Onboarding');
+      // Navigate to role selection screen
+      navigation.replace('SelectRole');
     } catch (error) {
       Alert.alert('오류', '서버에 연결할 수 없습니다.');
     } finally {

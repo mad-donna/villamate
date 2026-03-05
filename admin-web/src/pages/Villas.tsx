@@ -8,9 +8,32 @@ interface Villa {
   name: string;
   address: string;
   totalUnits: number;
+  status: string;
   admin: { id: string; name: string; email: string | null };
   _count: { residents: number };
   createdAt: string;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === 'APPROVED') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        승인됨
+      </span>
+    );
+  }
+  if (status === 'REJECTED') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+        반려됨
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+      승인 대기
+    </span>
+  );
 }
 
 export default function Villas() {
@@ -18,7 +41,7 @@ export default function Villas() {
   const [villas, setVillas] = useState<Villa[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchVillas = () => {
     const token = localStorage.getItem('admin_token');
     axios
       .get(`${API_BASE_URL}/api/admin/villas`, {
@@ -27,7 +50,26 @@ export default function Villas() {
       .then((res) => setVillas(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchVillas();
   }, []);
+
+  const updateStatus = async (villaId: number, status: 'APPROVED' | 'REJECTED') => {
+    const token = localStorage.getItem('admin_token');
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/api/admin/villas/${villaId}/status`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchVillas();
+    } catch (err) {
+      console.error('Status update failed:', err);
+      alert('상태 변경에 실패했습니다.');
+    }
+  };
 
   return (
     <div className="p-8">
@@ -44,6 +86,7 @@ export default function Villas() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">총 세대</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">입주자</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">관리자</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">등록일</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
               </tr>
@@ -63,16 +106,37 @@ export default function Villas() {
                   <td className="px-4 py-3 text-gray-700">{villa.totalUnits}세대</td>
                   <td className="px-4 py-3 text-gray-700">{villa._count.residents}명</td>
                   <td className="px-4 py-3 text-gray-500">{villa.admin.name}</td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={villa.status} />
+                  </td>
                   <td className="px-4 py-3 text-gray-500">
                     {new Date(villa.createdAt).toLocaleDateString('ko-KR')}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => navigate(`/villas/${villa.id}`)}
-                      className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      상세 보기
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/villas/${villa.id}`)}
+                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        상세 보기
+                      </button>
+                      {villa.status === 'PENDING' && (
+                        <>
+                          <button
+                            onClick={() => updateStatus(villa.id, 'APPROVED')}
+                            className="text-xs bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1.5 rounded-lg transition-colors font-medium"
+                          >
+                            승인
+                          </button>
+                          <button
+                            onClick={() => updateStatus(villa.id, 'REJECTED')}
+                            className="text-xs bg-red-100 hover:bg-red-200 text-red-800 px-3 py-1.5 rounded-lg transition-colors font-medium"
+                          >
+                            반려
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

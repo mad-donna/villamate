@@ -1046,3 +1046,95 @@ frontend/src/
 - `Ticket` 모델 schema.prisma에 잔존 → 마이그레이션 제거 권장
 - ~~API_BASE_URL 하드코딩~~ → **[RESOLVED]**
 - ~~비밀번호 미저장~~ → **[RESOLVED]**
+
+---
+
+### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
+
+#### 데이터 모델 변경 사항
+
+**Villa 모델 필드 추가 (구독 관리)**
+```
+Villa:
+  ├── subscriptionStatus String @default("FREE_TRIAL")  ← NEW (FREE_TRIAL | ACTIVE | EXPIRED)
+  └── trialEndDate       DateTime?                       ← NEW (무료 체험 만료일)
+```
+
+**Coupon 모델 신규 추가 (SaaS 쿠폰)**
+```
+Coupon (id: uuid)
+  ├── code      String @unique
+  ├── isUsed    Boolean @default(false)
+  └── usedAt    DateTime?
+```
+
+#### 신규 엔드포인트 (2026-03-05 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `POST` | `/api/subscriptions/redeem` | 쿠폰 코드 사용 → FREE_TRIAL 활성화 |
+| `GET` | `/api/villas/:villaId/subscription` | 구독 상태 조회 |
+| `POST` | `/api/villas/:villaId/subscription/notify` | 유료 구독 수동 입금 알림 |
+| `GET` | `/api/villas/search?q=` | 빌라 이름/주소 검색 |
+| `POST` | `/api/villas/:villaId/join-requests` | 빌라 입주 신청 |
+
+#### 신규 화면 및 네비게이션 업데이트
+
+```
+AppNavigator (Stack) — 2026-03-05 추가분
+├── SelectRole (Stack, headerShown: false)   ← 역할 선택 (동대표/입주민)
+├── VillaSearch (Stack)                       ← 빌라 검색/신청
+├── ContractDetail (Stack)                    ← 계약 상세 (BuildingEvent 사진 뷰어)
+└── AdminSubscription (Stack)                 ← SaaS 구독 관리
+
+ResidentTabNavigator — 탭 구성 변경:
+  기존: 홈 / 커뮤니티 / 프로필 (3개)
+  변경: 홈 / 커뮤니티 / 우리 빌라 / 프로필 (4개)
+  추가: '우리 빌라' → OurVillaScreen (3번째 탭)
+```
+
+#### 회원가입 플로우 아키텍처 (2026-03-05 업데이트)
+
+```
+EmailLoginScreen → SignupAgreementScreen → SignupProfileScreen
+  └── 성공 → navigate('SelectRole', { email, password, name, termsAgreed })  ← NEW 분기점
+
+SelectRoleScreen (NEW)
+  ├── "동대표로 시작" → POST /api/auth/register { role: 'ADMIN' } → replace('Onboarding')
+  └── "입주민으로 시작" → POST /api/auth/register { role: 'RESIDENT' } → replace('VillaSearch')
+```
+
+#### SaaS 구독 아키텍처
+
+```
+구독 상태 흐름:
+  FREE_TRIAL (신규 가입 기본값, trialEndDate = 가입일 + 30일)
+       ↓ 쿠폰 사용 → POST /api/subscriptions/redeem
+  ACTIVE (수동 입금 → 관리자 확인 후)
+       ↓ 구독 기간 종료
+  EXPIRED (핵심 기능 제한)
+```
+
+#### Express 라우트 등록 순서 (2026-03-05 추가분)
+
+```
+/api/villas/search                          ← NEW (구체적, :adminId 와일드카드 앞)
+/api/villas/:villaId/subscription/notify    ← NEW (구체적, 먼저 등록)
+/api/villas/:villaId/subscription           ← NEW
+/api/villas/:villaId/join-requests          ← NEW
+/api/subscriptions/redeem                   ← NEW
+... (기존 순서 유지)
+/api/villas/:adminId                        (와일드카드 ← 항상 마지막)
+```
+
+#### 알려진 기술 부채 (2026-03-05 업데이트)
+
+- 인증 미들웨어 없음 (앱 API) → JWT + 구독 상태 체크 미들웨어 필요
+- 구독 만료 시 API 접근 제한 없음 → EXPIRED 상태 체크 미들웨어 추가 필요
+- 구독 쿠폰 서버 미검증 → `Coupon` 테이블 + 원자적 `isUsed` 플래그 처리 필요
+- 단일 index.ts (~1700+ 라인) → 도메인별 라우터 분리 시급
+- `JWT_SECRET` 하드코딩 폴백 → `.env` 강력한 시크릿 설정 필수
+- 업로드 파일 로컬 저장 → S3 마이그레이션
+- `Ticket` 모델 schema.prisma에 잔존 → 마이그레이션 제거 권장
+- ~~API_BASE_URL 하드코딩~~ → **[RESOLVED]**
+- ~~비밀번호 미저장~~ → **[RESOLVED]**

@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import ResidentDashboardScreen from '../screens/ResidentDashboardScreen';
 import ResidentCommunityTabScreen from '../screens/ResidentCommunityTabScreen';
+import OurVillaScreen from '../screens/OurVillaScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -18,6 +19,8 @@ const ResidentTabNavigator = () => {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === '커뮤니티') {
             iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+          } else if (route.name === '우리 빌라') {
+            iconName = focused ? 'business' : 'business-outline';
           } else if (route.name === '프로필') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -31,6 +34,7 @@ const ResidentTabNavigator = () => {
     >
       <Tab.Screen name="홈" component={ResidentDashboardScreen} />
       <Tab.Screen name="커뮤니티" component={ResidentCommunityTabScreen} />
+      <Tab.Screen name="우리 빌라" component={OurVillaScreen} />
       <Tab.Screen name="프로필" component={ProfileScreen} />
     </Tab.Navigator>
   );

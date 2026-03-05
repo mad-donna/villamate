@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Switch,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +41,8 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
   const [contractorName, setContractorName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [isPublic, setIsPublic] = useState(false);
+  const [cost, setCost] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handlePickImage = async () => {
@@ -112,6 +115,8 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
           contactNumber: contactNumber.trim() || null,
           creatorId,
           attachmentUrl,
+          isPublic,
+          cost: cost ? Number(cost.replace(/[^0-9]/g, '')) : 0,
         }),
       });
       if (!res.ok) {
@@ -231,6 +236,33 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
             maxLength={20}
           />
 
+          {/* Cost */}
+          <Text style={[styles.label, { marginTop: 16 }]}>비용 (원)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="예: 150000"
+            placeholderTextColor="#B0B0B0"
+            value={cost}
+            onChangeText={setCost}
+            keyboardType="numeric"
+            returnKeyType="done"
+            maxLength={12}
+          />
+
+          {/* Public Toggle */}
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleLabelGroup}>
+              <Text style={styles.toggleLabel}>입주민에게 공개</Text>
+              <Text style={styles.toggleSub}>공개 시 입주민 앱에서 이 이력이 보입니다.</Text>
+            </View>
+            <Switch
+              value={isPublic}
+              onValueChange={setIsPublic}
+              trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+              thumbColor="#fff"
+            />
+          </View>
+
           {/* Image Upload */}
           <Text style={[styles.label, { marginTop: 16 }]}>사진 첨부 (선택)</Text>
           <TouchableOpacity style={styles.imagePickerButton} onPress={handlePickImage} activeOpacity={0.8}>
@@ -346,6 +378,22 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 17, fontWeight: 'bold', letterSpacing: 0.3 },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginBottom: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  toggleLabelGroup: { flex: 1, marginRight: 12 },
+  toggleLabel: { fontSize: 14, fontWeight: '600', color: '#1C1C1E', marginBottom: 2 },
+  toggleSub: { fontSize: 12, color: '#8E8E93' },
 });
 
 export default CreateBuildingEventScreen;

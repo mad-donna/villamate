@@ -641,3 +641,49 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
   if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
   ```
 - **회원가입 route.params 연쇄 전달**: `email + password → SignupAgreement → SignupProfile` 순서로 params 체인
+
+---
+
+### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **역할 선택 화면 신설** (`SelectRoleScreen.tsx`)
+   - 약관 동의(SignupAgreementScreen) 이후 역할 선택 단계 추가
+   - "동대표로 시작하기" → `Onboarding` (빌라 등록 플로우)
+   - "입주민으로 시작하기" → `VillaSearch` 또는 `ResidentJoin` (빌라 가입 플로우)
+   - route.params 체인: `{ email, password, name, termsAgreed }` 유지하여 전달
+
+2. **빌라 검색/신청 화면** (`VillaSearchScreen.tsx`)
+   - 초대 코드 없이 빌라 이름·주소로 검색 후 입주 신청
+   - 관리자가 앱에서 신청 승인 → `ResidentRecord` 생성하는 흐름
+
+3. **'우리 빌라' 탭 신설** (`OurVillaScreen.tsx`)
+   - `ResidentTabNavigator`에 4번째 탭 추가 (홈/커뮤니티/우리 빌라/프로필)
+   - 빌라 기본 정보(이름, 주소, 세대수) + 건물 이력 사진 썸네일 갤러리
+   - `GET /api/villas/:villaId/building-events` 기존 API 재활용
+
+4. **계약 상세 화면** (`ContractDetailScreen.tsx`)
+   - `BuildingEvent`의 `attachmentUrl`(계약서/영수증 사진) 풀스크린 뷰어
+   - `OurVillaScreen`에서 카드 탭 시 이동
+
+5. **SaaS 구독 관리 화면** (`AdminSubscriptionScreen.tsx`)
+   - 구독 상태 표시: `FREE_TRIAL` / `ACTIVE` / `EXPIRED`
+   - 1개월 무료 쿠폰 코드 입력 → `POST /api/subscriptions/redeem` → `FREE_TRIAL` 활성화
+   - 유료 구독 신청: 계좌번호 표시 → 수동 이체 → "입금 완료 알림" 버튼 (ExternalBilling 패턴 재활용)
+
+6. **입주민 청구서 전용 화면** (`ResidentInvoiceScreen.tsx`)
+   - `ResidentDashboardScreen`에 혼재되어 있던 청구서 로직을 독립 화면으로 분리
+   - 청구서 목록 + 미납/완납 필터 탭
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **SaaS 구독 상태 흐름**:
+  ```
+  신규 가입 → FREE_TRIAL (쿠폰 사용 시 1개월)
+           → ACTIVE     (유료 전환, 관리자 입금 확인 후)
+           → EXPIRED    (만료, 핵심 기능 제한)
+  ```
+- **무료 쿠폰 패턴**: `POST /api/subscriptions/redeem { code }` → DB `Coupon.isUsed = true`, `Villa.subscriptionStatus = 'FREE_TRIAL'`, `trialEndDate = now + 30days`
+- **역할 선택 params 체인 연장**: `email + password + name + termsAgreed` → `SelectRoleScreen` → role에 따라 분기
+- **탭 추가 시 순서 원칙**: 입주민 탭은 "홈(집) / 커뮤니티(말풍선) / 우리 빌라(건물) / 프로필(사람)" 순으로 직관적 아이콘 배치

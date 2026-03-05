@@ -22,6 +22,9 @@ interface Villa {
   totalUnits: number;
   accountNumber: string;
   bankName: string;
+  status?: string;
+  subscriptionStatus?: string;
+  subscriptionExpiry?: string;
   _count?: {
     residents: number;
   };
@@ -83,6 +86,16 @@ const DashboardScreen = ({ navigation }: any) => {
       }
       const villa = villas[0] as Villa;
       setVillaData(villa);
+
+      // Check subscription status
+      const isExpired = villa.subscriptionExpiry
+        ? new Date(villa.subscriptionExpiry) < new Date()
+        : false;
+      if (!villa.subscriptionStatus || villa.subscriptionStatus !== 'ACTIVE' || isExpired) {
+        navigation.navigate('AdminSubscription', { villaId: villa.id });
+        setLoading(false);
+        return;
+      }
 
       // Fetch dashboard stats + residents in parallel
       const [dashRes, residentsRes] = await Promise.all([
@@ -174,6 +187,13 @@ const DashboardScreen = ({ navigation }: any) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {villaData?.status === 'PENDING' && (
+        <View style={styles.pendingBanner}>
+          <Text style={styles.pendingBannerText}>
+            🚧 현재 단지 승인 대기 중입니다. 관리자 확인 후 정식 서비스 이용이 가능합니다.
+          </Text>
+        </View>
+      )}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* Rolling banner */}
@@ -311,6 +331,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F3F7',
+  },
+  pendingBanner: {
+    backgroundColor: '#FFA500',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  pendingBannerText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   loadingContainer: {
     flex: 1,

@@ -893,3 +893,132 @@ Expo 푸시 알림(1단계)에 이어, 앱 내 영구 알림함(2단계) 구현.
 3. **PG 결제 서버 검증**: `imp_uid` → PortOne API 서버 검증 (보안 필수)
 4. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
 5. **Admin 웹 기능 확장**: 빌라별 청구서/납부 현황, 통계 대시보드
+
+---
+
+## 16. MVP 구현 현황 (2026-03-05 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### 회원가입 역할 선택 분기 신설 (`SelectRoleScreen.tsx`)
+
+기존 `SignupProfileScreen` 완료 후 바로 Onboarding으로 이동하던 방식에서, 역할 선택 단계를 추가.
+
+| 구분 | 내용 |
+|------|------|
+| SelectRoleScreen | **신규** — "동대표로 시작하기" / "입주민으로 시작하기" 명시적 선택 |
+| 동대표 경로 | SelectRole → `POST /api/auth/register { role: 'ADMIN' }` → `Onboarding` (빌라 등록) |
+| 입주민 경로 | SelectRole → `POST /api/auth/register { role: 'RESIDENT' }` → `VillaSearch` 또는 `ResidentJoin` |
+| AppNavigator | `SelectRole` 스택 화면 등록 (headerShown: false) |
+
+#### 빌라 검색/신청 화면 신설 (`VillaSearchScreen.tsx`)
+
+초대 코드 없이도 입주 신청 가능한 경로 추가.
+
+| 구분 | 내용 |
+|------|------|
+| VillaSearchScreen | **신규** — 빌라 이름/주소 검색 → 입주 신청 |
+| 백엔드 | `GET /api/villas/search?q=` 신규 — 빌라 이름/주소 검색 |
+| 백엔드 | `POST /api/villas/:villaId/join-requests` 신규 — 입주 신청 (관리자 승인 대기) |
+
+#### '우리 빌라' 탭 신설 (`OurVillaScreen.tsx`)
+
+입주민 하단 탭에 빌라 정보 전용 탭 추가. 투명한 프롭테크 UX 완성.
+
+| 구분 | 내용 |
+|------|------|
+| ResidentTabNavigator | 3개 탭 → 4개 탭 (홈/커뮤니티/**우리 빌라**/프로필) |
+| OurVillaScreen | **신규** — 빌라 기본 정보 + 건물 이력 사진 썸네일 갤러리 |
+| 데이터 | `GET /api/villas/:villaId/building-events` 기존 API 재활용 (사진 있는 이력만 필터) |
+
+#### 계약 상세 화면 신설 (`ContractDetailScreen.tsx`)
+
+건물 이력의 계약서/영수증 사진 전체 화면 뷰어.
+
+| 구분 | 내용 |
+|------|------|
+| ContractDetailScreen | **신규** — `BuildingEvent.attachmentUrl` 풀스크린 이미지 뷰어 |
+| 네비게이션 | `OurVillaScreen` 카드 탭 → `ContractDetail` 이동 |
+
+#### SaaS B2B 수익 모델 장착 (`AdminSubscriptionScreen.tsx`)
+
+복잡한 PG 결제 대신 수동 계좌 송금 + 무료 쿠폰 방식으로 구독 BM 실증.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Villa.subscriptionStatus String @default("FREE_TRIAL")` 추가 (FREE_TRIAL \| ACTIVE \| EXPIRED) |
+| DB | `Villa.trialEndDate DateTime?` 추가 |
+| DB | `Coupon` 모델 신규 (id, code unique, isUsed, usedAt) |
+| 백엔드 | `POST /api/subscriptions/redeem` 신규 — 쿠폰 코드 검증 + FREE_TRIAL 활성화 |
+| 백엔드 | `GET /api/villas/:villaId/subscription` 신규 — 구독 상태 조회 |
+| 백엔드 | `POST /api/villas/:villaId/subscription/notify` 신규 — 수동 입금 완료 알림 |
+| AdminSubscriptionScreen | **신규** — 구독 상태 표시, 쿠폰 입력, 유료 신청(계좌 이체 안내) |
+| 구독 흐름 | `FREE_TRIAL(1개월)` → `ACTIVE`(유료) → `EXPIRED`(만료, 기능 제한 예정) |
+
+#### 입주민 청구서 전용 화면 신설 (`ResidentInvoiceScreen.tsx`)
+
+`ResidentDashboardScreen`에서 청구서 관련 로직을 분리하여 단일 책임 원칙 적용.
+
+| 구분 | 내용 |
+|------|------|
+| ResidentInvoiceScreen | **신규** — 청구서 목록, 미납/완납 필터, 납부 처리 |
+
+### 현재 구현된 전체 화면 목록 (2026-03-05 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `ProfileSetupScreen`, `OnboardingScreen`, `ResidentJoinScreen`
+- `SignupAgreementScreen` (회원가입 Step 2: 약관 동의)
+- `SignupProfileScreen` (회원가입 Step 3: 프로필 입력)
+- `SelectRoleScreen` ← NEW (회원가입 Step 4: 역할 선택 분기)
+
+#### 관리자 탭 (4개)
+- `DashboardScreen` (홈 — 롤링배너+위젯, 🔔), `BoardScreen` (커뮤니티+민원), `ManagementScreen` (관리), `ProfileScreen` (iOS 설정 스타일)
+
+#### 입주민 탭 (4개) ← 탭 1개 추가
+- `ResidentDashboardScreen` (홈 — 롤링배너+위젯, 🔔), `BoardScreen` (커뮤니티+민원), `OurVillaScreen` ← NEW (우리 빌라), `ProfileScreen` (iOS 설정 스타일)
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen`, `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen`, `CreatePostScreen`
+- `ParkingSearchScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen`
+- `VehicleManagementScreen`, `ChangePasswordScreen`, `MyPostsScreen`
+- `GuideScreen`, `NotificationScreen`
+- `CustomerCenterScreen`, `SystemNoticeScreen`
+- `VillaSearchScreen` ← NEW (빌라 검색/신청)
+- `ContractDetailScreen` ← NEW (계약 상세)
+- `AdminSubscriptionScreen` ← NEW (SaaS 구독 관리)
+- `ResidentInvoiceScreen` ← NEW (입주민 청구서 전용)
+
+### 현재 기술 스택 (2026-03-05 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~1700+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| API 설정 | `frontend/src/config.ts` (API_BASE_URL 중앙화) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker v8.4.4 |
+| 키보드 처리 | 표준 KeyboardAvoidingView + ScrollView |
+| SafeArea | react-native-safe-area-context |
+| 푸시 알림 | expo-notifications + expo-device + expo-server-sdk |
+| 비밀번호 | bcryptjs (hash rounds: 10) |
+| 테스트 | Jest + supertest |
+| Admin 웹 | React + Vite + TypeScript (`admin-web/`) |
+| Admin 인증 | jsonwebtoken (JWT, SUPER_ADMIN 역할 기반) |
+| SaaS BM | 수동 계좌 송금 + 쿠폰 방식 (PG 없음) |
+
+### 다음 개발 우선순위 (2026-03-05 업데이트)
+
+1. **구독 쿠폰 검증 강화**: DB 기반 Coupon 테이블 + 원자적 isUsed 플래그 처리 (레이스 컨디션 방지)
+2. **구독 만료 API 제한**: EXPIRED 상태 시 핵심 기능 제한 서버 미들웨어
+3. **미납자 알림 자동화**: cron 기반 미납자 자동 푸시 알림 (핵심 기획 요구사항 — 계속 미구현)
+4. **JWT 인증 미들웨어**: 앱 API 전체 보안 강화 + 구독 상태 체크 연동
+5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동

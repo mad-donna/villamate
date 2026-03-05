@@ -28,8 +28,13 @@ import GuideScreen from '../screens/GuideScreen';
 import NotificationScreen from '../screens/NotificationScreen';
 import SignupAgreementScreen from '../screens/SignupAgreementScreen';
 import SignupProfileScreen from '../screens/SignupProfileScreen';
+import SelectRoleScreen from '../screens/SelectRoleScreen';
+import VillaSearchScreen from '../screens/VillaSearchScreen';
 import SystemNoticeScreen from '../screens/SystemNoticeScreen';
 import CustomerCenterScreen from '../screens/CustomerCenterScreen';
+import ResidentInvoiceScreen from '../screens/ResidentInvoiceScreen';
+import ContractDetailScreen from '../screens/ContractDetailScreen';
+import AdminSubscriptionScreen from '../screens/AdminSubscriptionScreen';
 import MainTabNavigator from './MainTabNavigator';
 import ResidentTabNavigator from './ResidentTabNavigator';
 
@@ -69,6 +74,18 @@ const AppNavigator = () => {
         name="Onboarding"
         component={OnboardingScreen}
         options={{ title: '빌라 등록' }}
+      />
+      {/* Role selection — shown after signup profile is complete */}
+      <Stack.Screen
+        name="SelectRole"
+        component={SelectRoleScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Resident villa search — for '일반 입주민' path */}
+      <Stack.Screen
+        name="VillaSearch"
+        component={VillaSearchScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="CreateInvoice"
@@ -129,6 +146,11 @@ const AppNavigator = () => {
         name="BuildingHistory"
         component={BuildingHistoryScreen}
         options={{ title: '건물 이력 및 계약 관리' }}
+      />
+      <Stack.Screen
+        name="ContractDetail"
+        component={ContractDetailScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="CreateBuildingEvent"
@@ -198,6 +220,16 @@ const AppNavigator = () => {
       <Stack.Screen
         name="SignupProfile"
         component={SignupProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ResidentInvoice"
+        component={ResidentInvoiceScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AdminSubscription"
+        component={AdminSubscriptionScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

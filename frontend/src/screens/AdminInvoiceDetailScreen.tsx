@@ -6,6 +6,7 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -38,6 +39,7 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
 
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -61,8 +63,29 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
     }, [fetchPayments])
   );
 
+  const handleConfirm = async (paymentId: string) => {
+    setConfirming(paymentId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/invoices/${invoiceId}/confirm`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId }),
+      });
+      if (!res.ok) throw new Error('failed');
+      await fetchPayments();
+    } catch (e) {
+      Alert.alert('오류', '납부 확인 처리에 실패했습니다.');
+    } finally {
+      setConfirming(null);
+    }
+  };
+
   const totalCollected = payments
     .filter((p) => p.status === 'COMPLETED')
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const totalTransferred = payments
+    .filter((p) => p.status === 'TRANSFERRED')
     .reduce((sum, p) => sum + p.amount, 0);
 
   const totalUnpaid = payments
@@ -71,6 +94,7 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
 
   const renderItem = ({ item }: { item: PaymentRecord }) => {
     const isPaid = item.status === 'COMPLETED';
+    const isTransferred = item.status === 'TRANSFERRED';
     return (
       <View style={styles.paymentCard}>
         <View style={styles.paymentCardLeft}>
@@ -84,13 +108,31 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
           <View
             style={[
               styles.statusBadge,
-              isPaid ? styles.statusCompleted : styles.statusPending,
+              isPaid
+                ? styles.statusCompleted
+                : isTransferred
+                ? styles.statusTransferred
+                : styles.statusPending,
             ]}
           >
             <Text style={styles.statusBadgeText}>
-              {isPaid ? '납부 완료' : '미납 대기'}
+              {isPaid ? '납부 완료' : isTransferred ? '입금 확인 중' : '미납 대기'}
             </Text>
           </View>
+          {isTransferred && (
+            <TouchableOpacity
+              style={[styles.confirmBtn, confirming === item.id && { opacity: 0.6 }]}
+              onPress={() => handleConfirm(item.id)}
+              disabled={confirming === item.id}
+              activeOpacity={0.85}
+            >
+              {confirming === item.id ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.confirmBtnText}>납부 확인</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -122,13 +164,19 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
               {/* Summary cards */}
               <View style={styles.summaryRow}>
                 <View style={[styles.summaryCard, styles.summaryCardCollected]}>
-                  <Text style={styles.summaryLabel}>총 수금액</Text>
+                  <Text style={styles.summaryLabel}>수금 완료</Text>
                   <Text style={[styles.summaryAmount, styles.summaryAmountCollected]}>
                     {totalCollected.toLocaleString()}원
                   </Text>
                 </View>
+                <View style={[styles.summaryCard, styles.summaryCardTransferred]}>
+                  <Text style={styles.summaryLabel}>입금 확인 중</Text>
+                  <Text style={[styles.summaryAmount, styles.summaryAmountTransferred]}>
+                    {totalTransferred.toLocaleString()}원
+                  </Text>
+                </View>
                 <View style={[styles.summaryCard, styles.summaryCardUnpaid]}>
-                  <Text style={styles.summaryLabel}>미납액</Text>
+                  <Text style={styles.summaryLabel}>미납</Text>
                   <Text style={[styles.summaryAmount, styles.summaryAmountUnpaid]}>
                     {totalUnpaid.toLocaleString()}원
                   </Text>
@@ -196,13 +244,13 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginBottom: 24,
   },
   summaryCard: {
     flex: 1,
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -212,21 +260,27 @@ const styles = StyleSheet.create({
   summaryCardCollected: {
     backgroundColor: '#E8F5E9',
   },
+  summaryCardTransferred: {
+    backgroundColor: '#FFF3E0',
+  },
   summaryCardUnpaid: {
     backgroundColor: '#FFEBEE',
   },
   summaryLabel: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#6E6E73',
     fontWeight: '600',
     marginBottom: 6,
   },
   summaryAmount: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '800',
   },
   summaryAmountCollected: {
     color: '#2E7D32',
+  },
+  summaryAmountTransferred: {
+    color: '#E65100',
   },
   summaryAmountUnpaid: {
     color: '#C62828',
@@ -283,12 +337,28 @@ const styles = StyleSheet.create({
   statusCompleted: {
     backgroundColor: '#34C759',
   },
+  statusTransferred: {
+    backgroundColor: '#FF9500',
+  },
   statusPending: {
     backgroundColor: '#FF3B30',
   },
   statusBadgeText: {
     color: '#FFF',
     fontSize: 12,
+    fontWeight: '700',
+  },
+  confirmBtn: {
+    backgroundColor: '#FF9500',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  confirmBtnText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: '700',
   },
   emptyCard: {

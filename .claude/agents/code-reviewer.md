@@ -651,3 +651,41 @@ jest.mock('expo-server-sdk', () => {
   - Q 뱃지: `backgroundColor: '#EBF4FF'`, text `color: '#007AFF'`
   - A 뱃지: `backgroundColor: '#EDFAF1'`, text `color: '#34C759'`
   - 구분선: `borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E5EA'`
+
+---
+
+### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **폐쇄형 SUPER_ADMIN 백오피스 웹** 완성 및 공지/FAQ → 모바일 앱 연동 파이프라인 리뷰
+- **회원가입 온보딩 역할 선택 분기** (동대표/일반 입주민 SelectRoleScreen 신설) 구현 리뷰
+- **'우리 빌라' 탭 신설** (`OurVillaScreen`) 및 입주민 탭 구성 변경 리뷰
+- **SaaS B2B 수익 모델** (구독 관리, 무료 쿠폰, 수동 계좌 송금) 구현 리뷰
+
+#### 발견된 주요 버그 패턴
+
+**[PATTERN] 역할 선택 분기 플로우 — SelectRoleScreen 신설**
+- 기존: ProfileSetupScreen에서 역할을 선택하는 단일 흐름 → 약관 동의 이후 역할 분기가 불명확
+- 변경: `SelectRoleScreen` 신규 생성 — "동대표로 시작" / "입주민으로 시작" 명시적 선택 후 분기
+- **교훈**: 역할에 따라 이후 플로우가 완전히 갈리는 경우 명시적 선택 화면이 UX 혼선 방지에 효과적
+
+**[PATTERN] ResidentTabNavigator 탭 추가 시 주의사항**
+- 기존 탭 3개(홈/커뮤니티/프로필) → 4개(홈/커뮤니티/우리 빌라/프로필)로 변경
+- 탭 순서 변경 시 아이콘 레이아웃 및 `tabBarLabel` 간격 재확인 필요
+- `OurVillaScreen`: 빌라 기본 정보 + `BuildingEvent` 데이터 재활용 (사진 썸네일 갤러리)
+
+**[PATTERN] SaaS 구독 관리 — AdminSubscriptionScreen 신설**
+- Admin이 구독 상태(`FREE_TRIAL` / `ACTIVE` / `EXPIRED`) 확인 및 수동 계좌 이체 방식으로 구독 신청
+- 무료 쿠폰 코드 입력 → 서버 검증 후 `FREE_TRIAL` 활성화 패턴
+- ExternalBilling과 동일한 "수동 입금 확인" 상태 흐름 재활용
+
+**[IMPORTANT] 구독 쿠폰 코드 유효성 — 서버 검증 필수**
+- 쿠폰 코드 입력 시 서버에서 `isUsed` 플래그, 만료일, 존재 여부 검증이 반드시 있어야 함
+- 미검증 시 임의 문자열 입력으로 무제한 무료 사용 가능 — MVP에서도 최소한의 DB 검증 필요
+
+#### 이 세션에서 확인된 주의사항
+
+- **VillaSearchScreen**: 초대 코드 없이 빌라 이름/주소로 검색 후 입주 신청 → 관리자 승인 플로우
+- **ContractDetailScreen**: `BuildingEvent.attachmentUrl` 계약서 사진 풀스크린 뷰어
+- **ResidentInvoiceScreen**: `ResidentDashboardScreen`에서 청구서 로직 분리 — 단일 책임 원칙 적용

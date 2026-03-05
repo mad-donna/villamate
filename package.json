@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "dev": "concurrently --names \"API,ADMIN,EXPO\" --prefix-colors \"blue,green,magenta\" \"npm run dev:api\" \"npm run dev:admin\" \"npm run dev:expo\"",
+    "dev": "concurrently --names \"API,ADMIN\" --prefix-colors \"blue,green\" \"npm run dev:api\" \"npm run dev:admin\"",
     "dev:api": "cd backend && npm run start:api",
     "dev:admin": "cd admin-web && npm run dev",
     "dev:expo": "cd frontend && npx expo start -c"

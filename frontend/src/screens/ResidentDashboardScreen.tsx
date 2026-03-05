@@ -1,13 +1,10 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   ScrollView,
-  FlatList,
-  ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,32 +13,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 import RollingBanner from '../components/RollingBanner';
-
-interface InvoiceItem {
-  name: string;
-  amount: number;
-}
-
-interface InvoiceInfo {
-  id: string;
-  billingMonth: string;
-  memo?: string;
-  type: 'FIXED' | 'VARIABLE';
-  totalAmount: number;
-  items: InvoiceItem[] | null;
-  createdAt: string;
-  villa: { name: string };
-}
-
-interface Payment {
-  id: string;
-  invoiceId: string;
-  residentId: string;
-  amount: number;
-  status: string;
-  createdAt: string;
-  invoice: InvoiceInfo;
-}
 
 interface DashData {
   myUnpaidAmount: number;
@@ -53,20 +24,14 @@ interface DashData {
 const ResidentDashboardScreen = () => {
   const navigation = useNavigation<any>();
 
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loadingPayments, setLoadingPayments] = useState(true);
   const [dashData, setDashData] = useState<DashData | null>(null);
   const [residentUserId, setResidentUserId] = useState<string | null>(null);
   const [residentVillaId, setResidentVillaId] = useState<number | null>(null);
   const [residentName, setResidentName] = useState<string>('');
   const [villaName, setVillaName] = useState<string>('');
-  const scrollRef = useRef<any>(null);
-  const paymentSectionY = useRef<number>(0);
 
   const loadAll = useCallback(async () => {
     try {
-      setLoadingPayments(true);
-
       // Resolve userId
       let userId = await AsyncStorage.getItem('userId');
       if (!userId) {
@@ -112,32 +77,18 @@ const ResidentDashboardScreen = () => {
 
       setResidentVillaId(villaId);
 
-      // Fetch dashboard stats + payments in parallel
-      const fetches: Promise<Response>[] = [
-        fetch(`${API_BASE_URL}/api/residents/${userId}/payments`),
-      ];
+      // Fetch dashboard stats
       if (villaId) {
-        fetches.push(
-          fetch(`${API_BASE_URL}/api/dashboard/${userId}?villaId=${villaId}&role=RESIDENT`)
+        const dashRes = await fetch(
+          `${API_BASE_URL}/api/dashboard/${userId}?villaId=${villaId}&role=RESIDENT`
         );
-      }
-
-      const results = await Promise.all(fetches);
-      const [paymentsRes, dashRes] = results;
-
-      if (paymentsRes.ok) {
-        const data = await paymentsRes.json();
-        setPayments(Array.isArray(data) ? data : []);
-      }
-
-      if (dashRes && dashRes.ok) {
-        const dd = await dashRes.json();
-        setDashData(dd);
+        if (dashRes.ok) {
+          const dd = await dashRes.json();
+          setDashData(dd);
+        }
       }
     } catch (err) {
       console.error('Resident dashboard load error:', err);
-    } finally {
-      setLoadingPayments(false);
     }
   }, []);
 
@@ -146,15 +97,6 @@ const ResidentDashboardScreen = () => {
       loadAll();
     }, [loadAll])
   );
-
-  const formatBillingMonth = (billingMonth: string) => {
-    try {
-      const [y, m] = billingMonth.split('-');
-      return `${y}년 ${parseInt(m, 10)}월 관리비`;
-    } catch {
-      return billingMonth;
-    }
-  };
 
   const formatDate = (iso: string) => {
     try {
@@ -172,81 +114,9 @@ const ResidentDashboardScreen = () => {
     );
   };
 
-  const renderPaymentCard = ({ item }: { item: Payment }) => {
-    const isPending = item.status === 'PENDING';
-    const isVariable = item.invoice.type === 'VARIABLE';
-    const invoiceItems: InvoiceItem[] | null =
-      isVariable && Array.isArray(item.invoice.items) ? item.invoice.items : null;
-
-    return (
-      <View style={styles.invoiceCard}>
-        <View style={styles.invoiceCardHeader}>
-          <View style={styles.invoiceTitleRow}>
-            <Text style={styles.invoiceTitle}>
-              {formatBillingMonth(item.invoice.billingMonth)}
-            </Text>
-            <View
-              style={[
-                styles.typeBadge,
-                isVariable ? styles.typeBadgeVariable : styles.typeBadgeFixed,
-              ]}
-            >
-              <Text style={styles.typeBadgeText}>
-                {isVariable ? '변동 관리비' : '고정 관리비'}
-              </Text>
-            </View>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              isPending ? styles.statusPending : styles.statusCompleted,
-            ]}
-          >
-            <Text style={styles.statusBadgeText}>{isPending ? '미납' : '납부완료'}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.invoiceAmount}>{item.amount.toLocaleString()} 원</Text>
-        {item.invoice.memo ? (
-          <Text style={styles.invoiceMemo}>{item.invoice.memo}</Text>
-        ) : null}
-
-        {invoiceItems && invoiceItems.length > 0 && (
-          <View style={styles.itemBreakdown}>
-            <Text style={styles.itemBreakdownHeader}>항목 내역</Text>
-            {invoiceItems.map((entry, index) => (
-              <View key={index} style={styles.itemBreakdownRow}>
-                <Text style={styles.itemBreakdownName}>{entry.name}</Text>
-                <Text style={styles.itemBreakdownAmount}>
-                  {Number(entry.amount).toLocaleString()} 원
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {isPending && (
-          <TouchableOpacity
-            style={styles.pgPayButton}
-            onPress={() =>
-              navigation.navigate('Payment', {
-                paymentId: item.id,
-                amount: item.amount,
-                invoiceName: formatBillingMonth(item.invoice.billingMonth),
-              })
-            }
-            activeOpacity={0.85}
-          >
-            <Text style={styles.pgPayButtonText}>빌라메이트로 결제하기</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* Rolling banner */}
         <RollingBanner navigation={navigation} />
@@ -275,7 +145,7 @@ const ResidentDashboardScreen = () => {
         {/* Top widget: 미납 관리비 — full width */}
         <TouchableOpacity
           style={styles.widget}
-          onPress={() => scrollRef.current?.scrollTo({ y: paymentSectionY.current, animated: true })}
+          onPress={() => navigation.navigate('ResidentInvoice')}
           activeOpacity={0.7}
         >
           <View style={styles.widgetHeader}>
@@ -350,57 +220,6 @@ const ResidentDashboardScreen = () => {
             {dashData?.activePollsCount ?? 0}건
           </Text>
         </TouchableOpacity>
-
-        {/* Quick actions */}
-        <Text style={styles.sectionLabel}>바로가기</Text>
-        <View style={styles.quickActionsRow}>
-          <TouchableOpacity
-            style={[styles.pillButton, { backgroundColor: '#30B0C7' }]}
-            onPress={() => {
-              if (!residentVillaId) {
-                return Alert.alert('오류', '빌라 정보를 불러오는 중입니다.');
-              }
-              navigation.navigate('ParkingSearch', { villaId: residentVillaId });
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="car-outline" size={18} color="#fff" style={styles.pillIcon} />
-            <Text style={styles.pillText}>주차 조회</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.pillButton, { backgroundColor: '#FF2D55' }]}
-            onPress={() => navigation.navigate('PollList', { villaId: residentVillaId, userId: residentUserId, userRole: 'RESIDENT' })}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="checkbox-outline" size={18} color="#fff" style={styles.pillIcon} />
-            <Text style={styles.pillText}>전자투표</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Payment list */}
-        <Text
-          style={styles.sectionLabel}
-          onLayout={(e) => { paymentSectionY.current = e.nativeEvent.layout.y; }}
-        >납부 내역</Text>
-
-        {loadingPayments ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.loadingText}>납부 내역 불러오는 중...</Text>
-          </View>
-        ) : payments.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>발행된 청구서가 없습니다.</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={payments}
-            keyExtractor={(item) => item.id}
-            renderItem={renderPaymentCard}
-            scrollEnabled={false}
-          />
-        )}
 
         {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -514,206 +333,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#C7C7CC',
     fontStyle: 'italic',
-  },
-
-  // Section label
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#8E8E93',
-    marginBottom: 12,
-    marginTop: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  // Quick actions
-  quickActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 24,
-  },
-  pillButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  pillIcon: {
-    marginRight: 6,
-  },
-  pillText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-
-  // Loading
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    gap: 8,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginLeft: 8,
-  },
-
-  // Empty payment state
-  emptyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: '#8E8E93',
-  },
-
-  // Invoice / payment cards
-  invoiceCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  invoiceCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  invoiceTitleRow: {
-    flex: 1,
-    marginRight: 12,
-    gap: 6,
-  },
-  invoiceTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-  typeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginBottom: 2,
-  },
-  typeBadgeFixed: {
-    backgroundColor: '#E3F2FD',
-  },
-  typeBadgeVariable: {
-    backgroundColor: '#FFF3E0',
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#3A3A3C',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statusPending: {
-    backgroundColor: '#FF3B30',
-  },
-  statusCompleted: {
-    backgroundColor: '#34C759',
-  },
-  statusBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  invoiceAmount: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#007AFF',
-    marginBottom: 4,
-  },
-  invoiceMemo: {
-    fontSize: 13,
-    color: '#6E6E73',
-    fontStyle: 'italic',
-    marginBottom: 10,
-  },
-  itemBreakdown: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-  },
-  itemBreakdownHeader: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6E6E73',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  itemBreakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  itemBreakdownName: {
-    fontSize: 14,
-    color: '#3A3A3C',
-    flex: 1,
-  },
-  itemBreakdownAmount: {
-    fontSize: 14,
-    color: '#1C1C1E',
-    fontWeight: '600',
-  },
-  pgPayButton: {
-    backgroundColor: '#4CAF50',
-    height: 52,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 6,
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  pgPayButtonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.2,
   },
 
   // Logout
