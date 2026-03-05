@@ -35,6 +35,9 @@ model User {
   createdTickets  Ticket[]
   expoPushToken   String?
   password        String?
+  phoneNumber     String?
+  termsAgreed     Boolean          @default(false)
+  notifications   Notification[]
 }
 
 model Villa {
@@ -227,4 +230,28 @@ model Ticket {
   villaId     Int
   villa       Villa    @relation(fields: [villaId], references: [id])
   createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SystemNotice {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Faq {
+  id        String   @id @default(uuid())
+  question  String
+  answer    String
+  createdAt DateTime @default(now())
 }

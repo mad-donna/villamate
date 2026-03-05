@@ -446,3 +446,113 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 | ResidentRecord 하드 삭제 | LOW | 수용 |
 | ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
 | ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+
+---
+
+### 2026-03-03 — 롤링 배너 자동스크롤, 앱 가이드, 알림함 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[NEW-MEDIUM] GET /api/users/:userId/notifications — 인증 없이 타인 알림 조회 가능**
+- userId만 알면 다른 사용자의 알림 목록 전체 조회 가능
+- 현재 전체 API 인증 부재와 동일 수준. JWT 적용 시 `req.user.id`로 대체
+- MVP 단계 수용
+
+**[NEW-MEDIUM] PATCH /api/users/:userId/notifications/read-all — 타인 알림 일괄 읽음 처리 가능**
+- userId만 알면 타인의 모든 미읽음 알림을 읽음 처리 가능
+- 데이터 손상은 아니나 알림 인지 여부를 조작 가능
+- JWT 적용 시 해소
+
+**[NEW-LOW] notification.createMany 실패 시 push 발송은 성공**
+- `send-push` 라우트에서 push 발송 후 `createMany` 실패 시 알림 레코드 미생성 (트랜잭션 미적용)
+- push는 갔는데 앱 내 알림함에는 표시 안 되는 불일치 발생 가능
+- 향후: push + createMany를 try 단일 블록에서 처리하거나, createMany 실패는 별도 로깅으로 처리
+
+**[GOOD] 알림함 read-all 자동 처리**
+- 화면 진입 시 자동으로 read-all 호출 → 미읽음 알림이 다음 방문에 쌓이지 않음
+- UX와 데이터 정합성 모두 올바르게 처리
+
+#### 현재 누적 위험 현황 요약 (2026-03-03 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 | HIGH | 미해결 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
+| expoPushToken 인증 없이 덮어쓰기 | MEDIUM | JWT 적용 시 해소 |
+| send-push 인증 없이 대량 발송 | MEDIUM | JWT 적용 시 해소 |
+| notifications 조회/읽음처리 인증 없음 | MEDIUM | **신규**, JWT 적용 시 해소 |
+| 공개 notify 엔드포인트 (상태 변경) | MEDIUM | 수용 |
+| dashboard 통계 인증 없이 조회 | MEDIUM | JWT 적용 시 해소 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| PATCH status userRole 클라이언트 전달 | MEDIUM | JWT 적용 시 해소 |
+| notification.createMany 트랜잭션 없음 | LOW | **신규**, 수용 |
+| 'admin' sentinel roomNumber 통계 필터링 | LOW | 수용 |
+| vote userId 클라이언트 전달 | LOW | JWT 적용 시 해소 |
+| ResidentRecord 하드 삭제 | LOW | 수용 |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+
+---
+
+### 2026-03-04 — 회원가입 플로우 개편, 고객센터/시스템공지, Admin 웹 패널 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[NEW-HIGH] JWT_SECRET 하드코딩 폴백**
+- `const JWT_SECRET = process.env.JWT_SECRET || 'villamate-super-secret-2024'`
+- 프로덕션 배포 시 `JWT_SECRET` 환경변수 미설정 시 소스코드에 공개된 시크릿으로 운영될 수 있음
+- Admin 웹 패널이 이 JWT로 SUPER_ADMIN 권한 행사 → 시크릿 노출 시 전체 관리 권한 탈취 가능
+- 해결 필요: `.env` 파일에 강력한 랜덤 시크릿 설정 필수 (`openssl rand -hex 32`)
+- 현재 Admin 웹이 개발/내부 단계이므로 MVP 수용, 배포 전 필수 조치
+
+**[NEW-HIGH] /api/auth/register — termsAgreed 서버 미검증**
+- 클라이언트에서 `termsAgreed: true`를 바디에 담아 전송하지만 서버에서 값의 진위를 검증하지 않음
+- 누구나 `termsAgreed: false`로 요청해도 계정 생성 가능 (법적 약관 동의 기록 부재)
+- MVP 단계 수용, 향후 서버에서 `if (!termsAgreed) return 400` 명시적 검증 및 DB에 동의 시각 기록 필요
+
+**[GOOD] 회원가입/로그인 분리 — 운영 위험 감소**
+- 기존 upsert 방식: 동일 이메일로 재요청 시 항상 기존 계정 조회 → 비밀번호 변경 없이 로그인 가능했던 취약점 제거
+- 개선: 신규 `POST /api/auth/register`에서 이미 존재하는 이메일은 409 반환 → 중복 가입 차단
+- 이메일 로그인은 bcrypt.compare로 비밀번호 검증 → 인증 강도 향상
+
+**[NEW-MEDIUM] Admin 웹 패널 CORS 설정 미적용**
+- `app.use(cors())` — 모든 오리진 허용. Admin 웹이 분리된 도메인에서 운영될 경우 제한 없음
+- 현재 내부 네트워크(로컬)에서만 운영이므로 실질 위험 낮음
+- 향후: `cors({ origin: ['https://admin.villamate.app'] })` 특정 도메인만 허용 필요
+
+**[NEW-LOW] SystemNotice/FAQ DB 모델 — hard delete**
+- `DELETE /api/system-notices/:id`, `DELETE /api/faqs/:id`가 실제 DB 행 삭제
+- 오류로 삭제 시 복구 불가, 삭제 감사 로그 없음
+- Admin 웹이 내부 운영 도구이므로 현재 수용, 향후 soft delete 또는 삭제 로그 추가 고려
+
+**[GOOD] SUPER_ADMIN 전용 API 역할 체크**
+- 모든 Admin 전용 엔드포인트에서 `decoded.role !== 'SUPER_ADMIN'` 검증 일관 적용
+- 일반 ADMIN 역할의 JWT가 있어도 SUPER_ADMIN API 접근 불가 → 권한 분리 올바름
+
+#### 현재 누적 위험 현황 요약 (2026-03-04 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 (앱 API) | HIGH | 미해결 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| JWT_SECRET 하드코딩 폴백 | HIGH | **신규**, 배포 전 필수 조치 |
+| termsAgreed 서버 미검증 | HIGH | **신규**, 법적 리스크 |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
+| expoPushToken 인증 없이 덮어쓰기 | MEDIUM | JWT 적용 시 해소 |
+| send-push 인증 없이 대량 발송 | MEDIUM | JWT 적용 시 해소 |
+| notifications 조회/읽음처리 인증 없음 | MEDIUM | JWT 적용 시 해소 |
+| Admin 웹 CORS 전체 허용 | MEDIUM | **신규**, 수용 |
+| 공개 notify 엔드포인트 (상태 변경) | MEDIUM | 수용 |
+| dashboard 통계 인증 없이 조회 | MEDIUM | JWT 적용 시 해소 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| PATCH status userRole 클라이언트 전달 | MEDIUM | JWT 적용 시 해소 |
+| SystemNotice/FAQ hard delete | LOW | **신규**, 수용 |
+| notification.createMany 트랜잭션 없음 | LOW | 수용 |
+| 'admin' sentinel roomNumber 통계 필터링 | LOW | 수용 |
+| vote userId 클라이언트 전달 | LOW | JWT 적용 시 해소 |
+| ResidentRecord 하드 삭제 | LOW | 수용 |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |

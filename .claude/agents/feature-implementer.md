@@ -508,3 +508,136 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 - **회원 탈퇴 소프트 처리**: `User` 레코드를 DELETE하지 않고 이름 익명화 + 연락처 null + `status='DELETED'`로 처리 → 연관 InvoicePayment, Comment 등 외래키 보존
 - **모달 내 키보드 처리**: 바텀시트 스타일 모달(`justifyContent: 'flex-end'`)에서 `TouchableWithoutFeedback` > `View.modalOverlay` > `KeyboardAvoidingView` > `View.modalContent` 구조
 - **Jest에서 expo-server-sdk mock**: `jest.mock()` 팩토리 내부에 `__mockInstance` 참조를 `MockExpo`에 부착 → `clearAllMocks()` 후에도 mock 함수 참조 유지
+
+---
+
+### 2026-03-03 — 롤링 배너 자동스크롤, 앱 이용 가이드, 알림함 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **롤링 배너 자동스크롤** (`frontend/src/components/RollingBanner.tsx`)
+   - `currentIndexRef = useRef(0)` 로 stale closure 방지 (state 대신 ref를 interval 내부에서 사용)
+   - `useEffect` + `setInterval(3000ms)` 로 3초마다 자동 슬라이드
+   - `flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true })` 호출
+   - 컴포넌트 언마운트 시 `clearInterval` cleanup 반환
+   - `onViewableItemsChanged`에서 ref + state 동시 업데이트 → 도트 인디케이터 동기화
+
+2. **앱 이용 가이드 화면** (`frontend/src/screens/GuideScreen.tsx`, 신규)
+   - 7개 가이드 카드 (방문차량 등록, 전자투표, 커뮤니티, 청구서 납부, 주차관리, 공지사항, 마이페이지)
+   - 이모지 아이콘 + 좌측 액센트 바 + 설명 텍스트 카드 스타일
+   - `AppNavigator`에 `'Guide'` 라우트로 등록
+
+3. **알림함(NotificationScreen)** (`frontend/src/screens/NotificationScreen.tsx`, 신규)
+   - `useFocusEffect` 진입 시 `GET /api/users/:userId/notifications` 로 알림 목록 fetch
+   - `isRead === false`인 항목에 파란 점(●) + 굵은 텍스트 unread 표시
+   - 화면 마운트 시 `PATCH /api/users/:userId/notifications/read-all` 자동 전체 읽음 처리
+   - 빈 알림 시 "알림이 없습니다" 빈 상태 표시
+
+4. **DB 스키마 — Notification 모델 추가** (`backend/prisma/schema.prisma`)
+   - `Notification` 모델: `id uuid`, `userId String → User`, `title String`, `body String`, `isRead Boolean @default(false)`, `createdAt DateTime`
+   - `User` 모델에 `notifications Notification[]` 관계 필드 추가
+   - `npx prisma db push` 실행 완료
+
+5. **백엔드 알림 API 추가** (`backend/src/index.ts`)
+   - `POST .../send-push`: 푸시 발송 후 `prisma.notification.createMany`로 전체 입주민에게 DB 알림 레코드 저장 (토큰 없는 입주민 포함)
+   - `GET /api/users/:userId/notifications`: 알림 목록 조회 (최신순)
+   - `PATCH /api/users/:userId/notifications/read-all`: 전체 미읽음 알림 일괄 읽음 처리
+
+6. **대시보드 헤더에 벨 아이콘 추가** (Admin + Resident 홈)
+   - `DashboardScreen`, `ResidentDashboardScreen` 헤더 우상단에 🔔 `Ionicons notifications-outline` 버튼
+   - 탭 시 `navigation.navigate('Notifications')` 이동
+   - 헤더 레이아웃: `headerRow(flexRow)` + `headerTextGroup(flex:1)` + `bellButton(TouchableOpacity)`
+
+7. **AppNavigator 업데이트**
+   - `NotificationScreen` import 및 `Stack.Screen name="Notifications"` 등록
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **자동스크롤 stale closure 패턴**: interval 내부에서는 state 대신 `useRef`를 사용하고, 렌더링용 state는 따로 유지
+  ```typescript
+  const currentIndexRef = useRef(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const next = (currentIndexRef.current + 1) % banners.length;
+      flatListRef.current?.scrollToIndex({ index: next, animated: true });
+      currentIndexRef.current = next;
+      setCurrentIndex(next);
+    }, 3000);
+    return () => clearInterval(id);
+  }, []);
+  ```
+- **알림 읽음 처리 타이밍**: 화면 마운트 시 즉시 read-all API 호출 → 사용자가 목록을 보면서 unread 표시는 확인하고, 다음 방문 시에는 모두 읽음 처리된 상태로 표시
+- **notification.createMany 패턴**: 푸시 발송 API 내에서 Expo 토큰 유무와 무관하게 모든 입주민(`records.map((r) => r.userId)`)에게 알림 레코드 생성
+- **테스트 mock 업데이트**: `notification.createMany`, `findMany`, `updateMany` mock 추가, 기존 send-push 테스트에 `userId` 필드 추가 → 32/32 통과
+
+---
+
+### 2026-03-04 — 회원가입 플로우 개편, 고객센터/시스템공지, Admin 웹 패널 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **회원가입 3단계 플로우 신규 구현**
+   - 기존: `POST /api/auth/email-login`이 신규 사용자도 upsert 처리 (termsAgreed 없이 즉시 계정 생성)
+   - 변경: 사용자 미존재 시 `404 + { error: 'USER_NOT_FOUND' }` 반환 → 프론트에서 가입 플로우로 이동
+   - 백엔드: `POST /api/auth/register` 신규 — `email`, `password`, `name`, `phoneNumber`, `termsAgreed` 수신
+     - 기존 이메일 있으면 409 반환
+     - bcrypt.hash(10)으로 비밀번호 저장, `ADMIN` role로 계정 생성
+   - `SignupAgreementScreen.tsx` 신규 (Step 2/3):
+     - 전체 동의 + 이용약관/개인정보 개별 체크박스
+     - `StepIndicator` 컴포넌트: 완료=초록, 현재=파랑, 미완=회색 도트
+     - 모두 동의 시 `navigate('SignupProfile', { email, password, termsAgreed: true })`
+   - `SignupProfileScreen.tsx` 신규 (Step 3/3):
+     - 이름(필수) + 전화번호(선택) 입력
+     - `POST /api/auth/register` 호출 → 성공 시 `replace('Onboarding')`
+     - 409 시 이미 가입된 이메일 Alert + EmailLogin으로 이동
+   - `EmailLoginScreen` 수정: 404 USER_NOT_FOUND → `navigate('SignupAgreement', { email, password })`
+   - `AppNavigator`: `SignupAgreement`, `SignupProfile` 스택 화면 등록 (headerShown: false)
+
+2. **고객센터 FAQ 화면 신규 구현**
+   - DB: `Faq` 모델 추가 (id uuid, question, answer, createdAt)
+   - 백엔드: `GET /api/faqs` (공개), `POST /api/faqs`, `DELETE /api/faqs/:id` (SUPER_ADMIN JWT 전용)
+   - `CustomerCenterScreen.tsx` 신규:
+     - `GET /api/faqs` 목록 fetch → 아코디언 Q&A 카드 (Q=파랑뱃지, A=초록뱃지)
+     - 탭 시 `expandedId` toggle로 답변 표시/숨김
+     - 빈 상태: `Ionicons help-circle-outline` + "등록된 FAQ가 없습니다."
+   - `AppNavigator`: `CustomerCenter` 스택 등록
+
+3. **시스템 공지사항 화면 신규 구현**
+   - DB: `SystemNotice` 모델 추가 (id uuid, title, content, createdAt)
+   - 백엔드: `GET /api/system-notices` (공개), `POST /api/system-notices`, `DELETE /api/system-notices/:id` (SUPER_ADMIN JWT 전용)
+   - `SystemNoticeScreen.tsx` 신규:
+     - `GET /api/system-notices` 조회 → 아코디언 카드 (공지 뱃지, 제목, 날짜)
+     - 탭 시 내용 + 날짜(ko-KR) 표시
+     - 빈 상태: `Ionicons megaphone-outline` + "등록된 공지사항이 없습니다."
+   - `AppNavigator`: `SystemNotice` 스택 등록
+
+4. **Admin 웹 패널 (`admin-web/`) 신규 생성**
+   - React + Vite + TypeScript 프로젝트 (별도 디렉토리)
+   - 인증: `POST /api/admin/login` → SUPER_ADMIN JWT 발급 (7일 만료)
+   - 백엔드 SUPER_ADMIN 전용 엔드포인트:
+     - `GET /api/admin/users` — 전체 유저 목록
+     - `GET /api/admin/villas` — 전체 빌라 목록
+     - FAQ CRUD, SystemNotice CRUD
+   - `const JWT_SECRET = process.env.JWT_SECRET || 'villamate-super-secret-2024'`
+   - `jsonwebtoken` 패키지 설치 및 `import jwt from 'jsonwebtoken'` 추가
+
+5. **`frontend/src/components/` 디렉토리 신규 생성**
+   - `RollingBanner.tsx` — 기존 파일을 `components/` 디렉토리로 이동/분리
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **USER_NOT_FOUND 패턴**: 이메일 로그인 시 사용자 없으면 400 대신 `404 + { error: 'USER_NOT_FOUND' }` 반환 → 프론트에서 분기 처리로 가입 플로우 진입
+- **3단계 온보딩 StepIndicator 패턴**:
+  ```tsx
+  // 완료=초록, 현재=파랑, 미완=회색
+  i + 1 < current  → dotDone  (backgroundColor: '#34C759')
+  i + 1 === current → dotActive (backgroundColor: '#007AFF')
+  i + 1 > current  → dot      (backgroundColor: '#E5E5EA')
+  ```
+- **아코디언 카드 패턴**: `expandedId(string|null)` state + `toggleExpand(id)` 함수 → `expandedId === item.id` 조건으로 내용 표시
+- **SUPER_ADMIN JWT 미들웨어 인라인 패턴**:
+  ```typescript
+  const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+  if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+  ```
+- **회원가입 route.params 연쇄 전달**: `email + password → SignupAgreement → SignupProfile` 순서로 params 체인

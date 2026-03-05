@@ -85,6 +85,10 @@ const EmailLoginScreen = ({ navigation }: any) => {
       Alert.alert('알림', '이메일과 비밀번호를 입력해주세요.');
       return;
     }
+    if (password.length < 6) {
+      Alert.alert('알림', '비밀번호는 6자 이상이어야 합니다.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -94,14 +98,25 @@ const EmailLoginScreen = ({ navigation }: any) => {
         body: JSON.stringify({ email, password }),
       });
 
-      const user = await response.json();
+      const data = await response.json();
 
-      if (!response.ok) {
-        Alert.alert('오류', user.error || '로그인에 실패했습니다.');
+      if (response.status === 404 && data.error === 'USER_NOT_FOUND') {
+        // New user → go to signup agreement screen
+        navigation.navigate('SignupAgreement', { email, password });
         return;
       }
 
-      await navigateAfterLogin(user);
+      if (response.status === 401) {
+        Alert.alert('오류', '비밀번호가 올바르지 않습니다.');
+        return;
+      }
+
+      if (!response.ok) {
+        Alert.alert('오류', data.error || '로그인에 실패했습니다.');
+        return;
+      }
+
+      await navigateAfterLogin(data);
     } catch (error) {
       Alert.alert('오류', '서버에 연결할 수 없습니다.');
     } finally {

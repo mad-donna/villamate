@@ -1,1 +1,11 @@
-{}
+{
+  "scripts": {
+    "dev": "concurrently --names \"API,ADMIN,EXPO\" --prefix-colors \"blue,green,magenta\" \"npm run dev:api\" \"npm run dev:admin\" \"npm run dev:expo\"",
+    "dev:api": "cd backend && npm run start:api",
+    "dev:admin": "cd admin-web && npm run dev",
+    "dev:expo": "cd frontend && npx expo start -c"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -818,3 +818,231 @@ DELETE /api/users/:userId
 - expoPushToken 인증 없이 덮어쓰기 가능 → JWT 적용 시 해소
 - send-push 인증 없이 대량 발송 → JWT + ADMIN 역할 체크 필요
 - ~~API_BASE_URL 각 스크린에 하드코딩~~ → **[RESOLVED]**
+
+---
+
+### 2026-03-03 — 롤링 배너 자동스크롤, 앱 가이드, 알림함 세션
+
+#### 데이터 모델 변경 사항
+
+**Notification 모델 신규 추가**
+```
+Notification (id: uuid)
+  ├── userId String → User
+  ├── title  String
+  ├── body   String
+  ├── isRead Boolean @default(false)
+  └── createdAt DateTime
+
+User:
+  └── notifications Notification[]  ← 관계 필드 추가
+```
+
+#### 신규 엔드포인트 (2026-03-03 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `GET` | `/api/users/:userId/notifications` | 유저 알림 목록 (최신순) |
+| `PATCH` | `/api/users/:userId/notifications/read-all` | 전체 미읽음 알림 읽음 처리 |
+
+#### 변경된 엔드포인트
+
+| 메서드 | 경로 | 변경 내용 |
+|--------|------|-----------|
+| `POST` | `/api/villas/:villaId/posts/:postId/send-push` | push 발송 후 `notification.createMany` 추가 (전체 입주민 대상) |
+
+#### 신규 화면 및 네비게이션 업데이트
+
+```
+AppNavigator (Stack) — 2026-03-03 추가분
+├── Guide (Stack)          ← 앱 이용 가이드 (GuideScreen)
+└── Notifications (Stack)  ← 알림함 (NotificationScreen)
+
+신규 컴포넌트:
+  frontend/src/components/RollingBanner.tsx  ← 이미 이전 세션에서 생성, 자동스크롤 추가
+
+신규 화면:
+  frontend/src/screens/GuideScreen.tsx        ← 7개 가이드 카드
+  frontend/src/screens/NotificationScreen.tsx ← 알림함 (unread 표시, 자동 읽음)
+```
+
+#### 롤링 배너 자동스크롤 아키텍처
+
+```
+currentIndexRef = useRef(0)  ← interval 내 읽기/쓰기용 (stale closure 방지)
+currentIndex (state)          ← 도트 인디케이터 렌더링용
+
+useEffect → setInterval(3000ms):
+  next = (currentIndexRef.current + 1) % banners.length
+  flatListRef.current?.scrollToIndex({ index: next, animated: true })
+  currentIndexRef.current = next
+  setCurrentIndex(next)
+  → return () => clearInterval(id)  ← unmount cleanup
+
+onViewableItemsChanged:
+  currentIndexRef.current = index  ← 수동 스와이프 시 ref 동기화
+  setCurrentIndex(index)            ← dot 인디케이터 갱신
+```
+
+#### 알림함 아키텍처
+
+```
+[send-push 라우트 — 알림 저장]
+  push 발송 완료 후:
+    userIds = records.map((r) => r.userId)  ← 토큰 유무 무관 전체
+    prisma.notification.createMany({
+      data: userIds.map((uid) => ({ userId: uid, title, body: post.title }))
+    })
+
+[NotificationScreen — 알림 조회/읽음]
+  useFocusEffect:
+    GET /api/users/:userId/notifications  → FlatList 렌더링
+    PATCH .../read-all                    → 전체 읽음 처리
+
+[unread 표시]
+  isRead === false → 좌측 파란 점 + fontWeight: 'bold'
+  isRead === true  → 일반 텍스트
+```
+
+#### Express 라우트 등록 순서 (2026-03-03 추가분)
+
+```
+/api/users/:userId/notifications/read-all  ← NEW (구체적, 먼저 등록)
+/api/users/:userId/notifications           ← NEW
+/api/users/:userId/push-token              (기존)
+/api/users/:userId/password                (기존)
+/api/users/:userId/posts                   (기존)
+/api/users/:userId                         (기존)
+... (기존 순서 유지)
+```
+
+#### 알려진 기술 부채 (2026-03-03 업데이트)
+
+- 인증 미들웨어 없음 → JWT + Express middleware 필요 (notification API 포함)
+- 단일 index.ts (~1500+ 라인) → 도메인별 라우터 분리 필요
+- `notification.createMany` + push 발송 간 트랜잭션 없음 → 불일치 발생 가능
+- 업로드 파일 로컬 저장 → S3 마이그레이션
+- `Ticket` 모델 schema.prisma에 잔존 → 마이그레이션 제거 권장
+- ~~API_BASE_URL 하드코딩~~ → **[RESOLVED]**
+- ~~비밀번호 미저장~~ → **[RESOLVED]**
+
+---
+
+### 2026-03-04 — 회원가입 플로우 개편, 고객센터/시스템공지, Admin 웹 패널 세션
+
+#### 데이터 모델 변경 사항
+
+**SystemNotice 모델 신규 추가**
+```
+SystemNotice (id: uuid)
+  ├── title   String
+  ├── content String
+  └── createdAt DateTime
+```
+
+**Faq 모델 신규 추가**
+```
+Faq (id: uuid)
+  ├── question String
+  ├── answer   String
+  └── createdAt DateTime
+```
+
+#### 신규 엔드포인트 (2026-03-04 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `POST` | `/api/auth/register` | 신규 사용자 회원가입 (email/password/name/phone/termsAgreed) |
+| `POST` | `/api/admin/login` | SUPER_ADMIN JWT 로그인 (7일 만료) |
+| `GET` | `/api/admin/users` | 전체 유저 목록 (SUPER_ADMIN 전용) |
+| `GET` | `/api/admin/villas` | 전체 빌라 목록 (SUPER_ADMIN 전용) |
+| `GET` | `/api/system-notices` | 시스템 공지 목록 (공개) |
+| `POST` | `/api/system-notices` | 시스템 공지 등록 (SUPER_ADMIN 전용) |
+| `DELETE` | `/api/system-notices/:id` | 시스템 공지 삭제 (SUPER_ADMIN 전용) |
+| `GET` | `/api/faqs` | FAQ 목록 (공개) |
+| `POST` | `/api/faqs` | FAQ 등록 (SUPER_ADMIN 전용) |
+| `DELETE` | `/api/faqs/:id` | FAQ 삭제 (SUPER_ADMIN 전용) |
+
+#### 변경된 엔드포인트
+
+| 메서드 | 경로 | 변경 내용 |
+|--------|------|-----------|
+| `POST` | `/api/auth/email-login` | 사용자 없으면 upsert 대신 `404 + { error: 'USER_NOT_FOUND' }` 반환 |
+
+#### 신규 화면 및 네비게이션 업데이트
+
+```
+AppNavigator (Stack) — 2026-03-04 추가분
+├── SignupAgreement (Stack, headerShown: false)  ← 회원가입 Step 2 (약관 동의)
+├── SignupProfile (Stack, headerShown: false)    ← 회원가입 Step 3 (프로필 입력)
+├── SystemNotice (Stack, headerShown: false)     ← 시스템 공지사항
+└── CustomerCenter (Stack, headerShown: false)   ← 고객센터 FAQ
+```
+
+#### Admin 웹 패널 아키텍처
+
+```
+admin-web/  (별도 디렉토리, React + Vite + TypeScript)
+├── src/
+│   ├── App.tsx
+│   ├── config.ts       ← API_BASE_URL
+│   ├── components/
+│   └── pages/
+│       ├── LoginPage   ← POST /api/admin/login → JWT 획득
+│       ├── DashboardPage
+│       ├── UsersPage   ← GET /api/admin/users
+│       ├── VillasPage  ← GET /api/admin/villas
+│       ├── FaqPage     ← GET/POST/DELETE /api/faqs
+│       └── NoticePage  ← GET/POST/DELETE /api/system-notices
+
+인증 흐름:
+  Login → Bearer JWT 저장(localStorage) → 요청 시 Authorization 헤더 포함
+  서버에서 jwt.verify(token, JWT_SECRET) → decoded.role === 'SUPER_ADMIN' 확인
+```
+
+#### 회원가입 플로우 아키텍처 (신규)
+
+```
+EmailLoginScreen (Step 1)
+  ├── response.status === 404 && data.error === 'USER_NOT_FOUND'
+  │   → navigate('SignupAgreement', { email, password })
+  ├── response.status === 401
+  │   → Alert '비밀번호가 올바르지 않습니다.'
+  └── response.ok
+      → navigateAfterLogin(data)
+
+SignupAgreementScreen (Step 2/3)
+  ├── 전체 동의 토글 + 개별 체크박스 (agreeTerms + agreePrivacy)
+  └── allAgreed 시 → navigate('SignupProfile', { email, password, termsAgreed: true })
+
+SignupProfileScreen (Step 3/3)
+  ├── 이름(필수) + 전화번호(선택) 입력
+  └── POST /api/auth/register → { email, password, name, phoneNumber, termsAgreed }
+      ├── 201 → AsyncStorage 저장 → replace('Onboarding')
+      └── 409 → Alert + navigate('EmailLogin')
+```
+
+#### 프론트엔드 컴포넌트 구조 변경
+
+```
+frontend/src/
+├── components/        ← NEW 디렉토리
+│   └── RollingBanner.tsx  ← 기존 위치에서 이동
+└── screens/
+    ├── SignupAgreementScreen.tsx  ← NEW
+    ├── SignupProfileScreen.tsx    ← NEW
+    ├── CustomerCenterScreen.tsx   ← NEW
+    └── SystemNoticeScreen.tsx     ← NEW
+```
+
+#### 알려진 기술 부채 (2026-03-04 업데이트)
+
+- 인증 미들웨어 없음 (앱 API) → JWT 미들웨어 필요
+- 단일 index.ts (~1600+ 라인) → 도메인별 라우터 분리 필요
+- `JWT_SECRET` 하드코딩 폴백 → `.env` 파일 강력한 시크릿 설정 필수
+- `termsAgreed` 서버 미검증 → 명시적 체크 + DB에 동의 시각 기록 필요
+- `notification.createMany` + push 발송 트랜잭션 없음 → 불일치 가능
+- 업로드 파일 로컬 저장 → S3 마이그레이션
+- `Ticket` 모델 schema.prisma에 잔존 → 마이그레이션 제거 권장
+- ~~API_BASE_URL 하드코딩~~ → **[RESOLVED]**
+- ~~비밀번호 미저장~~ → **[RESOLVED]**

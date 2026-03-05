@@ -15,6 +15,7 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
+import RollingBanner from '../components/RollingBanner';
 
 interface InvoiceItem {
   name: string;
@@ -247,14 +248,28 @@ const ResidentDashboardScreen = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
+        {/* Rolling banner */}
+        <RollingBanner navigation={navigation} />
+
         {/* Header */}
         <View style={styles.headerSection}>
-          <Text style={styles.greeting}>
-            안녕하세요 👋 {residentName || '입주민'}님
-          </Text>
-          {villaName ? (
-            <Text style={styles.villaSubtitle}>{villaName}</Text>
-          ) : null}
+          <View style={styles.headerRow}>
+            <View style={styles.headerTextGroup}>
+              <Text style={styles.greeting}>
+                안녕하세요 👋 {residentName || '입주민'}님
+              </Text>
+              {villaName ? (
+                <Text style={styles.villaSubtitle}>{villaName}</Text>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Notifications')}
+              style={styles.bellButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#1C1C1E" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Top widget: 미납 관리비 — full width */}
@@ -409,6 +424,18 @@ const styles = StyleSheet.create({
   // Header
   headerSection: {
     marginBottom: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerTextGroup: {
+    flex: 1,
+  },
+  bellButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   greeting: {
     fontSize: 24,

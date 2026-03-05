@@ -171,6 +171,32 @@ const ProfileScreen = ({ navigation }: any) => {
         <View style={styles.card}>
           <TouchableOpacity
             style={styles.row}
+            onPress={() => navigation.navigate('SystemNotice')}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: '#007AFF' }]}>
+              <Ionicons name="megaphone" size={18} color="#fff" />
+            </View>
+            <Text style={styles.rowLabel}>공지사항</Text>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => navigation.navigate('CustomerCenter')}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: '#34C759' }]}>
+              <Ionicons name="help-circle" size={18} color="#fff" />
+            </View>
+            <Text style={styles.rowLabel}>고객센터 (자주 묻는 질문)</Text>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+          </TouchableOpacity>
+
+          <View style={styles.separator} />
+
+          <TouchableOpacity
+            style={styles.row}
             onPress={() => Alert.alert('준비 중입니다. (웹사이트 연동 예정)')}
           >
             <View style={[styles.rowIcon, { backgroundColor: '#8E8E93' }]}>

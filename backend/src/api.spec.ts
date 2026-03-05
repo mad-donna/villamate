@@ -89,6 +89,11 @@ jest.mock('@prisma/client', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+    notification: {
+      createMany: jest.fn(),
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
   };
 
   return {
@@ -682,10 +687,11 @@ describe('POST /api/villas/:villaId/posts/:postId/send-push', () => {
     const mockPost = { id: postId, title: '단지 공지사항', villaId: 1 };
     prisma.post.findUnique.mockResolvedValue(mockPost);
     prisma.residentRecord.findMany.mockResolvedValue([
-      { user: { id: 'user-001', expoPushToken: 'ExponentPushToken[aaaaaaaaaaaaaaaaaaa]' } },
-      { user: { id: 'user-002', expoPushToken: 'ExponentPushToken[bbbbbbbbbbbbbbbbbbb]' } },
-      { user: { id: 'user-003', expoPushToken: null } },
+      { userId: 'user-001', user: { id: 'user-001', expoPushToken: 'ExponentPushToken[aaaaaaaaaaaaaaaaaaa]' } },
+      { userId: 'user-002', user: { id: 'user-002', expoPushToken: 'ExponentPushToken[bbbbbbbbbbbbbbbbbbb]' } },
+      { userId: 'user-003', user: { id: 'user-003', expoPushToken: null } },
     ]);
+    prisma.notification.createMany.mockResolvedValue({ count: 3 });
 
     const res = await request(app).post(`/api/villas/1/posts/${postId}/send-push`);
 
@@ -707,8 +713,9 @@ describe('POST /api/villas/:villaId/posts/:postId/send-push', () => {
     const mockPost = { id: postId, title: '공지', villaId: 1 };
     prisma.post.findUnique.mockResolvedValue(mockPost);
     prisma.residentRecord.findMany.mockResolvedValue([
-      { user: { id: 'user-001', expoPushToken: null } },
+      { userId: 'user-001', user: { id: 'user-001', expoPushToken: null } },
     ]);
+    prisma.notification.createMany.mockResolvedValue({ count: 1 });
 
     const res = await request(app).post(`/api/villas/1/posts/${postId}/send-push`);
 

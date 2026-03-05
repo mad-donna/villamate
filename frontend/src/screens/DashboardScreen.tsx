@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { API_BASE_URL } from '../config';
+import RollingBanner from '../components/RollingBanner';
 
 interface Villa {
   id: number;
@@ -175,10 +176,24 @@ const DashboardScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
+        {/* Rolling banner */}
+        <RollingBanner navigation={navigation} />
+
         {/* Header */}
         <View style={styles.headerSection}>
-          <Text style={styles.greeting}>안녕하세요, 관리자님 👋</Text>
-          <Text style={styles.villaName}>{villaData.name}</Text>
+          <View style={styles.headerRow}>
+            <View style={styles.headerTextGroup}>
+              <Text style={styles.greeting}>안녕하세요, 관리자님 👋</Text>
+              <Text style={styles.villaName}>{villaData.name}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Notifications')}
+              style={styles.bellButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#1C1C1E" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Widget row: 미납 관리비 + 확인 대기 */}
@@ -356,6 +371,18 @@ const styles = StyleSheet.create({
   // Header
   headerSection: {
     marginBottom: 24,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerTextGroup: {
+    flex: 1,
+  },
+  bellButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   greeting: {
     fontSize: 26,

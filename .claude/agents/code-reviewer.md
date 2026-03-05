@@ -541,3 +541,113 @@ jest.mock('expo-server-sdk', () => {
 - `backend/src/api.spec.ts` — 총 32개 테스트 모두 통과
 - expo-server-sdk mock: `__mockInstance` singleton 패턴으로 `clearAllMocks()` 내성 확보
 - 커버리지 영역: push-token 저장 (3), send-push (5), 기존 테스트 (24)
+
+---
+
+### 2026-03-03 — 롤링 배너 자동스크롤, 앱 가이드, 알림함 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **RollingBanner 자동스크롤** stale closure 패턴 적용
+- **Notification 모델** DB 추가 및 알림 API 구현
+- **NotificationScreen** 신규 구현 리뷰
+- **send-push 라우트** notification.createMany 추가 후 테스트 32/32 통과
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] setInterval 내 state 직접 사용 — stale closure**
+- `useEffect` 내 `setInterval`에서 `currentIndex` state를 직접 참조하면 클로저가 초기값 0을 고정 포착
+- 증상: 자동스크롤이 항상 index 1로만 이동 후 멈춤
+- 해결: `currentIndexRef = useRef(0)` 사용. interval 내부는 ref 읽기/쓰기, 렌더링용 state는 병행 유지
+- **교훈**: `setInterval`/`setTimeout` 내부에서 state를 읽어야 할 때는 반드시 `useRef`로 미러링
+
+**[GOOD] notification.createMany 패턴**
+- `send-push` 라우트에서 Expo 토큰 필터링 후 push 발송과 별개로 `records.map((r) => r.userId)` 전체에 대해 `createMany` 호출
+- 토큰 없는 입주민도 앱 내 알림함에서 알림을 확인할 수 있음 — 두 채널을 독립적으로 처리하는 올바른 설계
+
+**[GOOD] FlatList viewabilityConfig useRef 패턴**
+- `viewabilityConfig`를 컴포넌트 본체에서 객체 리터럴로 정의하면 React Native FlatList가 경고 발생
+- 해결: `viewabilityConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 })` 로 메모이즈
+
+#### 이 세션에서 추가된 코딩 패턴
+
+- **알림 목록 화면 표준 패턴**:
+  ```tsx
+  useFocusEffect(useCallback(() => {
+    fetchNotifications(); // GET API
+    markAllRead();        // PATCH read-all API
+  }, [userId]));
+  ```
+- **unread 표시 패턴**: `isRead === false`일 때 좌측 파란 점(●) + `fontWeight: 'bold'` 적용
+- **벨 아이콘 헤더 배치**:
+  ```tsx
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }
+  headerTextGroup: { flex: 1 }  // 텍스트가 벨 아이콘에 밀리지 않도록
+  bellButton: { padding: 8 }
+  ```
+
+---
+
+### 2026-03-04 — 회원가입 플로우 개편, 고객센터/시스템공지, Admin 웹 패널 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **회원가입 3단계 플로우** (SignupAgreement → SignupProfile) 구현 리뷰
+- **EmailLoginScreen 분기 로직** 수정 (USER_NOT_FOUND 패턴)
+- **SUPER_ADMIN JWT 인증** Admin 웹 패널 백엔드 구현 리뷰
+- **CustomerCenterScreen**, **SystemNoticeScreen** 신규 화면 리뷰
+
+#### 발견된 주요 버그 패턴
+
+**[GOOD] USER_NOT_FOUND 404 분기 — 올바른 설계**
+- 기존: 신규 사용자도 `email-login`에서 upsert → termsAgreed 없이 계정 생성
+- 개선: 사용자 없으면 `404 + { error: 'USER_NOT_FOUND' }` 반환 → 클라이언트가 가입 플로우(`SignupAgreement`)로 분기
+- `response.status === 404 && data.error === 'USER_NOT_FOUND'` 조건으로 정확한 분기 처리
+- **교훈**: 로그인/가입을 단일 endpoint에서 혼용(upsert)하면 약관 동의 등 법적 요구사항 구현이 어려워짐 — 분리가 올바른 설계
+
+**[IMPORTANT] SUPER_ADMIN JWT Secret 하드코딩**
+- `const JWT_SECRET = process.env.JWT_SECRET || 'villamate-super-secret-2024'`
+- 환경변수 미설정 시 소스코드에 공개된 시크릿 사용 → 프로덕션 배포 전 반드시 `JWT_SECRET` 환경변수 설정 필수
+- 현재 Admin 웹이 운영 환경이 아닌 개발 단계이므로 수용 가능, 향후 `.env` 파일 관리 필요
+
+**[PATTERN] 3단계 온보딩 파라미터 체인**
+- Step 1 (EmailLogin) → Step 2 (SignupAgreement): `{ email, password }` 전달
+- Step 2 → Step 3 (SignupProfile): `{ email, password, termsAgreed: true }` 전달
+- `route.params || {}` 방어 코드로 직접 접근 시 undefined 방지
+- **교훈**: 멀티스텝 플로우에서 params 체인 방식은 navigation stack에 intermediate 화면이 쌓이므로 `goBack()`이 의도대로 작동함
+
+**[GOOD] 409 Conflict 처리 — 이메일 중복 가입 방지**
+- `SignupProfileScreen`: response.status === 409 시 Alert + EmailLogin으로 이동
+- 이메일 입력(Step 1) → 약관 동의(Step 2) → 프로필(Step 3) 사이에 다른 기기에서 가입 완료될 경우의 race condition 방어
+- **교훈**: 멀티스텝 폼에서 409는 마지막 단계(실제 등록)에서 처리, 이전 단계에서는 pre-check 불필요
+
+**[PATTERN] 아코디언 UI — expandedId nullable 패턴**
+- `expandedId(string|null)`: null = 모두 닫힘, string = 해당 ID만 열림
+- `setExpandedId(prev => prev === id ? null : id)`: 이미 열린 것 탭 → 닫힘, 다른 것 탭 → 새 것 열림 + 이전 것 닫힘
+- **장점**: state 1개로 "한 번에 하나만" 아코디언 동작 구현, 별도 index 없이 id로 추적
+
+#### 이 세션에서 추가된 코딩 패턴
+
+- **StepIndicator 재사용 컴포넌트** (SignupAgreementScreen, SignupProfileScreen 내 인라인 정의):
+  ```tsx
+  const StepIndicator = ({ current, total }: { current: number; total: number }) => (
+    // 완료 도트: 체크마크 아이콘 + 초록 배경
+    // 현재 도트: 숫자 + 파랑 배경
+    // 미완 도트: 숫자 + 회색 배경
+  );
+  ```
+
+- **전체 동의 토글 패턴**:
+  ```typescript
+  const allAgreed = agreeTerms && agreePrivacy;
+  const toggleAll = () => {
+    const next = !allAgreed;
+    setAgreeTerms(next);
+    setAgreePrivacy(next);
+  };
+  ```
+
+- **Q&A 아코디언 카드 스타일** (CustomerCenterScreen):
+  - Q 뱃지: `backgroundColor: '#EBF4FF'`, text `color: '#007AFF'`
+  - A 뱃지: `backgroundColor: '#EDFAF1'`, text `color: '#34C759'`
+  - 구분선: `borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E5EA'`

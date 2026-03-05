@@ -12,7 +12,10 @@
       "Bash(xargs sed:*)",
       "Bash(python3:*)",
       "Bash(npx jest:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(npm create:*)",
+      "Bash(npm run:*)",
+      "Bash(curl:*)"
     ]
   }
 }

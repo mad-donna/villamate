@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import { Expo } from 'expo-server-sdk';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ const prisma = new PrismaClient();
 const app = express();
 const expo = new Expo();
 const port = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'villamate-super-secret-2024';
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -76,7 +78,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// Email/Password Login (MVP - no password hashing)
+// Email/Password Login — verifies password, returns user or 404/401
 app.post('/api/auth/email-login', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -84,19 +86,89 @@ app.post('/api/auth/email-login', async (req: Request, res: Response) => {
   }
 
   try {
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: {},
-      create: {
-        email,
-        name: email.split('@')[0],
-        provider: 'LOCAL',
-      },
-    });
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'USER_NOT_FOUND' });
+    }
+
+    if (!user.password) {
+      // Legacy account with no password — set it now
+      const hashed = await bcrypt.hash(String(password), 10);
+      const updated = await prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashed },
+      });
+      return res.status(200).json(updated);
+    }
+
+    const match = await bcrypt.compare(String(password), user.password);
+    if (!match) {
+      return res.status(401).json({ error: 'INVALID_PASSWORD' });
+    }
+
     res.status(200).json(user);
   } catch (error) {
     console.error('Email login error:', error);
     res.status(500).json({ error: 'Email login failed' });
+  }
+});
+
+// Register new user with email, password, name, phoneNumber, termsAgreed
+app.post('/api/auth/register', async (req: Request, res: Response) => {
+  const { email, password, name, phoneNumber, termsAgreed } = req.body;
+
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: 'email, password, and name are required' });
+  }
+  if (!termsAgreed) {
+    return res.status(400).json({ error: '약관에 동의해야 가입할 수 있습니다.' });
+  }
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: 'EMAIL_ALREADY_EXISTS' });
+    }
+
+    const hashed = await bcrypt.hash(String(password), 10);
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashed,
+        name,
+        phoneNumber: phoneNumber || null,
+        termsAgreed: Boolean(termsAgreed),
+        provider: 'LOCAL',
+        role: 'ADMIN',
+      },
+    });
+
+    res.status(201).json(user);
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// Update user profile (name, phone, role)
+app.put('/api/users/:userId', async (req: Request, res: Response) => {
+  const userId = String(req.params.userId);
+  const { name, phone, role } = req.body;
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(name && { name: String(name) }),
+        ...(phone && { phone: String(phone) }),
+        ...(role && { role: String(role) }),
+      },
+    });
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ error: 'Failed to update user profile' });
   }
 });
 
@@ -924,6 +996,18 @@ app.post('/api/villas/:villaId/posts/:postId/send-push', async (req: Request, re
       }
     }
 
+    // Save in-app notifications for all residents
+    const userIds = records.map((r: any) => r.userId);
+    if (userIds.length > 0) {
+      await prisma.notification.createMany({
+        data: userIds.map((uid: string) => ({
+          userId: uid,
+          title: '새롭게 공지사항 등록된 글이 있습니다. 확인해보실까요?',
+          body: post.title,
+        })),
+      });
+    }
+
     res.status(200).json({ success: true, sent: tokens.length });
   } catch (error) {
     console.error('Send push error:', error);
@@ -1654,6 +1738,292 @@ app.patch('/api/villas/:villaId/tickets/:ticketId/status', async (req: Request, 
   } catch (error) {
     console.error('Update ticket status error:', error);
     res.status(500).json({ error: 'Failed to update ticket status' });
+  }
+});
+
+// Notification Inbox — fetch all notifications for a user
+app.get('/api/users/:userId/notifications', async (req: Request, res: Response) => {
+  const userId = String(req.params.userId);
+  try {
+    const notifications = await prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(notifications);
+  } catch (error) {
+    console.error('Fetch notifications error:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// Notification Inbox — mark all unread notifications as read
+app.patch('/api/users/:userId/notifications/read-all', async (req: Request, res: Response) => {
+  const userId = String(req.params.userId);
+  try {
+    await prisma.notification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true },
+    });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Mark notifications read error:', error);
+    res.status(500).json({ error: 'Failed to mark notifications as read' });
+  }
+});
+
+// ─── Admin Endpoints ──────────────────────────────────────────────────────────
+
+// Admin email+password login (returns JWT)
+app.post('/api/admin/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || user.role !== 'SUPER_ADMIN') {
+      return res.status(401).json({ error: '관리자 계정이 아닙니다.' });
+    }
+    if (!user.password) {
+      return res.status(401).json({ error: '비밀번호가 설정되지 않은 계정입니다.' });
+    }
+    const match = await bcrypt.compare(String(password), user.password);
+    if (!match) {
+      return res.status(401).json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+    }
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.status(200).json({
+      token,
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    });
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ error: 'Admin login failed' });
+  }
+});
+
+// Admin: verify token and return current user
+app.get('/api/admin/me', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string; role: string };
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, name: true, role: true },
+    });
+    if (!user || user.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    res.status(200).json(user);
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// Admin: list all users
+app.get('/api/admin/users', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+    const users = await prisma.user.findMany({
+      select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(users);
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// Admin: list all villas
+app.get('/api/admin/villas', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+    const villas = await prisma.villa.findMany({
+      include: {
+        admin: { select: { id: true, name: true, email: true } },
+        _count: { select: { residents: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(villas);
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// Admin: get users belonging to a specific villa
+app.get('/api/admin/villas/:villaId/users', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    const villaId = parseInt(String(req.params.villaId), 10);
+    if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+    const villa = await prisma.villa.findUnique({
+      where: { id: villaId },
+      select: { id: true, name: true, address: true, totalUnits: true, accountNumber: true, bankName: true },
+    });
+    if (!villa) return res.status(404).json({ error: 'Villa not found' });
+
+    const residents = await prisma.residentRecord.findMany({
+      where: { villaId },
+      orderBy: { roomNumber: 'asc' },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, role: true, status: true, phone: true },
+        },
+      },
+    });
+
+    res.status(200).json({
+      villa,
+      users: residents.map((r) => ({
+        recordId: r.id,
+        roomNumber: r.roomNumber,
+        joinedAt: r.joinedAt,
+        ...r.user,
+      })),
+    });
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// ─── System Notices ───────────────────────────────────────────────────────────
+
+// Public: list all system notices
+app.get('/api/system-notices', async (_req: Request, res: Response) => {
+  try {
+    const notices = await prisma.systemNotice.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(notices);
+  } catch (error) {
+    console.error('Fetch notices error:', error);
+    res.status(500).json({ error: 'Failed to fetch notices' });
+  }
+});
+
+// Admin: create a system notice
+app.post('/api/system-notices', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    const { title, content } = req.body;
+    if (!title || !content) return res.status(400).json({ error: 'title and content are required' });
+
+    const notice = await prisma.systemNotice.create({ data: { title, content } });
+    res.status(201).json(notice);
+  } catch (error) {
+    console.error('Create notice error:', error);
+    res.status(500).json({ error: 'Failed to create notice' });
+  }
+});
+
+// Admin: delete a system notice
+app.delete('/api/system-notices/:id', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    await prisma.systemNotice.delete({ where: { id: String(req.params.id) } });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Delete notice error:', error);
+    res.status(500).json({ error: 'Failed to delete notice' });
+  }
+});
+
+// ─── FAQs ─────────────────────────────────────────────────────────────────────
+
+// Public: list all FAQs
+app.get('/api/faqs', async (_req: Request, res: Response) => {
+  try {
+    const faqs = await prisma.faq.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(faqs);
+  } catch (error) {
+    console.error('Fetch FAQs error:', error);
+    res.status(500).json({ error: 'Failed to fetch FAQs' });
+  }
+});
+
+// Admin: create a FAQ
+app.post('/api/faqs', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    const { question, answer } = req.body;
+    if (!question || !answer) return res.status(400).json({ error: 'question and answer are required' });
+
+    const faq = await prisma.faq.create({ data: { question, answer } });
+    res.status(201).json(faq);
+  } catch (error) {
+    console.error('Create FAQ error:', error);
+    res.status(500).json({ error: 'Failed to create FAQ' });
+  }
+});
+
+// Admin: delete a FAQ
+app.delete('/api/faqs/:id', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    await prisma.faq.delete({ where: { id: String(req.params.id) } });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Delete FAQ error:', error);
+    res.status(500).json({ error: 'Failed to delete FAQ' });
   }
 });
 

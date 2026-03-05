@@ -693,3 +693,203 @@
 4. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
 5. **외부 청구 SMS 자동화**: 수동 복사 → 카카오 알림톡 자동 발송
 6. **업로드 스토리지 마이그레이션**: 로컬 디스크 → S3 또는 Supabase Storage
+
+---
+
+## 14. MVP 구현 현황 (2026-03-03 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### 롤링 배너 자동스크롤 (UX 개선)
+
+- **기존**: 수동 스와이프만 가능한 정적 배너
+- **변경**: 3초마다 자동으로 다음 배너로 전환
+  - `currentIndexRef(useRef)` + `setInterval(3000ms)` 조합 (stale closure 방지)
+  - 수동 스와이프 시 `onViewableItemsChanged`에서 ref + state 동시 동기화
+  - 컴포넌트 언마운트 시 `clearInterval` cleanup
+
+#### 앱 이용 가이드 화면 신규 추가 (`GuideScreen.tsx`)
+
+- 배너 탭 → 가이드 화면 이동 (`navigation.navigate('Guide')`)
+- 7개 카드: 방문차량 등록 / 전자투표 참여 / 커뮤니티 이용 / 청구서 확인 및 납부 / 주차관리 / 공지사항 확인 / 마이페이지 이용
+- 이모지 아이콘 + 좌측 액센트 바 + 설명 텍스트 스타일 카드
+
+#### 앱 내 알림함 시스템 신규 추가
+
+Expo 푸시 알림(1단계)에 이어, 앱 내 영구 알림함(2단계) 구현.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Notification` 모델 신규 (id, userId → User, title, body, isRead @default(false), createdAt) |
+| 백엔드 | `POST .../send-push` 라우트에 `notification.createMany` 추가 (전체 입주민 — 토큰 유무 무관) |
+| 백엔드 | `GET /api/users/:userId/notifications` 신규 (최신순 알림 목록) |
+| 백엔드 | `PATCH /api/users/:userId/notifications/read-all` 신규 (전체 미읽음 → 읽음) |
+| NotificationScreen | **신규** — `useFocusEffect` 진입 시 fetch + read-all 자동 호출, unread 파란 점 표시 |
+| AppNavigator | `Notifications` 스택 라우트 등록 |
+| DashboardScreen | 헤더 우상단 🔔 벨 아이콘 버튼 추가 → `Notifications` 이동 |
+| ResidentDashboardScreen | 동일하게 🔔 벨 아이콘 버튼 추가 |
+
+- **설계 결정**: Expo 토큰 없는 입주민도 앱 내 알림함 확인 가능하도록 토큰 유무 무관하게 전체 createMany
+- **읽음 처리**: 화면 진입 시 자동 전체 읽음 처리 → 사용자 별도 액션 불필요
+
+### 현재 구현된 전체 화면 목록 (2026-03-03 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `ProfileSetupScreen`, `OnboardingScreen`, `ResidentJoinScreen`
+
+#### 관리자 탭 (4개)
+- `DashboardScreen` (홈 — 롤링배너+위젯, 🔔), `BoardScreen` (커뮤니티+민원), `ManagementScreen` (관리), `ProfileScreen` (iOS 설정 스타일)
+
+#### 입주민 탭 (3개)
+- `ResidentDashboardScreen` (홈 — 롤링배너+위젯, 🔔), `BoardScreen` (커뮤니티+민원), `ProfileScreen` (iOS 설정 스타일)
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen`, `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen` (공지 푸시 발송 버튼 포함), `CreatePostScreen`
+- `ParkingSearchScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen`
+- `VehicleManagementScreen`, `ChangePasswordScreen`, `MyPostsScreen`
+- `GuideScreen` ← NEW (앱 이용 가이드)
+- `NotificationScreen` ← NEW (알림함)
+
+### 현재 기술 스택 (2026-03-03 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~1500+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| API 설정 | `frontend/src/config.ts` (API_BASE_URL 중앙화) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker v8.4.4 |
+| 키보드 처리 | react-native-keyboard-aware-scroll-view (일부), 표준 KeyboardAvoidingView (일부) |
+| SafeArea | react-native-safe-area-context |
+| 푸시 알림 | expo-notifications + expo-device + expo-server-sdk |
+| 비밀번호 | bcryptjs (hash rounds: 10) |
+| 테스트 | Jest + supertest (32개 테스트) |
+
+### 다음 개발 우선순위 (2026-03-03 업데이트)
+
+1. **미납자 알림 자동화**: 공지 수동 발송을 넘어 미납자 대상 자동 스케줄 알림 (cron 연동 + notification DB 저장)
+2. **JWT 인증 미들웨어**: 알림 API 포함 전체 API 보안 강화
+3. **PG 결제 서버 검증**: `imp_uid` → PortOne API 서버 검증 (보안 필수)
+4. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
+5. **외부 청구 SMS 자동화**: 수동 복사 → 카카오 알림톡 자동 발송
+6. **업로드 스토리지 마이그레이션**: 로컬 디스크 → S3 또는 Supabase Storage
+
+---
+
+## 15. MVP 구현 현황 (2026-03-04 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### 회원가입 3단계 플로우 신규 구현 (기존 upsert 방식 교체)
+
+기존: `POST /api/auth/email-login`이 신규 사용자도 upsert로 즉시 계정 생성 → 약관 동의 없이 가입
+변경: 사용자 미존재 시 `404 + { error: 'USER_NOT_FOUND' }` → 3단계 가입 플로우로 분기
+
+| 구분 | 내용 |
+|------|------|
+| 백엔드 | `POST /api/auth/register` 신규 — email/password(bcrypt)/name/phoneNumber/termsAgreed |
+| 백엔드 | 기존 이메일 있으면 409 반환 (중복 가입 방지) |
+| SignupAgreementScreen | **신규** — Step 2/3: 이용약관 + 개인정보 동의 (전체 동의 + 개별 체크박스) |
+| SignupProfileScreen | **신규** — Step 3/3: 이름(필수) + 전화번호(선택) 입력 → 가입 완료 후 Onboarding |
+| StepIndicator | 3단계 진행 표시 인라인 컴포넌트 (완료=초록, 현재=파랑, 미완=회색) |
+| EmailLoginScreen | 수정: 404 USER_NOT_FOUND → `navigate('SignupAgreement', { email, password })` |
+| AppNavigator | `SignupAgreement`, `SignupProfile` 스택 화면 등록 (headerShown: false) |
+
+#### 고객센터 FAQ 기능 (신규)
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Faq` 모델 신규 (id uuid, question, answer, createdAt) |
+| 백엔드 | `GET /api/faqs` (공개), `POST/DELETE /api/faqs/:id` (SUPER_ADMIN JWT 전용) |
+| CustomerCenterScreen | **신규** — 아코디언 Q&A 카드 (Q=파랑뱃지, A=초록뱃지, 탭 시 토글) |
+| AppNavigator | `CustomerCenter` 스택 등록 (headerShown: false) |
+
+#### 시스템 공지사항 (신규)
+
+| 구분 | 내용 |
+|------|------|
+| DB | `SystemNotice` 모델 신규 (id uuid, title, content, createdAt) |
+| 백엔드 | `GET /api/system-notices` (공개), `POST/DELETE /api/system-notices/:id` (SUPER_ADMIN JWT 전용) |
+| SystemNoticeScreen | **신규** — 아코디언 카드 (공지뱃지, 제목, 탭 시 내용+날짜 표시) |
+| AppNavigator | `SystemNotice` 스택 등록 (headerShown: false) |
+
+#### Admin 웹 패널 (`admin-web/`) 신규 구축
+
+내부 운영팀이 브라우저에서 서비스를 관리하기 위한 전용 웹 패널.
+
+| 구분 | 내용 |
+|------|------|
+| 기술 스택 | React + Vite + TypeScript (별도 디렉토리) |
+| 인증 | `POST /api/admin/login` → SUPER_ADMIN JWT 발급 (7일 만료) |
+| 백엔드 패키지 | `jsonwebtoken` 설치, `JWT_SECRET` 환경변수 (폴백: 하드코딩 시크릿) |
+| Admin 전용 API | `GET /api/admin/users`, `GET /api/admin/villas` (SUPER_ADMIN 전용) |
+| 기능 | FAQ 등록/삭제, 시스템 공지 등록/삭제, 유저/빌라 목록 조회 |
+
+#### 프론트엔드 구조 개선
+
+- `frontend/src/components/` 디렉토리 신규 생성
+- `RollingBanner.tsx` → `components/` 디렉토리로 이동 (컴포넌트 분리 원칙 적용)
+
+### 현재 구현된 전체 화면 목록 (2026-03-04 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `ProfileSetupScreen`, `OnboardingScreen`, `ResidentJoinScreen`
+- `SignupAgreementScreen` ← NEW (회원가입 Step 2: 약관 동의)
+- `SignupProfileScreen` ← NEW (회원가입 Step 3: 프로필 입력)
+
+#### 관리자 탭 (4개)
+- `DashboardScreen` (홈 — 롤링배너+위젯, 🔔), `BoardScreen` (커뮤니티+민원), `ManagementScreen` (관리), `ProfileScreen` (iOS 설정 스타일)
+
+#### 입주민 탭 (3개)
+- `ResidentDashboardScreen` (홈 — 롤링배너+위젯, 🔔), `BoardScreen` (커뮤니티+민원), `ProfileScreen` (iOS 설정 스타일)
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen`, `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen`, `CreatePostScreen`
+- `ParkingSearchScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen`
+- `VehicleManagementScreen`, `ChangePasswordScreen`, `MyPostsScreen`
+- `GuideScreen`, `NotificationScreen`
+- `CustomerCenterScreen` ← NEW (고객센터 FAQ)
+- `SystemNoticeScreen` ← NEW (시스템 공지사항)
+
+### 현재 기술 스택 (2026-03-04 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~1600+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| API 설정 | `frontend/src/config.ts` (API_BASE_URL 중앙화) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker v8.4.4 |
+| 키보드 처리 | 표준 KeyboardAvoidingView + ScrollView |
+| SafeArea | react-native-safe-area-context |
+| 푸시 알림 | expo-notifications + expo-device + expo-server-sdk |
+| 비밀번호 | bcryptjs (hash rounds: 10) |
+| 테스트 | Jest + supertest |
+| Admin 웹 | React + Vite + TypeScript (`admin-web/`) |
+| Admin 인증 | jsonwebtoken (JWT, SUPER_ADMIN 역할 기반) |
+
+### 다음 개발 우선순위 (2026-03-04 업데이트)
+
+1. **미납자 알림 자동화**: 미납자 대상 자동 스케줄 알림 (cron 연동)
+2. **JWT 인증 미들웨어 (앱 API)**: Admin 웹에 이어 앱 API도 JWT 보안 강화
+3. **PG 결제 서버 검증**: `imp_uid` → PortOne API 서버 검증 (보안 필수)
+4. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
+5. **Admin 웹 기능 확장**: 빌라별 청구서/납부 현황, 통계 대시보드

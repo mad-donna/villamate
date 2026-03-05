@@ -24,6 +24,12 @@ import PollDetailScreen from '../screens/PollDetailScreen';
 import VehicleManagementScreen from '../screens/VehicleManagementScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import MyPostsScreen from '../screens/MyPostsScreen';
+import GuideScreen from '../screens/GuideScreen';
+import NotificationScreen from '../screens/NotificationScreen';
+import SignupAgreementScreen from '../screens/SignupAgreementScreen';
+import SignupProfileScreen from '../screens/SignupProfileScreen';
+import SystemNoticeScreen from '../screens/SystemNoticeScreen';
+import CustomerCenterScreen from '../screens/CustomerCenterScreen';
 import MainTabNavigator from './MainTabNavigator';
 import ResidentTabNavigator from './ResidentTabNavigator';
 
@@ -163,6 +169,36 @@ const AppNavigator = () => {
         name="MyPosts"
         component={MyPostsScreen}
         options={{ title: '내가 쓴 글 / 민원 내역' }}
+      />
+      <Stack.Screen
+        name="Guide"
+        component={GuideScreen}
+        options={{ title: '이용 가이드' }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationScreen}
+        options={{ title: '알림함' }}
+      />
+      <Stack.Screen
+        name="SystemNotice"
+        component={SystemNoticeScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CustomerCenter"
+        component={CustomerCenterScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="SignupAgreement"
+        component={SignupAgreementScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="SignupProfile"
+        component={SignupProfileScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
