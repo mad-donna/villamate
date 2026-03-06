@@ -18,6 +18,30 @@ const expo = new Expo();
 const port = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'villamate-super-secret-2024';
 
+// ─── Security Helpers ──────────────────────────────────────────────────────────
+
+/** Strip sensitive fields from any User object before sending to clients. */
+function sanitizeUser<T extends { password?: string | null; expoPushToken?: string | null; providerId?: string | null }>(user: T): Omit<T, 'password' | 'expoPushToken' | 'providerId'> {
+  const { password: _p, expoPushToken: _e, providerId: _pr, ...safe } = user as any;
+  return safe;
+}
+
+/** Middleware: verify mobile JWT and attach decoded payload to req. */
+function authenticateUser(req: Request, res: Response, next: Function) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
+    (req as any).user = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -71,7 +95,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       });
     }
 
-    res.status(200).json(user);
+    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+    res.status(200).json({ ...sanitizeUser(user), token });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Failed to login' });
@@ -99,7 +124,8 @@ app.post('/api/auth/email-login', async (req: Request, res: Response) => {
         where: { id: user.id },
         data: { password: hashed },
       });
-      return res.status(200).json(updated);
+      const token = jwt.sign({ userId: updated.id, role: updated.role }, JWT_SECRET, { expiresIn: '30d' });
+      return res.status(200).json({ ...sanitizeUser(updated), token });
     }
 
     const match = await bcrypt.compare(String(password), user.password);
@@ -107,7 +133,8 @@ app.post('/api/auth/email-login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'INVALID_PASSWORD' });
     }
 
-    res.status(200).json(user);
+    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+    res.status(200).json({ ...sanitizeUser(user), token });
   } catch (error) {
     console.error('Email login error:', error);
     res.status(500).json({ error: 'Email login failed' });
@@ -144,7 +171,8 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
       },
     });
 
-    res.status(201).json(user);
+    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+    res.status(201).json({ ...sanitizeUser(user), token });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Registration failed' });
@@ -165,7 +193,7 @@ app.put('/api/users/:userId', async (req: Request, res: Response) => {
         ...(role && { role: String(role) }),
       },
     });
-    res.status(200).json(updated);
+    res.status(200).json(sanitizeUser(updated));
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user profile' });
@@ -186,7 +214,7 @@ app.patch('/api/users/:userId/push-token', async (req: Request, res: Response) =
       where: { id: userId },
       data: { expoPushToken: String(token) },
     });
-    res.status(200).json(user);
+    res.status(200).json(sanitizeUser(user));
   } catch (error) {
     console.error('Push token update error:', error);
     res.status(500).json({ error: 'Failed to update push token' });
@@ -311,7 +339,8 @@ app.post('/api/auth/social-login', async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      return res.status(200).json(existingUser);
+      const token = jwt.sign({ userId: existingUser.id, role: existingUser.role }, JWT_SECRET, { expiresIn: '30d' });
+      return res.status(200).json({ ...sanitizeUser(existingUser), token });
     }
 
     // 2. If email provided, check for account collision
@@ -335,7 +364,8 @@ app.post('/api/auth/social-login', async (req: Request, res: Response) => {
       },
     });
 
-    res.status(201).json(newUser);
+    const token = jwt.sign({ userId: newUser.id, role: newUser.role }, JWT_SECRET, { expiresIn: '30d' });
+    res.status(201).json({ ...sanitizeUser(newUser), token });
   } catch (error) {
     console.error('Social login error:', error);
     res.status(500).json({ error: 'Social login failed' });
@@ -356,7 +386,7 @@ app.put('/api/users/:id', async (req: Request, res: Response) => {
         name: name || undefined,
       },
     });
-    res.status(200).json(updatedUser);
+    res.status(200).json(sanitizeUser(updatedUser));
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user profile' });
@@ -635,8 +665,11 @@ app.patch('/api/payments/:paymentId/confirm', async (req: Request, res: Response
   }
 });
 
-// SaaS subscription: activate free trial for a villa
-app.patch('/api/villas/:villaId/subscribe', async (req: Request, res: Response) => {
+// SaaS subscription: activate free trial for a villa (SUPER_ADMIN only)
+app.patch('/api/villas/:villaId/subscribe', authenticateUser, async (req: Request, res: Response) => {
+  if ((req as any).user?.role !== 'SUPER_ADMIN') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   const villaId = Number(req.params.villaId);
   if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
   try {
@@ -2227,6 +2260,145 @@ app.delete('/api/faqs/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete FAQ error:', error);
     res.status(500).json({ error: 'Failed to delete FAQ' });
+  }
+});
+
+// ─── Admin Stats ──────────────────────────────────────────────────────────────
+
+app.get('/api/admin/stats', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    const [totalUsers, usersByRole, totalVillas, villasBySubscription] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.groupBy({ by: ['role'], _count: { role: true } }),
+      prisma.villa.count(),
+      prisma.villa.groupBy({ by: ['subscriptionStatus'], _count: { subscriptionStatus: true } }),
+    ]);
+
+    res.status(200).json({
+      totalUsers,
+      usersByRole: usersByRole.map((r) => ({ role: r.role, count: r._count.role })),
+      totalVillas,
+      villasBySubscription: villasBySubscription.map((r) => ({
+        status: r.subscriptionStatus,
+        count: r._count.subscriptionStatus,
+      })),
+    });
+  } catch (error) {
+    console.error('Admin stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// ─── Guides ───────────────────────────────────────────────────────────────────
+
+// Public: list all guides (optionally filtered by category)
+app.get('/api/guides', async (req: Request, res: Response) => {
+  const { category } = req.query;
+  try {
+    const guides = await prisma.guide.findMany({
+      where: category ? { category: String(category) } : undefined,
+      orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(guides);
+  } catch (error) {
+    console.error('Fetch guides error:', error);
+    res.status(500).json({ error: 'Failed to fetch guides' });
+  }
+});
+
+// Public: get a single guide by id
+app.get('/api/guides/:id', async (req: Request, res: Response) => {
+  try {
+    const guide = await prisma.guide.findUnique({ where: { id: String(req.params.id) } });
+    if (!guide) return res.status(404).json({ error: 'Guide not found' });
+    res.status(200).json(guide);
+  } catch (error) {
+    console.error('Fetch guide error:', error);
+    res.status(500).json({ error: 'Failed to fetch guide' });
+  }
+});
+
+// Admin: create a guide
+app.post('/api/guides', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    const { category, title, content, thumbnailUrl } = req.body;
+    if (!category || !title || !content) return res.status(400).json({ error: 'category, title, and content are required' });
+
+    const guide = await prisma.guide.create({
+      data: {
+        category: String(category),
+        title: String(title),
+        content: String(content),
+        thumbnailUrl: thumbnailUrl ? String(thumbnailUrl) : null,
+      },
+    });
+    res.status(201).json(guide);
+  } catch (error) {
+    console.error('Create guide error:', error);
+    res.status(500).json({ error: 'Failed to create guide' });
+  }
+});
+
+// Admin: update a guide
+app.put('/api/guides/:id', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    const { category, title, content, thumbnailUrl } = req.body;
+    const guide = await prisma.guide.update({
+      where: { id: String(req.params.id) },
+      data: {
+        ...(category && { category: String(category) }),
+        ...(title && { title: String(title) }),
+        ...(content && { content: String(content) }),
+        thumbnailUrl: thumbnailUrl !== undefined ? (thumbnailUrl ? String(thumbnailUrl) : null) : undefined,
+      },
+    });
+    res.status(200).json(guide);
+  } catch (error) {
+    console.error('Update guide error:', error);
+    res.status(500).json({ error: 'Failed to update guide' });
+  }
+});
+
+// Admin: delete a guide
+app.delete('/api/guides/:id', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    await prisma.guide.delete({ where: { id: String(req.params.id) } });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Delete guide error:', error);
+    res.status(500).json({ error: 'Failed to delete guide' });
   }
 });
 

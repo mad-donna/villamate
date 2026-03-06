@@ -261,3 +261,12 @@ model Faq {
   answer    String
   createdAt DateTime @default(now())
 }
+
+model Guide {
+  id           String   @id @default(uuid())
+  category     String
+  title        String
+  content      String
+  thumbnailUrl String?
+  createdAt    DateTime @default(now())
+}

@@ -25,6 +25,8 @@ import VehicleManagementScreen from '../screens/VehicleManagementScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import MyPostsScreen from '../screens/MyPostsScreen';
 import GuideScreen from '../screens/GuideScreen';
+import GuideLibraryScreen from '../screens/GuideLibraryScreen';
+import GuideDetailScreen from '../screens/GuideDetailScreen';
 import NotificationScreen from '../screens/NotificationScreen';
 import SignupAgreementScreen from '../screens/SignupAgreementScreen';
 import SignupProfileScreen from '../screens/SignupProfileScreen';
@@ -196,6 +198,16 @@ const AppNavigator = () => {
         name="Guide"
         component={GuideScreen}
         options={{ title: '이용 가이드' }}
+      />
+      <Stack.Screen
+        name="GuideLibrary"
+        component={GuideLibraryScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="GuideDetail"
+        component={GuideDetailScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="Notifications"

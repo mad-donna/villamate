@@ -183,6 +183,12 @@ const DashboardScreen = ({ navigation }: any) => {
       color: '#FF2D55',
       onPress: () => navigation.navigate('PollList', { villaId: villaData.id, userId: adminUserId, userRole: 'ADMIN' }),
     },
+    {
+      label: '관리자 가이드',
+      icon: 'book-outline' as const,
+      color: '#5856D6',
+      onPress: () => navigation.navigate('GuideLibrary'),
+    },
   ];
 
   return (

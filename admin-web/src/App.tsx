@@ -8,6 +8,7 @@ import VillaDetail from './pages/VillaDetail';
 import ProtectedRoute from './components/ProtectedRoute';
 import SystemNotices from './pages/SystemNotices';
 import Faqs from './pages/Faqs';
+import Guides from './pages/Guides';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="villas/:villaId" element={<VillaDetail />} />
           <Route path="notices" element={<SystemNotices />} />
           <Route path="faqs" element={<Faqs />} />
+          <Route path="guides" element={<Guides />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

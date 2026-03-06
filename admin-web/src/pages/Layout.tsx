@@ -6,6 +6,7 @@ const navItems = [
   { to: '/villas', label: '빌라 관리', icon: '🏢' },
   { to: '/notices', label: '공지사항 관리', icon: '📢' },
   { to: '/faqs', label: 'FAQ 관리', icon: '❓' },
+  { to: '/guides', label: '매거진/가이드 관리', icon: '📚' },
 ];
 
 export default function Layout() {
