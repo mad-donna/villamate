@@ -15,7 +15,8 @@
       "Bash(npm test:*)",
       "Bash(npm create:*)",
       "Bash(npm run:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(grep \"\"version\"\":*)"
     ]
   }
 }

@@ -640,3 +640,59 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 3. **미납자 알림 자동화**: cron 기반 미납자 자동 푸시 알림 (핵심 기획 요구사항)
 4. **JWT 인증 미들웨어**: 앱 API 전체 보안 강화 + 구독 상태 체크 연동
 5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
+
+---
+
+### 2026-03-06 — 관리자 가이드 라이브러리, Admin 웹 대시보드 시각화, 보안 취약점 수정 세션
+
+#### 이 세션에서 완성된 기능 및 제품 결정
+
+**관리자 가이드 라이브러리 — B2B SaaS 핵심 가치 기여**
+- **제품 결정 배경**: 동대표들이 관리비 분쟁, 하자 처리, 법적 의무 등 실무 정보를 검색하는 데 시간을 낭비함. 빌라메이트가 정보 허브 역할을 하면 앱 내 체류 시간 증가 + 이탈율 감소 기대
+- **콘텐츠 카테고리 7개**: 하자관리 / 관리비 / 시설관리 / 세입자관리 / 건물운영 / 유지보수 / 법/제도
+- **운영 플로우**: Admin 웹 → 리치 텍스트 편집기(Tiptap)로 가이드 작성 → 앱에서 입주민/동대표 모두 열람
+- **Tiptap 선택 이유**: react-quill은 React 19와 호환 불가(ref 방식 변경) → Tiptap이 유일한 실용적 대안
+- **리치 텍스트 렌더링**: `react-native-render-html` + `tagsStyles`로 H2/H3/ul/li/strong/em 앱 내 스타일링
+- **비즈니스 임팩트**: 가이드 라이브러리는 경쟁 서비스와의 차별화 요소이자 동대표 유입 채널로 활용 가능
+
+**Admin 웹 대시보드 시각화 — 운영 인텔리전스 강화**
+- **제품 결정 배경**: Admin 웹 대시보드가 빈 화면이라 운영팀이 서비스 현황 파악 불가
+- **구현 내용**: KPI 카드 4개 (전체 빌라/사용자/가이드/FAQ 수) + Recharts 시각화
+  - `PieChart`: 구독 상태별 빌라 분포 (FREE_TRIAL / ACTIVE / EXPIRED)
+  - `BarChart`: 최근 7일 신규 가입 추이
+- **데이터 엔드포인트**: `GET /api/admin/stats` (SUPER_ADMIN 전용, Prisma groupBy 활용)
+
+**보안 취약점 C1~C5 수정 완료 — 서비스 보안 기준선 달성**
+- **C2 (민감 정보 노출)**: 모든 auth 응답에서 `password`, `expoPushToken`, `providerId` 제거 → `sanitizeUser()` 헬퍼 함수 전체 적용
+- **C1 (모바일 JWT 미발급)**: 모든 로그인/가입 엔드포인트에 30일 만료 JWT 발급 추가
+- **C4 (구독 관리 미인증)**: `PATCH /api/villas/:villaId/subscribe`에 `authenticateUser` + SUPER_ADMIN 역할 체크 적용
+- **C5 (XSS 취약)**: Admin 웹 `Guides.tsx`에 `DOMPurify.sanitize()` 래핑
+- **전략적 의의**: C1~C5 완료로 외부 감사 전 최소 보안 기준선 확보. JWT 토큰 클라이언트 AsyncStorage 저장 작업은 다음 세션 진행 예정
+
+#### 현재 MVP 기능 현황 (2026-03-06 기준)
+
+| 기능 | 상태 | 비고 |
+|------|------|------|
+| 이메일 로그인 | ✅ | JWT 토큰 발급 (**신규** — C1 수정) |
+| 회원가입 3단계 + 역할 선택 | ✅ | |
+| 빌라 등록 (동대표) | ✅ | |
+| 청구서 발행/납부 | ✅ | |
+| 커뮤니티/민원 | ✅ | |
+| 전자투표 (1세대 1표) | ✅ | |
+| 푸시 알림 + 알림함 | ✅ | |
+| SaaS 구독 관리 | ✅ | |
+| Admin 웹 패널 | ✅ | |
+| **관리자 가이드 라이브러리** | ✅ | **신규** — Tiptap 편집기 + 모바일 HTML 렌더링 |
+| **Admin 웹 대시보드 시각화** | ✅ | **신규** — KPI 카드 + Recharts PieChart/BarChart |
+| **보안 수정 C1~C5** | ✅ | **신규** — sanitizeUser, JWT 발급, DOMPurify |
+| 미납자 알림 (자동 푸시) | ❌ | 미구현 — 핵심 기획 요구사항 잔여 |
+| 서버 결제 검증 | ❌ | 보안 취약 |
+| 공용 장부 실데이터 연동 | ❌ | 더미 데이터 유지 중 |
+
+#### 다음 우선순위 (2026-03-06 업데이트)
+
+1. **JWT 클라이언트 저장**: AsyncStorage에 토큰 저장 → 모바일 API 인증 헤더 적용 (C1 완성)
+2. **미납자 알림 자동화**: cron 기반 미납자 자동 푸시 알림
+3. **구독 만료 API 제한**: EXPIRED 상태 시 핵심 기능 제한 미들웨어
+4. **PG 결제 서버 검증**: imp_uid → PortOne API 서버 검증
+5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 DB 연동

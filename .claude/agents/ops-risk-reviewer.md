@@ -559,6 +559,63 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 
 ---
 
+### 2026-03-06 — 관리자 가이드 라이브러리, Admin 웹 대시보드 시각화, 보안 취약점 수정 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] C2: 인증 응답에 password 필드 노출**
+- 기존: `res.json(user)` — bcrypt 해시 포함된 password 필드가 모든 인증 응답에 노출
+- 해결: `sanitizeUser()` 헬퍼로 `password`, `expoPushToken`, `providerId` 제거 후 응답
+- 8개 엔드포인트 모두 적용 완료
+- **[RESOLVED]** 2026-03-02부터 존재했던 bcrypt 해시 노출 위험 해소
+
+**[RESOLVED] C1: 모바일 로그인 API JWT 미발급**
+- 기존: 로그인/회원가입 응답에 JWT 없음 → 모바일 클라이언트가 인증 토큰 없이 동작
+- 해결: 모든 로그인/회원가입 응답에 `jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '30d' })` 추가
+- 이제 모바일 앱이 수신한 `token`을 저장하여 인증 필요 요청에 사용 가능
+- **주의**: 모바일 앱(AsyncStorage)에 token 저장 로직은 아직 미구현 — 다음 스프린트에서 반드시 추가 필요
+
+**[RESOLVED] C4: PATCH /api/villas/:villaId/subscribe 무인증 구독 활성화**
+- 기존: 누구나 villaId만 알면 구독을 무료로 ACTIVE로 변경 가능
+- 해결: `authenticateUser` 미들웨어 + `role !== 'SUPER_ADMIN'` 시 403 반환
+- **[RESOLVED]** SaaS BM 핵심 게이트웨이 보호
+
+**[RESOLVED] C5: Admin 웹 XSS — dangerouslySetInnerHTML**
+- 기존: DB에 저장된 Rich Text HTML을 `dangerouslySetInnerHTML={{ __html: guide.content }}`로 직접 렌더링
+- 해결: `DOMPurify.sanitize(guide.content)` 적용
+- **[RESOLVED]** Admin 내부 도구라도 XSS 방지 필수 (악의적 관리자 또는 DB 주입 공격 대비)
+
+**[NEW-LOW] 모바일 앱 JWT token 미저장**
+- 백엔드가 `token`을 응답에 포함하기 시작했으나, 모바일 앱 측에서 AsyncStorage에 저장하는 로직 미구현
+- 현재 상태: JWT 발급은 되지만 앱에서 사용하지 않음 → 인증 미들웨어 적용 효과가 없음
+- 해결 필요: 각 로그인 화면(LoginScreen, EmailLoginScreen, SocialLogin 등)에서 `token` 수신 후 `AsyncStorage.setItem('token', token)` 저장 + 모든 fetch 요청에 `Authorization: Bearer ${token}` 헤더 추가
+
+**[NEW-LOW] /api/guides POST/PUT/DELETE — Admin 앱에서도 가이드 관리 가능성**
+- SUPER_ADMIN JWT로만 보호되어 있으나, 일반 Admin 사용자도 JWT가 생기면 접근 시도 가능
+- SUPER_ADMIN role 체크는 올바르게 적용됨 → 일반 Admin 접근 차단 보장
+
+#### 현재 누적 위험 현황 요약 (2026-03-06 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| ~~C2: password 필드 API 응답 노출~~ | HIGH | **해결됨** (sanitizeUser 적용) |
+| ~~C4: 구독 활성화 무인증~~ | HIGH | **해결됨** (SUPER_ADMIN 인증) |
+| ~~C5: Admin 웹 XSS~~ | HIGH | **해결됨** (DOMPurify) |
+| 모바일 앱 JWT token 미저장 | MEDIUM | **신규**, 다음 스프린트 필수 |
+| API 인증 미들웨어 없음 (앱 API 전반) | HIGH | 부분 해소(구독), 전반 미해결 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| JWT_SECRET 하드코딩 폴백 | HIGH | 배포 전 필수 조치 |
+| termsAgreed 서버 미검증 | HIGH | 법적 리스크 |
+| 구독 쿠폰 서버 미검증 | HIGH | SaaS BM 리스크 |
+| 구독 만료 시 API 접근 제한 없음 | MEDIUM | JWT 적용 시 추가 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
+
+---
+
 ### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
 
 #### 이 세션에서 추가된 운영 위험 및 완화 조치

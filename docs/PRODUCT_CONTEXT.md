@@ -1022,3 +1022,120 @@ Expo 푸시 알림(1단계)에 이어, 앱 내 영구 알림함(2단계) 구현.
 3. **미납자 알림 자동화**: cron 기반 미납자 자동 푸시 알림 (핵심 기획 요구사항 — 계속 미구현)
 4. **JWT 인증 미들웨어**: 앱 API 전체 보안 강화 + 구독 상태 체크 연동
 5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
+
+---
+
+## 17. MVP 구현 현황 (2026-03-06 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### 관리자 가이드 라이브러리 (신규)
+
+동대표 실무 지식 허브 — 관리비 분쟁, 하자 처리, 법적 의무 등 카테고리별 아티클 제공.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `Guide` 모델 신규 (id uuid, category, title, content HTML, thumbnailUrl?, createdAt) |
+| 백엔드 | `GET /api/guides`, `GET /api/guides/:id` (공개) |
+| 백엔드 | `POST/PUT/DELETE /api/guides` (SUPER_ADMIN JWT 전용) |
+| Admin 웹 | `Guides.tsx` — Tiptap 리치 텍스트 편집기 (Bold/Italic/H2/H3/목록/인용 툴바) |
+| Admin 웹 | 썸네일 이미지 업로드 (`POST /api/upload`) |
+| 모바일 | `GuideLibraryScreen.tsx` — 카테고리 칩 필터, 썸네일 카드 목록 |
+| 모바일 | `GuideDetailScreen.tsx` — `react-native-render-html`로 HTML 렌더링, tagsStyles 적용 |
+| 콘텐츠 분류 | 하자관리 / 관리비 / 시설관리 / 세입자관리 / 건물운영 / 유지보수 / 법/제도 |
+
+- **기술 선택**: react-quill은 React 19 호환 불가 → Tiptap(`@tiptap/react`) 채택
+- **모바일 렌더링**: `react-native-render-html` + `tagsStyles` 객체로 커스텀 스타일 적용
+
+#### Admin 웹 대시보드 시각화 (신규)
+
+운영팀이 서비스 현황을 한눈에 파악할 수 있는 관리 대시보드.
+
+| 구분 | 내용 |
+|------|------|
+| 백엔드 | `GET /api/admin/stats` 신규 (SUPER_ADMIN 전용, Prisma groupBy 활용) |
+| KPI 카드 | 전체 빌라 수 / 사용자 수 / 가이드 수 / FAQ 수 |
+| PieChart | 구독 상태별 빌라 분포 (FREE_TRIAL=파랑 / ACTIVE=초록 / EXPIRED=빨강) |
+| BarChart | 최근 7일 신규 가입 추이 |
+| 패키지 | `recharts` (Recharts 라이브러리) |
+
+#### 보안 취약점 C1~C5 전체 수정 완료
+
+보안 감사에서 식별된 5개 취약점 중 C1~C5 백엔드/프론트엔드 수정 완료.
+
+| 취약점 | 내용 | 수정 방식 |
+|--------|------|-----------|
+| C1 | 모바일 로그인 JWT 미발급 | 모든 login/register 엔드포인트에 30일 만료 JWT 발급 추가 |
+| C2 | auth 응답에 password/expoPushToken/providerId 포함 | `sanitizeUser()` 헬퍼 전체 적용 |
+| C4 | 구독 관리 엔드포인트 인증 없음 | `authenticateUser` 미들웨어 + SUPER_ADMIN 역할 체크 |
+| C5 | Admin 웹 XSS 취약점 (dangerouslySetInnerHTML) | `DOMPurify.sanitize()` 래핑 (`dompurify` + `@types/dompurify` 설치) |
+
+- **잔여 작업**: 모바일 클라이언트 AsyncStorage에 JWT 토큰 저장 → 다음 세션 완성 예정
+
+### 현재 구현된 전체 화면 목록 (2026-03-06 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `ProfileSetupScreen`, `OnboardingScreen`, `ResidentJoinScreen`
+- `SignupAgreementScreen` (회원가입 Step 2: 약관 동의)
+- `SignupProfileScreen` (회원가입 Step 3: 프로필 입력)
+- `SelectRoleScreen` (회원가입 Step 4: 역할 선택 분기)
+
+#### 관리자 탭 (4개)
+- `DashboardScreen` (홈 — 롤링배너+위젯, 🔔), `BoardScreen` (커뮤니티+민원), `ManagementScreen` (관리), `ProfileScreen` (iOS 설정 스타일)
+
+#### 입주민 탭 (4개)
+- `ResidentDashboardScreen` (홈 — 롤링배너+위젯, 🔔), `BoardScreen` (커뮤니티+민원), `OurVillaScreen` (우리 빌라), `ProfileScreen` (iOS 설정 스타일)
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen`, `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen`, `CreatePostScreen`
+- `ParkingSearchScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen`
+- `VehicleManagementScreen`, `ChangePasswordScreen`, `MyPostsScreen`
+- `GuideScreen`, `NotificationScreen`
+- `CustomerCenterScreen`, `SystemNoticeScreen`
+- `VillaSearchScreen`, `ContractDetailScreen`, `AdminSubscriptionScreen`, `ResidentInvoiceScreen`
+- `GuideLibraryScreen` ← NEW (관리자 가이드 라이브러리 목록)
+- `GuideDetailScreen` ← NEW (가이드 상세 — HTML 렌더링)
+
+#### Admin 웹 (`admin-web/`)
+- `LoginPage`, `UsersPage`, `VillasPage`, `FaqPage`, `NoticePage`
+- `Guides.tsx` ← NEW (가이드 CRUD — Tiptap 편집기)
+- `Dashboard.tsx` ← NEW (KPI 카드 + Recharts 차트)
+
+### 현재 기술 스택 (2026-03-06 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~1800+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| API 설정 | `frontend/src/config.ts` (API_BASE_URL 중앙화) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker v8.4.4 |
+| 키보드 처리 | 표준 KeyboardAvoidingView + ScrollView |
+| SafeArea | react-native-safe-area-context |
+| 푸시 알림 | expo-notifications + expo-device + expo-server-sdk |
+| 비밀번호 | bcryptjs (hash rounds: 10) |
+| 테스트 | Jest + supertest |
+| Admin 웹 | React + Vite + TypeScript (`admin-web/`) |
+| Admin 인증 | jsonwebtoken (JWT, SUPER_ADMIN 역할 기반) |
+| SaaS BM | 수동 계좌 송금 + 쿠폰 방식 (PG 없음) |
+| 리치 텍스트 편집 | @tiptap/react + StarterKit + Underline + Link |
+| HTML 렌더링 (모바일) | react-native-render-html |
+| 대시보드 차트 | Recharts (PieChart, BarChart, ResponsiveContainer) |
+| XSS 방지 | DOMPurify (admin-web) |
+
+### 다음 개발 우선순위 (2026-03-06 업데이트)
+
+1. **JWT 클라이언트 저장 완성**: AsyncStorage에 토큰 저장 → 모바일 API 인증 헤더 일괄 적용 (C1 클라이언트 완성)
+2. **미납자 알림 자동화**: cron 기반 미납자 자동 푸시 알림 (핵심 기획 요구사항 — 계속 미구현)
+3. **구독 만료 API 제한**: EXPIRED 상태 시 핵심 기능 제한 서버 미들웨어
+4. **PG 결제 서버 검증**: `imp_uid` → PortOne API 서버 검증 (보안 필수)
+5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동

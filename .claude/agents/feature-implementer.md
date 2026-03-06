@@ -644,6 +644,57 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 
 ---
 
+### 2026-03-06 — 관리자 가이드 라이브러리, Admin 웹 대시보드 시각화, 보안 취약점 수정 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **관리자 가이드 라이브러리** (매거진 스타일 콘텐츠 시스템)
+   - DB: `Guide` 모델 추가 (id uuid, category, title, content, thumbnailUrl?, createdAt)
+   - 백엔드: `GET/POST/PUT/DELETE /api/guides`, `GET /api/guides/:id` (GET은 공개, 나머지는 SUPER_ADMIN)
+   - Admin 웹: `admin-web/src/pages/Guides.tsx` 신규 — Tiptap 리치 에디터, 카테고리 드롭다운, 썸네일 업로드, 그리드 목록
+   - 모바일: `GuideLibraryScreen.tsx` 신규 — 카테고리 탭 필터, FlatList 카드, featuredCard(첫 번째 더 크게)
+   - 모바일: `GuideDetailScreen.tsx` 신규 — `react-native-render-html` HTML 렌더링, 히어로 이미지, 카테고리 뱃지
+   - Admin 웹 `Layout.tsx` + `App.tsx` 업데이트 (네비게이션 + 라우트 등록)
+   - `AppNavigator.tsx` + `DashboardScreen.tsx` 업데이트 (GuideLibrary 라우트 + 홈 퀵액션)
+
+2. **Admin 웹 대시보드 시각화** (`admin-web/src/pages/Dashboard.tsx` 완전 재작성)
+   - 백엔드: `GET /api/admin/stats` — Prisma `groupBy`로 빌라 구독 상태별 카운트, 사용자 역할별 카운트
+   - KPI 카드 3개: 총 가입자 수(파랑) / 총 등록 빌라 수(초록) / 프리미엄 구독 빌라 수(주황)
+   - PieChart(도넛): 빌라 구독 현황 (FREE_TRIAL / ACTIVE / EXPIRED)
+   - BarChart: 사용자 역할별 분포 (ADMIN / RESIDENT / SUPER_ADMIN)
+   - 패키지: `recharts` 설치, `<ResponsiveContainer width="100%" height={240}>` 래핑
+
+3. **보안 취약점 수정 (C1~C5)**
+   - C2: `sanitizeUser()` 헬퍼 추가 + 8개 인증/유저 엔드포인트에 적용 (password 필드 제거)
+   - C1: 모든 로그인/회원가입 엔드포인트에 JWT 발급 (`expiresIn: '30d'`), 응답에 `token` 포함
+   - C4: `PATCH /api/villas/:villaId/subscribe`에 `authenticateUser` + SUPER_ADMIN 체크 추가
+   - C5: Admin 웹 `Guides.tsx`에 `DOMPurify.sanitize()` 적용 (`dompurify` 설치)
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **React 19 Rich Text Editor**: `react-quill` 사용 불가 → `@tiptap/react` + `StarterKit` + 확장 모듈 조합
+- **Tiptap 툴바 버튼**: `onMouseDown={(e) => { e.preventDefault(); onClick(); }}` — `onClick` 대신 `onMouseDown` 사용하여 에디터 포커스 유지
+- **Tiptap 외부 value sync**: `useRef(value)` + `useEffect`로 prevValue 추적, 변경 시 `editor.commands.setContent(value, false)` 호출
+- **useFocusEffect + selectedCategory 의존성**: 카테고리 필터 탭이 있는 목록 화면에서 `useCallback([selectedCategory])` 패턴으로 탭 변경 + 포커스 시 자동 fetch
+- **react-native-render-html 사용법**:
+  ```tsx
+  import RenderHtml from 'react-native-render-html';
+  const { width } = useWindowDimensions();
+  <RenderHtml contentWidth={width} source={{ html: content }} tagsStyles={tagsStyles} enableExperimentalMarginCollapsing />
+  ```
+- **Recharts 기본 패턴** (admin-web):
+  ```tsx
+  import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+  // ResponsiveContainer로 반드시 래핑 (width="100%")
+  ```
+- **DOMPurify 사용법** (admin-web React):
+  ```tsx
+  import DOMPurify from 'dompurify';
+  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent) }}
+  ```
+
+---
+
 ### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
 
 #### 이 세션에서 구현한 기능

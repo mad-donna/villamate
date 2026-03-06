@@ -654,6 +654,73 @@ jest.mock('expo-server-sdk', () => {
 
 ---
 
+### 2026-03-06 — 관리자 가이드 라이브러리, Admin 웹 대시보드 시각화, 보안 취약점 수정 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **관리자 가이드 라이브러리** 전체 구현 (백엔드 + Admin 웹 + 모바일)
+- **Admin 웹 대시보드 시각화** (Recharts KPI 카드, PieChart, BarChart)
+- **보안 취약점 C1~C5 수정** (sanitizeUser, JWT 발급, 구독 인증, DOMPurify)
+
+#### 발견된 주요 패턴 / 수정 내용
+
+**[RESOLVED] C2: 인증 응답에 password/expoPushToken/providerId 필드 노출**
+- `sanitizeUser<T>()` 제네릭 헬퍼 추가 — 민감 필드 3개를 구조분해로 제거
+- 적용 대상: `/api/auth/login`, `/api/auth/email-login` (2개 경로), `/api/auth/register`, `PUT /api/users/:userId`, `PATCH /api/users/:userId/push-token`, `/api/auth/social-login` (2개 경로), `PUT /api/users/:id`
+- **교훈**: Prisma `findUnique` 응답은 항상 모든 컬럼을 포함 → API 응답 직전 sanitize 필수
+
+**[RESOLVED] C1: 모바일 로그인 엔드포인트 JWT 미발급**
+- 모든 로그인/회원가입 응답에 `jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '30d' })` 추가
+- 응답 포맷: `{ ...sanitizeUser(user), token }` — 기존 필드 유지 + token 추가
+- **교훈**: 로그인 API가 JWT를 발급하지 않으면 이후 인증 미들웨어 적용이 불가능 — 두 작업은 항상 동시에 설계해야 함
+
+**[RESOLVED] C4: PATCH /api/villas/:villaId/subscribe 인증 없이 구독 활성화 가능**
+- `authenticateUser` 미들웨어 + `role === 'SUPER_ADMIN'` 체크 추가 → 403 반환
+- **교훈**: 구독 활성화 같이 금전적 가치가 있는 상태 변경 엔드포인트는 반드시 최강 인증 수준 적용
+
+**[RESOLVED] C5: Admin 웹 가이드 목록 미리보기 XSS**
+- `dangerouslySetInnerHTML={{ __html: guide.content }}` → `DOMPurify.sanitize(guide.content)` 적용
+- `dompurify @types/dompurify` 설치
+- **교훈**: Admin 웹이라도 신뢰할 수 없는 HTML(DB 저장된 Rich Text 콘텐츠)을 그대로 렌더링하면 XSS 위험
+
+**[GOOD] react-quill 대신 Tiptap 선택 — React 19 호환**
+- `react-quill`은 `peer react@"^16 || ^17 || ^18"` 제약으로 React 19에서 설치 실패
+- `@tiptap/react` + `@tiptap/starter-kit` + `@tiptap/extension-underline` + `@tiptap/extension-link` 조합으로 대체
+- Tiptap `useEditor` + `onMouseDown` + `e.preventDefault()` 패턴으로 툴바 구현
+- **교훈**: React 19 프로젝트에서 Rich Text Editor는 Tiptap이 현재 유일한 안정적 선택
+
+**[PATTERN] 조건부 이미지 렌더링 — placeholder 공간 없애기**
+- `hasThumbnail = !!item.thumbnailUrl` 로 사전 판별 → false이면 `<Image>` 자체를 렌더링하지 않음
+- `Image` 컴포넌트에 `null`을 source로 넘기면 높이를 차지하는 빈 공간이 생김 → 조건부 렌더링이 올바른 방식
+
+#### 이 세션에서 추가된 코딩 패턴
+
+- **sanitizeUser 패턴**:
+  ```typescript
+  function sanitizeUser<T extends { password?: string | null; expoPushToken?: string | null; providerId?: string | null }>(user: T) {
+    const { password: _p, expoPushToken: _e, providerId: _pr, ...safe } = user as any;
+    return safe;
+  }
+  // 사용: res.json({ ...sanitizeUser(user), token })
+  ```
+
+- **authenticateUser 미들웨어 패턴**:
+  ```typescript
+  function authenticateUser(req: Request, res: Response, next: Function) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET) as { userId: string; role: string };
+      (req as any).user = decoded;
+      next();
+    } catch { return res.status(401).json({ error: 'Invalid or expired token' }); }
+  }
+  ```
+
+- **react-native-render-html tagsStyles 패턴**: h1~h6, p, strong, em, blockquote, hr, ul, ol, li, a 모두 명시적으로 정의해야 올바른 렌더링 보장. `useWindowDimensions()` hook으로 `contentWidth` 동적 제공 필수
+
+---
+
 ### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
 
 #### 이 세션에서 리뷰/검토한 주요 내용

@@ -1138,3 +1138,110 @@ SelectRoleScreen (NEW)
 - `Ticket` 모델 schema.prisma에 잔존 → 마이그레이션 제거 권장
 - ~~API_BASE_URL 하드코딩~~ → **[RESOLVED]**
 - ~~비밀번호 미저장~~ → **[RESOLVED]**
+
+---
+
+### 2026-03-06 — 관리자 가이드 라이브러리, Admin 웹 대시보드 시각화, 보안 취약점 수정 세션
+
+#### 데이터 모델 변경 사항
+
+**Guide 모델 신규 추가**
+```
+Guide (id: uuid)
+  ├── category    String       (하자관리|관리비|시설관리|세입자관리|건물운영|유지보수|법/제도)
+  ├── title       String
+  ├── content     String       (Tiptap HTML)
+  ├── thumbnailUrl String?
+  └── createdAt   DateTime
+```
+- Villa와 연관 없는 전역 콘텐츠 — 모든 사용자에게 공개
+
+#### 신규 엔드포인트 (2026-03-06 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `GET` | `/api/guides` | 가이드 목록 (공개) |
+| `GET` | `/api/guides/:id` | 가이드 상세 (공개) |
+| `POST` | `/api/guides` | 가이드 등록 (SUPER_ADMIN 전용) |
+| `PUT` | `/api/guides/:id` | 가이드 수정 (SUPER_ADMIN 전용) |
+| `DELETE` | `/api/guides/:id` | 가이드 삭제 (SUPER_ADMIN 전용) |
+| `GET` | `/api/admin/stats` | 운영 통계 (SUPER_ADMIN 전용) |
+
+#### /api/admin/stats 응답 구조
+
+```typescript
+{
+  totalVillas: number,
+  totalUsers: number,
+  totalGuides: number,
+  totalFaqs: number,
+  subscriptionBreakdown: [{ subscriptionStatus, _count }],  // groupBy
+  recentSignups: [{ date, count }],                          // 최근 7일
+}
+```
+
+#### 신규 화면 및 네비게이션 업데이트
+
+```
+모바일 (frontend/src/screens/) — 2026-03-06 추가분:
+├── GuideLibraryScreen.tsx   ← 카테고리 필터 + 가이드 카드 목록
+└── GuideDetailScreen.tsx    ← react-native-render-html로 HTML 렌더링
+
+Admin 웹 (admin-web/src/pages/) — 2026-03-06 추가분:
+├── Guides.tsx               ← Tiptap 리치 텍스트 편집기 + CRUD
+└── Dashboard.tsx            ← KPI 카드 + Recharts PieChart/BarChart
+```
+
+#### 보안 아키텍처 개선 (C1~C5)
+
+**sanitizeUser 헬퍼 패턴**
+```typescript
+function sanitizeUser<T extends { password?: unknown; expoPushToken?: unknown; providerId?: unknown }>(user: T) {
+  const { password, expoPushToken, providerId, ...safe } = user;
+  return safe;
+}
+// 모든 auth 엔드포인트 응답에 적용
+res.json({ ...sanitizeUser(user), token });
+```
+
+**authenticateUser 미들웨어 (기존 패턴 확장 적용)**
+```typescript
+// PATCH /api/villas/:villaId/subscribe
+app.patch('/api/villas/:villaId/subscribe', authenticateUser, async (req, res) => {
+  if ((req as any).user?.role !== 'SUPER_ADMIN') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  // ...
+});
+```
+
+**JWT 발급 표준 (30일)**
+```typescript
+const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
+res.status(200).json({ ...sanitizeUser(user), token });
+```
+
+#### Admin 웹 시각화 아키텍처 (Recharts)
+
+```
+Dashboard.tsx
+  └── GET /api/admin/stats (Bearer JWT)
+        ├── KPI 카드 × 4 (grid)
+        ├── PieChart (subscriptionBreakdown)
+        │     └── ResponsiveContainer > PieChart > Pie > Cell (색상: ACTIVE=초록, FREE_TRIAL=파랑, EXPIRED=빨강)
+        └── BarChart (recentSignups)
+              └── ResponsiveContainer > BarChart > Bar fill="#3b82f6"
+```
+
+#### 알려진 기술 부채 (2026-03-06 업데이트)
+
+- ~~민감 정보 auth 응답 노출 (C2)~~ → **[RESOLVED]** `sanitizeUser()` 전체 적용
+- ~~모바일 JWT 미발급 (C1)~~ → **[RESOLVED]** 30일 JWT 백엔드 발급 완료 (클라이언트 저장은 미완)
+- ~~구독 관리 엔드포인트 미인증 (C4)~~ → **[RESOLVED]** `authenticateUser` + SUPER_ADMIN 체크
+- ~~Admin 웹 XSS 취약점 (C5)~~ → **[RESOLVED]** `DOMPurify.sanitize()` 적용
+- 모바일 JWT 클라이언트 AsyncStorage 저장 미완 → 다음 세션 완성 필요
+- 인증 미들웨어 미적용 (앱 일반 API) → JWT 전체 확산 필요
+- 단일 index.ts (~1800+ 라인) → 도메인별 라우터 분리 시급
+- 업로드 파일 로컬 저장 → S3 마이그레이션
+- ~~API_BASE_URL 하드코딩~~ → **[RESOLVED]**
+- ~~비밀번호 미저장~~ → **[RESOLVED]**
