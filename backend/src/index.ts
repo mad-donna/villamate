@@ -9,6 +9,7 @@ import fs from 'fs';
 import { Expo } from 'expo-server-sdk';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { sendPushToTokens } from './utils/push';
 
 dotenv.config();
 
@@ -686,6 +687,65 @@ app.patch('/api/villas/:villaId/subscribe', authenticateUser, async (req: Reques
   } catch (error) {
     console.error('Subscribe error:', error);
     res.status(500).json({ error: 'Failed to activate subscription' });
+  }
+});
+
+// Mock Auto-Billing: register a card and activate subscription
+app.post('/api/villas/:villaId/billing', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  const { cardNumber, expireMonth, expireYear, password, adminId } = req.body;
+  if (!cardNumber || !expireMonth || !expireYear || !password || !adminId) {
+    return res.status(400).json({ error: 'cardNumber, expireMonth, expireYear, password, adminId are required' });
+  }
+
+  try {
+    const villa = await prisma.villa.findUnique({ where: { id: villaId } });
+    if (!villa) return res.status(404).json({ error: 'Villa not found' });
+    if (villa.adminId !== String(adminId)) {
+      return res.status(403).json({ error: 'Not the admin of this villa' });
+    }
+
+    const fakeBillingKey = `bk_mock_${Date.now()}`;
+    const rawCard = String(cardNumber).replace(/\s/g, '');
+    const last4 = rawCard.slice(-4);
+    const maskedCard = `****-****-****-${last4}`;
+    const subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    await prisma.villa.update({
+      where: { id: villaId },
+      data: {
+        isAutoBilling: true,
+        billingKey: fakeBillingKey,
+        maskedCard,
+        subscriptionStatus: 'ACTIVE',
+        subscriptionExpiry,
+      },
+    });
+
+    res.json({ success: true, maskedCard, subscriptionExpiry });
+  } catch (error) {
+    console.error('Billing registration error:', error);
+    res.status(500).json({ error: 'Failed to register billing' });
+  }
+});
+
+// Mock Auto-Billing: get current billing status for a villa
+app.get('/api/villas/:villaId/billing', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  try {
+    const villa = await prisma.villa.findUnique({
+      where: { id: villaId },
+      select: { isAutoBilling: true, maskedCard: true, subscriptionExpiry: true, subscriptionStatus: true },
+    });
+    if (!villa) return res.status(404).json({ error: 'Villa not found' });
+    res.json(villa);
+  } catch (error) {
+    console.error('Billing fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch billing info' });
   }
 });
 
@@ -1786,26 +1846,41 @@ app.post('/api/villas/:villaId/polls', async (req: Request, res: Response) => {
   }
 });
 
-// Get all polls for a villa (with options and vote counts)
+// Get all polls for a villa (with options, vote counts, participation rate, and anonymous masking)
 app.get('/api/villas/:villaId/polls', async (req: Request, res: Response) => {
   const villaId = parseInt(String(req.params.villaId), 10);
   if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
 
   try {
-    const polls = await prisma.poll.findMany({
-      where: { villaId },
-      include: {
-        options: {
-          include: {
-            _count: { select: { votes: true } },
-            votes: { select: { roomNumber: true, voterId: true } },
+    const [polls, totalEligibleVoters] = await Promise.all([
+      prisma.poll.findMany({
+        where: { villaId },
+        include: {
+          options: {
+            include: {
+              _count: { select: { votes: true } },
+              votes: { select: { roomNumber: true, voterId: true } },
+            },
           },
+          _count: { select: { votes: true } },
         },
-        _count: { select: { votes: true } },
-      },
-      orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.residentRecord.count({ where: { villaId } }),
+    ]);
+
+    const result = polls.map(poll => {
+      const totalVotes = poll._count.votes;
+      const options = poll.isAnonymous
+        ? poll.options.map(opt => ({
+            ...opt,
+            votes: opt.votes.map(() => ({ roomNumber: '익명', voterId: null })),
+          }))
+        : poll.options;
+      return { ...poll, options, totalVotes, totalEligibleVoters };
     });
-    res.status(200).json(polls);
+
+    res.status(200).json(result);
   } catch (error) {
     console.error('Fetch polls error:', error);
     res.status(500).json({ error: 'Failed to fetch polls' });
@@ -1863,6 +1938,75 @@ app.post('/api/villas/:villaId/polls/:pollId/vote', async (req: Request, res: Re
   } catch (error) {
     console.error('Cast vote error:', error);
     res.status(500).json({ error: 'Failed to cast vote' });
+  }
+});
+
+// Send reminder push notification to non-voters of a poll (ADMIN only)
+app.post('/api/polls/:pollId/remind', async (req: Request, res: Response) => {
+  const pollId = String(req.params.pollId);
+  const { adminId } = req.body;
+
+  if (!adminId) {
+    return res.status(400).json({ error: 'adminId is required' });
+  }
+
+  try {
+    // 1. Find the poll and verify it belongs to a villa managed by adminId
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: { villa: true },
+    });
+    if (!poll) return res.status(404).json({ error: '투표를 찾을 수 없습니다.' });
+    if (poll.villa.adminId !== String(adminId)) {
+      return res.status(403).json({ error: '권한이 없습니다.' });
+    }
+    if (new Date() > poll.endDate) {
+      return res.status(400).json({ error: '이미 종료된 투표입니다.' });
+    }
+
+    // 2. Get all residents of the villa
+    const residents = await prisma.residentRecord.findMany({
+      where: { villaId: poll.villaId },
+      include: { user: true },
+    });
+
+    // 3. Get userIds who already voted
+    const votes = await prisma.vote.findMany({
+      where: { pollId },
+      select: { voterId: true },
+    });
+    const voterIds = new Set(votes.map((v) => v.voterId));
+
+    // 4. Filter non-voters and collect their push tokens
+    const nonVoters = residents.filter((r) => !voterIds.has(r.userId));
+    const tokens = nonVoters
+      .map((r) => r.user.expoPushToken)
+      .filter((t): t is string => !!t);
+
+    // 5. Send push notifications
+    const sent = await sendPushToTokens(
+      tokens,
+      '투표 마감 임박!',
+      '아직 참여하지 않은 투표가 있습니다. 앱을 열어 투표해 주세요!',
+      { pollId, villaId: poll.villaId }
+    );
+
+    // 6. Save in-app notifications for non-voters
+    const nonVoterUserIds = nonVoters.map((r) => r.userId);
+    if (nonVoterUserIds.length > 0) {
+      await prisma.notification.createMany({
+        data: nonVoterUserIds.map((uid) => ({
+          userId: uid,
+          title: '투표 마감 임박!',
+          body: `[${poll.title}] 아직 참여하지 않은 투표가 있습니다. 앱을 열어 투표해 주세요!`,
+        })),
+      });
+    }
+
+    res.status(200).json({ success: true, nonVoterCount: nonVoters.length, sent });
+  } catch (error) {
+    console.error('Poll remind error:', error);
+    res.status(500).json({ error: 'Failed to send reminders' });
   }
 });
 

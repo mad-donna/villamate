@@ -616,6 +616,54 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 
 ---
 
+---
+
+### 2026-03-08 — IA 개편, 전자투표 고도화, 모의 자동결제 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[NEW-MEDIUM] POST /api/villas/:villaId/billing — adminId 클라이언트 전달로 인증**
+- 빌링 등록 시 `villa.adminId !== adminId` 비교로 관리자 여부 확인
+- 전체 API 인증 미들웨어 없는 상태에서 adminId를 본문으로 전달하므로 위조 가능
+- JWT 미들웨어 적용 시 `req.user.id`로 대체하면 해소됨
+
+**[NEW-MEDIUM] 모의 빌링키 — 실제 과금 없음**
+- `bk_mock_${Date.now()}`는 가짜 키로, 실제 Toss API 연동 전까지 과금이 발생하지 않음
+- `isAutoBilling=true`가 되더라도 실제 자동 청구 cron이 없으므로 BM 완성 전까지 구독 만료 강제 불가
+- **운영 리스크**: ACTIVE 상태가 영구적으로 유지될 수 있음 — 실제 Toss 연동 전 주의 필요
+
+**[NEW-LOW] maskedCard 저장 — 민감도 낮으나 노출 시 주의**
+- `****-****-****-1234` 형식의 마스킹된 카드번호만 DB 저장 — 실제 카드번호 미저장
+- `billingKey` 필드에 모의 값이 저장되어 있으나 실제 Toss 빌링키로 교체 시 보안 저장(env 또는 별도 vault) 권장
+
+**[GOOD] 전자투표 미참여자 알림 — 권한 검증 포함**
+- `POST /api/polls/:pollId/remind`에서 `adminId`로 poll → villa → adminId 비교하여 해당 빌라 관리자만 알림 발송 가능
+- 다른 공개 API보다 한 단계 높은 검증 수준 — 올바른 설계
+
+#### 현재 누적 위험 현황 요약 (2026-03-08 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 (앱 API) | HIGH | 미해결 |
+| JWT_SECRET 하드코딩 폴백 | HIGH | 배포 전 필수 조치 |
+| termsAgreed 서버 미검증 | HIGH | 법적 리스크 |
+| 구독 쿠폰 서버 미검증 | HIGH | SaaS BM 리스크 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| billing adminId 클라이언트 전달 | MEDIUM | **신규**, JWT 적용 시 해소 |
+| 모의 빌링키 — 실제 과금 없음 | MEDIUM | **신규**, Toss 실 연동 전 수용 |
+| 모바일 앱 JWT token 미저장 | MEDIUM | 다음 스프린트 필수 |
+| 구독 만료 시 API 접근 제한 없음 | MEDIUM | JWT 적용 시 추가 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| ~~C2: password 필드 API 응답 노출~~ | HIGH | **해결됨** |
+| ~~C4: 구독 활성화 무인증~~ | HIGH | **해결됨** |
+| ~~C5: Admin 웹 XSS~~ | HIGH | **해결됨** |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+
+---
+
 ### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
 
 #### 이 세션에서 추가된 운영 위험 및 완화 조치

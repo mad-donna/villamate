@@ -20,6 +20,8 @@ interface Poll {
   isAnonymous: boolean;
   options: PollOption[];
   _count: { votes: number };
+  totalVotes: number;
+  totalEligibleVoters: number;
 }
 
 const PollDetailScreen = ({ navigation, route }: any) => {
@@ -28,6 +30,7 @@ const PollDetailScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(true);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [voting, setVoting] = useState(false);
+  const [reminding, setReminding] = useState(false);
 
   const fetchPoll = useCallback(async () => {
     try {
@@ -57,7 +60,9 @@ const PollDetailScreen = ({ navigation, route }: any) => {
   const myOptionId = poll?.options.find(o =>
     o.votes.some(v => v.voterId === userId || (userRole === 'ADMIN' && v.roomNumber === 'admin'))
   )?.id ?? null;
-  const totalVotes = poll ? poll.options.reduce((s, o) => s + o._count.votes, 0) : 0;
+  const totalVotes = poll ? (poll.totalVotes ?? poll.options.reduce((s, o) => s + o._count.votes, 0)) : 0;
+  const totalEligibleVoters = poll?.totalEligibleVoters ?? 0;
+  const participationPct = totalEligibleVoters > 0 ? Math.round((totalVotes / totalEligibleVoters) * 100) : 0;
 
   const handleVote = async () => {
     if (!selectedOptionId) return Alert.alert('알림', '옵션을 선택해주세요.');
@@ -82,6 +87,28 @@ const PollDetailScreen = ({ navigation, route }: any) => {
       Alert.alert('오류', '투표에 실패했습니다.');
     } finally {
       setVoting(false);
+    }
+  };
+
+  const handleRemind = async () => {
+    setReminding(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/polls/${pollId}/remind`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId: userId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        Alert.alert('오류', err.error || '알림 발송에 실패했습니다.');
+      } else {
+        const data = await res.json();
+        Alert.alert('발송 완료', `미참여자 ${data.nonVoterCount}명에게 알림을 발송했습니다!`);
+      }
+    } catch {
+      Alert.alert('오류', '알림 발송에 실패했습니다.');
+    } finally {
+      setReminding(false);
     }
   };
 
@@ -121,6 +148,35 @@ const PollDetailScreen = ({ navigation, route }: any) => {
           {poll.description ? <Text style={styles.pollDesc}>{poll.description}</Text> : null}
           <Text style={styles.pollEndDate}>종료일: {formatDate(poll.endDate)}</Text>
         </View>
+
+        {/* Participation progress bar */}
+        <View style={styles.progressCard}>
+          <View style={styles.progressLabelRow}>
+            <Text style={styles.progressLabel}>현재 투표율</Text>
+            <Text style={styles.progressPct}>{participationPct}%</Text>
+          </View>
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${participationPct}%` as any }]} />
+          </View>
+          <Text style={styles.progressSubLabel}>
+            {totalVotes}/{totalEligibleVoters > 0 ? totalEligibleVoters : '?'}명 참여
+          </Text>
+        </View>
+
+        {/* Admin reminder button */}
+        {userRole === 'ADMIN' && isActive && (
+          <TouchableOpacity
+            style={[styles.remindBtn, reminding && { opacity: 0.6 }]}
+            onPress={handleRemind}
+            disabled={reminding}
+            activeOpacity={0.75}
+          >
+            {reminding
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={styles.remindBtnText}>🔔 미참여자에게 알림 보내기</Text>
+            }
+          </TouchableOpacity>
+        )}
 
         {/* Options */}
         <Text style={styles.sectionLabel}>{showResults ? '투표 결과' : '옵션 선택'}</Text>
@@ -229,6 +285,27 @@ const styles = StyleSheet.create({
   roomChipText: { fontSize: 12, color: '#3C3C43', fontWeight: '600' },
   totalRow: { alignItems: 'center', marginTop: 16 },
   totalText: { fontSize: 14, color: '#8E8E93', fontWeight: '500' },
+  // Participation progress bar
+  progressCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
+  progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  progressLabel: { fontSize: 13, fontWeight: '700', color: '#8E8E93' },
+  progressPct: { fontSize: 18, fontWeight: '800', color: '#007AFF' },
+  progressBarBg: { height: 10, borderRadius: 5, backgroundColor: '#F2F2F7', overflow: 'hidden', marginBottom: 6 },
+  progressBarFill: { height: 10, borderRadius: 5, backgroundColor: '#007AFF' },
+  progressSubLabel: { fontSize: 12, color: '#8E8E93', textAlign: 'right' },
+  remindBtn: {
+    backgroundColor: '#FF9500',
+    borderRadius: 14,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  remindBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });
 
 export default PollDetailScreen;

@@ -695,6 +695,70 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 
 ---
 
+---
+
+### 2026-03-08 — IA 개편, 전자투표 고도화, 모의 자동결제 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **전자투표 실시간 참여율 프로그레스 바** (`PollDetailScreen.tsx`)
+   - `totalVotes`, `totalEligibleVoters`를 백엔드 `GET /api/villas/:villaId/polls` 응답에 추가
+   - `totalEligibleVoters`: `ResidentRecord.count({ where: { villaId } })` — 빌라 입주민 수 기준
+   - `participationPct = Math.round((totalVotes / totalEligibleVoters) * 100)`
+   - 프로그레스 바 UI: `View(progressBarBg)` + `View(progressBarFill, width: participationPct%)` 패턴
+
+2. **미참여자 푸시 알림 리마인더** (백엔드 + 프론트엔드)
+   - `backend/src/utils/push.ts` 신규: `sendPushToTokens(tokens, title, body, data?)` 유틸 함수
+   - `POST /api/polls/:pollId/remind` 신규: 관리자 검증 → 미투표 세대 필터링 → 푸시 발송
+   - `PollDetailScreen`에 관리자 전용 "🔔 미참여자에게 알림 보내기" 버튼 (ADMIN + isActive 조건)
+
+3. **IA 구조 개편** (다수 파일)
+   - 관리자 탭 4개 → 5개: `[홈][관리][커뮤니티][장부][프로필]` (장부 탭 독립)
+   - `LedgerTabScreen.tsx` 신규 (LedgerScreen 래퍼)
+   - `MainTabNavigator.tsx` 5탭 업데이트
+   - `ManagementScreen.tsx`: 장부 메뉴 제거, 전자투표 메뉴 추가 (userId 상태 포함)
+   - `OurVillaScreen.tsx`: 회계 장부·전자투표·이용 가이드 메뉴 추가, villaId/userId AsyncStorage 해결
+   - `CommunityTabScreen.tsx` / `ResidentCommunityTabScreen.tsx`: 커스텀 헤더 + 📄 아이콘 → MyPosts 이동
+   - `DashboardScreen.tsx`: 바로가기 섹션 제거, 상태 위젯만 유지
+   - `ProfileScreen.tsx`: Admin 가이드 라이브러리 섹션 추가 (ADMIN only)
+   - `admin-web/src/pages/Layout.tsx`: 사이드바 2섹션 분리 (플랫폼 운영 / 콘텐츠 관리)
+
+4. **모의 자동결제 시스템** (Mock Toss Payments)
+   - `backend/prisma/schema.prisma`: Villa에 `isAutoBilling`, `billingKey`, `maskedCard` 필드 추가, `npx prisma db push` 적용
+   - `POST /api/villas/:villaId/billing`: 카드 등록 → 모의 빌링키 발급 → Villa 업데이트
+   - `GET /api/villas/:villaId/billing`: 자동결제 상태 조회
+   - `AdminSubscriptionScreen.tsx` 전면 개편:
+     - 카드번호/유효기간/비밀번호 입력 바텀시트 모달
+     - 카드번호 자동 공백 포맷, MM/YY 슬래시 자동 삽입
+     - 등록 완료 시 초록 카드 UI (maskedCard + 다음 결제일)
+
+5. **ProfileScreen 구독/요금제 메뉴 추가**
+   - ADMIN 전용 "구독 / 요금제" 섹션 신설 (가이드 섹션 위)
+   - `card` 아이콘, `#5856D6` 보라색 → `AdminSubscription` 화면 이동
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **푸시 유틸 분리**: `backend/src/utils/push.ts`로 Expo 청크 발송 로직 분리 — 재사용 가능한 유틸
+  ```typescript
+  export async function sendPushToTokens(tokens: string[], title: string, body: string, data?: object) {
+    const expo = new Expo();
+    const messages = tokens.filter(t => Expo.isExpoPushToken(t)).map(to => ({ to, sound: 'default', title, body, data }));
+    const chunks = expo.chunkPushNotifications(messages);
+    for (const chunk of chunks) { await expo.sendPushNotificationsAsync(chunk); }
+  }
+  ```
+- **미참여자 필터링 패턴**:
+  ```typescript
+  const allRooms = await prisma.residentRecord.findMany({ where: { villaId }, select: { userId: true } });
+  const voters = await prisma.vote.findMany({ where: { pollId }, select: { voterId: true } });
+  const voterIds = new Set(voters.map(v => v.voterId));
+  const nonVoters = allRooms.filter(r => !voterIds.has(r.userId));
+  ```
+- **자동결제 상태 조건부 렌더링**: `billingInfo.isAutoBilling`으로 카드 등록 버튼 vs 활성 카드 UI 분기
+- **LedgerTabScreen 래퍼 패턴**: 탭 마운트 전용 래퍼 — params 없는 화면은 단순 pass-through 컴포넌트
+
+---
+
 ### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
 
 #### 이 세션에서 구현한 기능

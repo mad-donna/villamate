@@ -39,14 +39,23 @@ const SectionHeader = ({ title }: { title: string }) => (
 const OurVillaScreen = ({ navigation }: any) => {
   const [villaName, setVillaName] = useState<string>('');
   const [villaAddress, setVillaAddress] = useState<string>('');
+  const [villaId, setVillaId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('user').then((raw) => {
+    const load = async () => {
+      const raw = await AsyncStorage.getItem('user');
       if (!raw) return;
       const user = JSON.parse(raw);
       if (user?.villa?.name) setVillaName(user.villa.name);
       if (user?.villa?.address) setVillaAddress(user.villa.address);
-    });
+      if (user?.villa?.id) setVillaId(user.villa.id);
+
+      let uid = await AsyncStorage.getItem('userId');
+      if (!uid) uid = user.id;
+      if (uid) setUserId(uid);
+    };
+    load();
   }, []);
 
   return (
@@ -81,10 +90,41 @@ const OurVillaScreen = ({ navigation }: any) => {
               description="하자보수, 정기점검, 계약 이력"
               onPress={() => navigation.navigate('BuildingHistory')}
             />
+            <MenuItem
+              icon="book-outline"
+              iconColor="#34C759"
+              iconBg="#E8F9EE"
+              label="회계 장부"
+              description="수입·지출 내역 및 관리비 흐름 확인"
+              onPress={() => navigation.navigate('Ledger')}
+            />
+            <MenuItem
+              icon="checkbox-outline"
+              iconColor="#FF2D55"
+              iconBg="#FFE5EA"
+              label="전자 투표"
+              description="진행 중인 투표 확인 및 참여"
+              onPress={() => navigation.navigate('PollList', { villaId, userId, userRole: 'RESIDENT' })}
+            />
           </View>
         </View>
 
-        {/* Section 2: 차량 */}
+        {/* Section 2: 관리비 */}
+        <View style={styles.section}>
+          <SectionHeader title="관리비" />
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="receipt-outline"
+              iconColor="#FF9500"
+              iconBg="#FFF4E5"
+              label="관리비 조회"
+              description="청구 내역 및 납부 현황 확인"
+              onPress={() => navigation.navigate('ResidentInvoice')}
+            />
+          </View>
+        </View>
+
+        {/* Section 3: 차량 */}
         <View style={styles.section}>
           <SectionHeader title="차량" />
           <View style={styles.menuCard}>
@@ -99,17 +139,17 @@ const OurVillaScreen = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* Section 3: 관리비 */}
+        {/* Section 4: 가이드 */}
         <View style={styles.section}>
-          <SectionHeader title="관리비" />
+          <SectionHeader title="가이드" />
           <View style={styles.menuCard}>
             <MenuItem
-              icon="receipt-outline"
+              icon="library-outline"
               iconColor="#FF9500"
               iconBg="#FFF4E5"
-              label="관리비 조회"
-              description="청구 내역 및 납부 현황 확인"
-              onPress={() => navigation.navigate('ResidentInvoice')}
+              label="이용 가이드"
+              description="빌라메이트 활용법 및 생활 정보"
+              onPress={() => navigation.navigate('Guide')}
             />
           </View>
         </View>

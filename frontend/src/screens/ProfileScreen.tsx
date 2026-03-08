@@ -120,18 +120,6 @@ const ProfileScreen = ({ navigation }: any) => {
             <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
           </TouchableOpacity>
 
-          <View style={styles.separator} />
-
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => navigation.navigate('MyPosts', { userId, userRole })}
-          >
-            <View style={[styles.rowIcon, { backgroundColor: '#5856D6' }]}>
-              <Ionicons name="document-text" size={18} color="#fff" />
-            </View>
-            <Text style={styles.rowLabel}>내가 쓴 글 / 민원 내역</Text>
-            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
-          </TouchableOpacity>
         </View>
 
         {/* ── Section 3: Account Info ── */}
@@ -165,6 +153,39 @@ const ProfileScreen = ({ navigation }: any) => {
             />
           </View>
         </View>
+
+        {/* ── Section: 구독/요금제 + 가이드 (ADMIN only) ── */}
+        {userRole === 'ADMIN' && (
+          <>
+            <Text style={styles.sectionLabel}>구독 / 요금제</Text>
+            <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => navigation.navigate('AdminSubscription')}
+              >
+                <View style={[styles.rowIcon, { backgroundColor: '#5856D6' }]}>
+                  <Ionicons name="card" size={18} color="#fff" />
+                </View>
+                <Text style={styles.rowLabel}>구독 및 결제 관리</Text>
+                <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sectionLabel}>가이드</Text>
+            <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => navigation.navigate('GuideLibrary')}
+              >
+                <View style={[styles.rowIcon, { backgroundColor: '#FF9500' }]}>
+                  <Ionicons name="book" size={18} color="#fff" />
+                </View>
+                <Text style={styles.rowLabel}>관리자 가이드 라이브러리</Text>
+                <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         {/* ── Section 5: Support & Legal ── */}
         <Text style={styles.sectionLabel}>고객센터 & 약관</Text>

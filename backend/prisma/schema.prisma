@@ -54,6 +54,9 @@ model Villa {
   status                String              @default("PENDING")
   subscriptionStatus    String              @default("NONE")
   subscriptionExpiry    DateTime?
+  isAutoBilling         Boolean             @default(false)
+  billingKey            String?
+  maskedCard            String?
   createdAt             DateTime            @default(now())
   residents        ResidentRecord[]
   transactions     LedgerTransaction[]

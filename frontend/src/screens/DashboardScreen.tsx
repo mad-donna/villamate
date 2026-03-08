@@ -164,33 +164,6 @@ const DashboardScreen = ({ navigation }: any) => {
     );
   }
 
-  const quickActions = [
-    {
-      label: '청구서 발행',
-      icon: 'receipt-outline' as const,
-      color: '#FF9500',
-      onPress: () => navigation.navigate('CreateInvoice'),
-    },
-    {
-      label: '주차 조회',
-      icon: 'car-outline' as const,
-      color: '#30B0C7',
-      onPress: () => navigation.navigate('ParkingSearch', { villaId: villaData.id }),
-    },
-    {
-      label: '전자투표',
-      icon: 'checkbox-outline' as const,
-      color: '#FF2D55',
-      onPress: () => navigation.navigate('PollList', { villaId: villaData.id, userId: adminUserId, userRole: 'ADMIN' }),
-    },
-    {
-      label: '관리자 가이드',
-      icon: 'book-outline' as const,
-      color: '#5856D6',
-      onPress: () => navigation.navigate('GuideLibrary'),
-    },
-  ];
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {villaData?.status === 'PENDING' && (
@@ -286,24 +259,6 @@ const DashboardScreen = ({ navigation }: any) => {
             {dashData?.activePollsCount ?? 0}건
           </Text>
         </TouchableOpacity>
-
-        {/* Quick Actions */}
-        <Text style={styles.sectionLabel}>바로가기</Text>
-        <View style={styles.actionRow}>
-          {quickActions.map((action, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.actionCard}
-              onPress={action.onPress}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.actionIconCircle, { backgroundColor: action.color + '1A' }]}>
-                <Ionicons name={action.icon} size={24} color={action.color} />
-              </View>
-              <Text style={styles.actionLabel}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
 
         {/* Resident list */}
         <Text style={styles.sectionLabel}>입주민 명단</Text>
@@ -505,39 +460,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-
-  // Quick actions
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  actionCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  actionIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  actionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    textAlign: 'center',
   },
 
   // Resident list

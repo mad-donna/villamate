@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import BoardScreen from './BoardScreen';
@@ -66,7 +67,19 @@ const ResidentCommunityTabScreen = ({ navigation }: any) => {
     params: { villaId, userId, userRole: 'RESIDENT' },
   };
 
-  return <BoardScreen navigation={navigation} route={fakeRoute} />;
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F7F7F7' }} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>커뮤니티</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('MyPosts', { userId, userRole: 'RESIDENT' })}
+        >
+          <Ionicons name="document-text-outline" size={22} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
+      <BoardScreen navigation={navigation} route={fakeRoute} />
+    </SafeAreaView>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -78,6 +91,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1C1C1E',
   },
 });
 

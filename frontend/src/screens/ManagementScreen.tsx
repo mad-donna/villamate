@@ -27,6 +27,7 @@ interface MenuItem {
 const ManagementScreen = () => {
   const navigation = useNavigation<any>();
   const [villaId, setVillaId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchVillaId = useCallback(async () => {
@@ -42,6 +43,7 @@ const ManagementScreen = () => {
         }
       }
       if (!userId) return;
+      setUserId(userId);
 
       const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
       if (!response.ok) return;
@@ -81,20 +83,20 @@ const ManagementScreen = () => {
       onPress: () => navigation.navigate('ResidentManagement'),
     },
     {
-      id: 'ledger',
-      label: '납부 내역 확인',
-      sublabel: '공용 납부 및 영수증을 확인합니다',
-      icon: 'book-outline',
-      color: '#007AFF',
-      onPress: () => navigation.navigate('Ledger'),
-    },
-    {
       id: 'building',
       label: '건물 이력 및 계약 관리',
       sublabel: '하자보수, 정기점검, 계약 이력을 기록합니다',
       icon: 'construct-outline',
       color: '#5856D6',
       onPress: () => navigation.navigate('BuildingHistory'),
+    },
+    {
+      id: 'poll',
+      label: '전자 투표 관리',
+      sublabel: '투표 생성, 진행 현황 및 결과를 관리합니다',
+      icon: 'checkbox-outline',
+      color: '#FF2D55',
+      onPress: () => navigation.navigate('PollList', { villaId, userId, userRole: 'ADMIN' }),
     },
     {
       id: 'external-billing',

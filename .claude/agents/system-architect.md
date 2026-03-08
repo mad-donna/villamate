@@ -1049,6 +1049,122 @@ frontend/src/
 
 ---
 
+---
+
+### 2026-03-08 — IA 개편, 전자투표 고도화, 모의 자동결제 세션
+
+#### 데이터 모델 변경 사항
+
+**Villa 모델 필드 추가 (자동결제)**
+```
+Villa:
+  ├── isAutoBilling Boolean @default(false)  ← NEW (자동결제 활성화 여부)
+  ├── billingKey    String?                  ← NEW (Toss 빌링키, 현재 Mock)
+  └── maskedCard    String?                  ← NEW (예: ****-****-****-1234)
+```
+- `subscriptionStatus`, `subscriptionExpiry`는 기존에 이미 존재 확인됨
+
+#### 신규 엔드포인트 (2026-03-08 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `POST` | `/api/villas/:villaId/billing` | 카드 등록 → 모의 빌링키 발급 → Villa 업데이트 |
+| `GET` | `/api/villas/:villaId/billing` | 자동결제 상태 조회 |
+| `POST` | `/api/polls/:pollId/remind` | 미참여자에게 푸시 알림 발송 (ADMIN 전용) |
+
+#### 신규 파일 및 네비게이션 업데이트
+
+```
+백엔드 신규:
+  backend/src/utils/push.ts  ← Expo 푸시 발송 유틸 (sendPushToTokens)
+
+프론트엔드 신규:
+  frontend/src/screens/LedgerTabScreen.tsx  ← 장부 탭 래퍼 (LedgerScreen pass-through)
+
+MainTabNavigator (관리자) — 탭 구성 변경:
+  기존: [홈][관리][커뮤니티][프로필] (4개)
+  변경: [홈][관리][커뮤니티][장부][프로필] (5개)
+  추가: '장부' → LedgerTabScreen (4번째 탭, book/book-outline 아이콘, #007AFF)
+```
+
+#### 모의 자동결제 아키텍처
+
+```
+POST /api/villas/:villaId/billing:
+  받는 값: { cardNumber, expireMonth, expireYear, password, adminId }
+  처리:
+    1. villa.adminId !== adminId → 403
+    2. fakeBillingKey = "bk_mock_${Date.now()}"
+    3. maskedCard = "****-****-****-" + cardNumber.replace(/\s/g,'').slice(-4)
+    4. prisma.villa.update({
+         isAutoBilling: true,
+         billingKey: fakeBillingKey,
+         maskedCard,
+         subscriptionStatus: 'ACTIVE',
+         subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+       })
+  반환: { success: true, maskedCard, subscriptionExpiry }
+
+GET /api/villas/:villaId/billing:
+  반환: { isAutoBilling, maskedCard, subscriptionExpiry, subscriptionStatus }
+  (Prisma select로 필요한 필드만 조회)
+```
+
+#### 미참여자 알림 아키텍처
+
+```
+POST /api/polls/:pollId/remind:
+  1. poll → villa → adminId 검증 (adminId !== req.body.adminId → 403)
+  2. 전체 입주민: ResidentRecord.findMany({ where: { villaId } })
+  3. 이미 투표: Vote.findMany({ where: { pollId } })
+  4. 미참여 = 전체 - 투표자
+  5. 미참여자의 expoPushToken 수집
+  6. sendPushToTokens(tokens, '투표 참여 요청', '...')
+  7. notification.createMany(미참여자 전원)
+  8. 반환: { success, nonVoterCount, sent }
+```
+
+#### IA 탭 구조 현황 (2026-03-08 기준)
+
+```
+관리자 (ADMIN) MainTabNavigator — 5탭:
+  [홈]       DashboardScreen        (home/home-outline)
+  [관리]     ManagementScreen       (settings/settings-outline)
+  [커뮤니티] CommunityTabScreen     (chatbubbles/chatbubbles-outline)
+  [장부]     LedgerTabScreen        (book/book-outline)  ← NEW
+  [프로필]   ProfileScreen          (person/person-outline)
+
+입주민 (RESIDENT) ResidentTabNavigator — 4탭:
+  [홈]       ResidentDashboardScreen
+  [커뮤니티] ResidentCommunityTabScreen
+  [우리 빌라] OurVillaScreen
+  [프로필]   ProfileScreen
+```
+
+#### Express 라우트 등록 순서 (2026-03-08 추가분)
+
+```
+/api/polls/:pollId/remind   ← NEW (구체적, :pollId 패턴)
+/api/villas/:villaId/billing ← NEW (GET, POST)
+... (기존 순서 유지)
+/api/villas/:adminId        (와일드카드 ← 항상 마지막)
+```
+
+#### 알려진 기술 부채 (2026-03-08 업데이트)
+
+- ~~민감 정보 auth 응답 노출 (C2)~~ → **[RESOLVED]**
+- ~~모바일 JWT 미발급 (C1)~~ → **[RESOLVED]** (클라이언트 저장 미완)
+- ~~구독 관리 엔드포인트 미인증 (C4)~~ → **[RESOLVED]**
+- 모의 자동결제 → 실제 Toss 빌링키 API 연동 필요
+- 미납자 자동 독촉 cron → 미구현 (핵심 요구사항)
+- 인증 미들웨어 미적용 (앱 일반 API) → JWT 전체 확산 필요
+- 단일 index.ts (~1900+ 라인) → 도메인별 라우터 분리 시급
+- 업로드 파일 로컬 저장 → S3 마이그레이션
+- ~~API_BASE_URL 하드코딩~~ → **[RESOLVED]**
+- ~~비밀번호 미저장~~ → **[RESOLVED]**
+
+---
+
 ### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
 
 #### 데이터 모델 변경 사항

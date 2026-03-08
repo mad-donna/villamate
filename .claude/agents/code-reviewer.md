@@ -721,6 +721,57 @@ jest.mock('expo-server-sdk', () => {
 
 ---
 
+---
+
+### 2026-03-08 — IA 개편, 전자투표 고도화, 모의 자동결제 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **전자투표 실시간 참여율 프로그레스 바** + **미참여자 푸시 알림** 구현
+- **IA 구조 개편**: 관리자 4탭 → 5탭, 메뉴 재배치, 백오피스 2섹션 분리
+- **모의 자동결제 시스템** (Mock Toss Payments) 전체 구현
+- **ProfileScreen 구독/요금제 메뉴** 추가
+
+#### 발견된 주요 버그 패턴
+
+**[GOOD] 전자투표 미참여자 알림 — push + notification 이중 발송 올바른 설계**
+- `POST /api/polls/:pollId/remind`: 미투표 세대를 `Vote` 테이블과 `ResidentRecord` 비교로 필터링
+- push 발송(`sendPushToTokens`) + DB 알림 저장(`notification.create`) 병행 — 기존 send-push 패턴 일관성 유지
+
+**[PATTERN] 모의 빌링키 패턴 — Mock Toss Payments**
+- `bk_mock_${Date.now()}` 형식으로 가짜 빌링키 생성
+- 카드번호 마스킹: `****-****-****-${cardNumber.slice(-4)}`
+- Villa 모델 업데이트: `isAutoBilling=true`, `subscriptionStatus='ACTIVE'`, `subscriptionExpiry=now+30days`
+- **주의**: 실제 Toss 빌링 연동 시 `billingKey`는 Toss 서버에서 발급받아야 함 — 현재 mock 값은 클라이언트 신뢰 기반
+
+**[PATTERN] 바텀시트 모달 내 키보드 처리**
+- 카드 등록 모달: `Modal(animationType="slide")` + `KeyboardAvoidingView(behavior='padding'(iOS)/'height'(Android))` + `useSafeAreaInsets().bottom`으로 패딩 처리
+- `TouchableWithoutFeedback`으로 배경 탭 시 모달 닫기
+
+**[GOOD] 카드번호 자동 포맷 — 입력 UX**
+- 카드번호 입력 시 비숫자 제거 + 4자리마다 공백 삽입 (최대 19자)
+- 유효기간 MM/YY 자동 슬래시 삽입 (2자 입력 후)
+- API 전송 전 공백 제거 (`cardNumber.replace(/\s/g, '')`)
+
+#### 이 세션에서 추가된 코딩 패턴
+
+- **모의 결제 API 응답 검증**: `POST /billing` 응답에 `maskedCard`, `subscriptionExpiry` 포함 → 프론트 즉시 UI 업데이트
+- **조건부 렌더링 패턴 (billingInfo)**:
+  ```tsx
+  {billingInfo.isAutoBilling ? (
+    <View style={styles.activeBillingCard}>
+      {/* 초록 카드: maskedCard + 다음 결제일 */}
+    </View>
+  ) : (
+    <TouchableOpacity onPress={() => setShowCardModal(true)}>
+      신용/체크카드 등록
+    </TouchableOpacity>
+  )}
+  ```
+- **`useFocusEffect` + GET 빌링 정보 패턴**: 화면 포커스 시 `GET /api/villas/:villaId/billing` 호출로 최신 상태 반영
+
+---
+
 ### 2026-03-05 — 백오피스 웹 완성, 공지/FAQ 연동, 온보딩 정규화, SaaS BM 세션
 
 #### 이 세션에서 리뷰/검토한 주요 내용
