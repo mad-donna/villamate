@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,10 +24,34 @@ const ResidentJoinScreen = ({ navigation }: any) => {
   const [roomNumber, setRoomNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [availableRooms, setAvailableRooms] = useState<string[]>([]);
+  const [roomsLoaded, setRoomsLoaded] = useState(false);
+  const [roomPickerVisible, setRoomPickerVisible] = useState(false);
+  const [fetchingRooms, setFetchingRooms] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('userId').then(id => setUserId(id));
   }, []);
+
+  const fetchRooms = async (code: string) => {
+    if (code.length !== 6) return;
+    setFetchingRooms(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/villas/join/rooms?inviteCode=${code.trim().toUpperCase()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableRooms(data.roomNumbers || []);
+        setRoomsLoaded(true);
+      } else {
+        setAvailableRooms([]);
+        setRoomsLoaded(false);
+      }
+    } catch {
+      setAvailableRooms([]);
+    } finally {
+      setFetchingRooms(false);
+    }
+  };
 
   const handleJoin = async () => {
     if (!inviteCode || !roomNumber) {
@@ -58,7 +84,7 @@ const ResidentJoinScreen = ({ navigation }: any) => {
         return;
       }
 
-      const updatedUser = { ...data.user, villa: data.villa };
+      const updatedUser = { ...data.user, villa: data.villa, residentType: data.residentType };
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
 
       navigation.replace('ResidentDashboard');
@@ -89,18 +115,37 @@ const ResidentJoinScreen = ({ navigation }: any) => {
               style={styles.input}
               placeholder="예: VILA9X"
               value={inviteCode}
-              onChangeText={setInviteCode}
+              onChangeText={(text) => {
+                const upper = text.trim().toUpperCase();
+                setInviteCode(upper);
+                if (upper.length === 6) fetchRooms(upper);
+                else { setAvailableRooms([]); setRoomsLoaded(false); }
+              }}
               autoCapitalize="characters"
               maxLength={6}
             />
 
-            <Text style={styles.label}>호수 (예: 101호)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="예: 101호"
-              value={roomNumber}
-              onChangeText={setRoomNumber}
-            />
+            <Text style={styles.label}>호수 선택</Text>
+            {fetchingRooms ? (
+              <ActivityIndicator color="#007AFF" style={{ marginBottom: 20 }} />
+            ) : availableRooms.length > 0 ? (
+              <TouchableOpacity
+                style={[styles.input, { justifyContent: 'center' }]}
+                onPress={() => setRoomPickerVisible(true)}
+              >
+                <Text style={{ fontSize: 16, color: roomNumber ? '#1C1C1E' : '#C7C7CC' }}>
+                  {roomNumber ? `${roomNumber}호` : '호수를 선택해주세요'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TextInput
+                style={styles.input}
+                placeholder="예: 101"
+                value={roomNumber}
+                onChangeText={setRoomNumber}
+                keyboardType="default"
+              />
+            )}
           </View>
 
           <TouchableOpacity
@@ -131,6 +176,52 @@ const ResidentJoinScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Room Picker Modal */}
+      <Modal
+        visible={roomPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRoomPickerVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setRoomPickerVisible(false)}
+        >
+          <View style={styles.bottomSheet}>
+            <View style={styles.bottomSheetHandle} />
+            <Text style={styles.bottomSheetTitle}>호수 선택</Text>
+            <FlatList
+              data={availableRooms}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.roomItem,
+                    roomNumber === item && styles.roomItemSelected,
+                  ]}
+                  onPress={() => {
+                    setRoomNumber(item);
+                    setRoomPickerVisible(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.roomItemText,
+                    roomNumber === item && styles.roomItemTextSelected,
+                  ]}>
+                    {item}호
+                  </Text>
+                  {roomNumber === item && (
+                    <Text style={{ color: '#007AFF', fontSize: 18 }}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              contentContainerStyle={{ paddingBottom: 32 }}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -203,6 +294,55 @@ const styles = StyleSheet.create({
   joinButtonText: {
     color: '#fff',
     fontSize: 18,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: '70%',
+  },
+  bottomSheetHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E5E5EA',
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  roomItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  roomItemSelected: {
+    backgroundColor: '#F0F7FF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  roomItemText: {
+    fontSize: 17,
+    color: '#1C1C1E',
+  },
+  roomItemTextSelected: {
+    color: '#007AFF',
     fontWeight: '700',
   },
 });

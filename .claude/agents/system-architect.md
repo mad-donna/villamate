@@ -1361,3 +1361,97 @@ Dashboard.tsx
 - 업로드 파일 로컬 저장 → S3 마이그레이션
 - ~~API_BASE_URL 하드코딩~~ → **[RESOLVED]**
 - ~~비밀번호 미저장~~ → **[RESOLVED]**
+
+---
+
+### 2026-03-10 — 다중 역할, 듀얼 모드, 호수 정규화, 자동 독촉 알림 세션
+
+#### 데이터 모델 변경 사항
+
+**ResidentRecord 모델 업데이트**
+```
+ResidentRecord
+  ├── id Int @id @default(autoincrement())
+  ├── villaId Int → Villa
+  ├── userId String → User
+  ├── roomNumber String
+  ├── residentType String @default("HEAD")  ← NEW ('HEAD' | 'MEMBER')
+  └── joinedAt DateTime
+```
+
+**Villa 모델 업데이트**
+```
+Villa
+  ├── ... (기존)
+  └── roomNumbers String[] @default([])  ← NEW (사전 지정 호수 목록)
+```
+
+#### 신규 엔드포인트 (2026-03-10 추가)
+
+| 메서드 | 경로 | 설명 | 비고 |
+|--------|------|------|------|
+| `GET` | `/api/villas/join/rooms?inviteCode=XXX` | 호수 목록 조회 (가입 전) | `GET /api/villas/:adminId` 앞에 배치 필수 |
+| `PUT` | `/api/villas/:villaId/rooms` | 관리자 호수 목록 수정 | normalizeRoom 적용 |
+
+#### 신규 컴포넌트/유틸 (프론트엔드)
+
+```
+frontend/src/context/AppModeContext.tsx  ← NEW
+  ├── AppMode: 'ADMIN' | 'RESIDENT'
+  ├── AppModeProvider (App.tsx 최상위 래핑)
+  └── useAppMode() hook
+```
+
+#### 아키텍처 결정: 입주민 다중 역할
+
+**비즈니스 로직 분리 원칙**:
+- `residentType === 'HEAD'`만 청구 대상 → 청구서 생성, 자동결제 cron 양쪽 필터
+- `residentType === 'MEMBER'`는 투표 403, 납부 내역 즉시 `200 []` 반환
+- 판별 기준: 가입 시 `villaId + normalizedRoomNumber` 조합으로 기존 HEAD 존재 여부 확인
+
+**normalizeRoom 유틸 패턴**:
+```typescript
+// backend/src/index.ts 상단
+function normalizeRoom(room: string): string {
+  return room.replace(/호/g, '').trim();
+}
+// 모든 roomNumber 저장/조회 경로에 적용
+```
+
+**스타트업 마이그레이션 패턴**:
+```typescript
+async function migrateRoomNumbers() {
+  const records = await prisma.residentRecord.findMany();
+  for (const r of records) {
+    const normalized = normalizeRoom(r.roomNumber);
+    if (normalized !== r.roomNumber) {
+      await prisma.residentRecord.update({ where: { id: r.id }, data: { roomNumber: normalized } });
+    }
+  }
+}
+// app.listen() 직전에 호출
+```
+
+#### 자동 독촉 크론 아키텍처
+
+```
+cron.schedule('0 10 * * *') — 매일 오전 10시
+  └── prisma.invoicePayment.findMany({ where: { status: 'PENDING' } })
+        └── 각 payment:
+              ├── daysSince = Math.floor((now - invoice.createdAt) / 86400000)
+              ├── daysSince === 3 → 1차 독촉 푸시
+              └── daysSince === 7 → 최종 독촉 푸시 (이후 없음)
+
+cron.schedule('POST /api/villas/:villaId/invoices') — 청구서 생성 시
+  └── 즉시 푸시 (별도 try/catch — 응답과 격리)
+```
+
+#### 알려진 기술 부채 (2026-03-10 업데이트)
+
+- ~~호수 정규화 불일치~~ → **[RESOLVED]** `normalizeRoom()` + startup migration
+- 독촉 크론 `=== 3/7` 조건 → 서버 다운 시 발송 누락 가능 (향후 `>= 3 && < 7` 범위 조건 권장)
+- 독촉 크론 푸시 후 `Notification` DB 미기록 → 알림함 누락 (향후 `notification.create` 추가 필요)
+- 모바일 JWT 클라이언트 AsyncStorage 저장 미완 → 다음 세션 완성 필요
+- 인증 미들웨어 미적용 (앱 일반 API) → JWT 전체 확산 필요
+- 단일 index.ts (~2200+ 라인) → 도메인별 라우터 분리 시급
+- 업로드 파일 로컬 저장 → S3 마이그레이션

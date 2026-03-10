@@ -7,6 +7,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import AppNavigator from './src/navigation/AppNavigator';
 import { API_BASE_URL } from './src/config';
+import { AppModeProvider } from './src/context/AppModeContext';
 
 // Show notifications when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -84,10 +85,12 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <AppNavigator />
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <AppModeProvider>
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <AppNavigator />
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </AppModeProvider>
   );
 }

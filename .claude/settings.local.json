@@ -17,7 +17,11 @@
       "Bash(npm run:*)",
       "Bash(curl:*)",
       "Bash(grep \"\"version\"\":*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(ls /d/villamate/frontend-app/App.tsx && ls /d/villamate/frontend-app/assets 2>/dev/null; find /d/villamate/frontend-app -name \"*.tsx\" -not -path \"*/node_modules/*\" | head -30)",
+      "Bash(find /d/villamate/frontend -name \"*.tsx\" -o -name \"*.ts\" 2>/dev/null | grep -v node_modules | sort | head -40)",
+      "Bash(find /d/villamate/admin-web -name \"*.tsx\" -o -name \"*.ts\" 2>/dev/null | grep -v node_modules | sort | head -40)",
+      "Bash(git stash && npx --prefix backend jest backend/src/api.spec.ts --no-coverage --forceExit 2>&1 | tail -10)"
     ]
   }
 }

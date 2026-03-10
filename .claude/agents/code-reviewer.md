@@ -807,3 +807,66 @@ jest.mock('expo-server-sdk', () => {
 - **VillaSearchScreen**: 초대 코드 없이 빌라 이름/주소로 검색 후 입주 신청 → 관리자 승인 플로우
 - **ContractDetailScreen**: `BuildingEvent.attachmentUrl` 계약서 사진 풀스크린 뷰어
 - **ResidentInvoiceScreen**: `ResidentDashboardScreen`에서 청구서 로직 분리 — 단일 책임 원칙 적용
+
+---
+
+### 2026-03-10 — 다중 역할, 듀얼 모드, 호수 사전 지정, 자동 독촉 알림 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **HEAD/MEMBER 자동 판별** 로직 구현 및 투표·청구서·납부 가드 적용
+- **AppModeContext** 듀얼 모드 전환 패턴 구현
+- **normalizeRoom()** 버그 수정 및 마이그레이션
+- **미납 관리비 자동 독촉 크론** 구현 (청구서 생성 즉시 + 3일/7일차 리마인더)
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] 라우트 충돌 — `GET /api/villas/join/rooms`가 와일드카드에 차단됨**
+- Express에서 `GET /api/villas/:adminId` 라우트가 먼저 등록되면 `GET /api/villas/join/rooms`가 `:adminId = 'join'`으로 포착됨
+- 해결: `GET /api/villas/join/rooms`를 `GET /api/villas/:adminId`보다 앞에 배치
+- **패턴 재확인**: 이 프로젝트에서 3번 이상 반복되는 Express 라우트 순서 문제
+
+**[CRITICAL] 호수 정규화 불일치 — '101호' vs '101' 복합 버그**
+- 증상 1: `normalizeRoom` 미적용 시 동일 세대 입주민이 HEAD로 중복 등록됨
+- 증상 2: 청구서 payments 조회 시 roomNumber 불일치로 세대 납부 내역 미표시
+- 해결: `normalizeRoom()` 유틸 + 스타트업 `migrateRoomNumbers()` 일괄 정규화
+- **교훈**: DB 저장 전 정규화 함수를 한 곳에 집중 — 여러 경로에서 흩어진 처리가 불일치 원인
+
+**[GOOD] MEMBER 가드 패턴 — 조기 반환으로 코드 명확화**
+- MEMBER는 투표 불가(403), 납부 내역 빈 배열 즉시 반환(200) — 에러가 아닌 빈 결과로 UX 배려
+- 백엔드와 프론트 양쪽에서 이중 가드 → 의도 명확
+
+**[GOOD] 독촉 크론 push 격리 패턴**
+- 청구서 생성 응답 전송 후 별도 try/catch로 푸시 발송 → 푸시 실패가 생성 트랜잭션에 영향 없음
+- 기존 `sendPushToTokens` 유틸 재사용으로 일관성 유지
+
+**[PATTERN] daysSince 독촉 로직**
+- `Math.floor((Date.now() - invoice.createdAt.getTime()) / (1000 * 60 * 60 * 24))`
+- `=== 3`, `=== 7`로 정확한 날짜에만 발송 — 중복 발송 없음
+
+#### 이 세션에서 추가된 코딩 패턴
+
+- **normalizeRoom 유틸**:
+  ```typescript
+  function normalizeRoom(room: string): string {
+    return room.replace(/호/g, '').trim();
+  }
+  ```
+- **HEAD/MEMBER 자동 판별**:
+  ```typescript
+  const existingHead = await prisma.residentRecord.findFirst({
+    where: { villaId, roomNumber: normalizedRoom }
+  });
+  const residentType = existingHead ? 'MEMBER' : 'HEAD';
+  ```
+- **AppModeContext 듀얼 모드**:
+  ```tsx
+  const { appMode, setAppMode } = useAppMode();
+  // 전환 시 AsyncStorage 병합 → setAppMode → navigation.replace
+  ```
+- **호수 picker 조건부 렌더링** (ResidentJoinScreen):
+  ```tsx
+  {fetchingRooms ? <ActivityIndicator />
+    : availableRooms.length > 0 ? <TouchableOpacity onPress={() => setRoomPickerVisible(true)}>...</>
+    : <TextInput ... />}
+  ```

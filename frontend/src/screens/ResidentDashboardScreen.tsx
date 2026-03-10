@@ -5,6 +5,7 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 import RollingBanner from '../components/RollingBanner';
+import { useAppMode } from '../context/AppModeContext';
 
 interface DashData {
   myUnpaidAmount: number;
@@ -23,12 +25,14 @@ interface DashData {
 
 const ResidentDashboardScreen = () => {
   const navigation = useNavigation<any>();
+  const { setAppMode } = useAppMode();
 
   const [dashData, setDashData] = useState<DashData | null>(null);
   const [residentUserId, setResidentUserId] = useState<string | null>(null);
   const [residentVillaId, setResidentVillaId] = useState<number | null>(null);
   const [residentName, setResidentName] = useState<string>('');
   const [villaName, setVillaName] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>('RESIDENT');
 
   const loadAll = useCallback(async () => {
     try {
@@ -58,6 +62,9 @@ const ResidentDashboardScreen = () => {
         }
         if (storedUser?.villa?.name) {
           setVillaName(storedUser.villa.name);
+        }
+        if (storedUser?.role) {
+          setUserRole(storedUser.role);
         }
       }
 
@@ -112,6 +119,11 @@ const ResidentDashboardScreen = () => {
     navigation.dispatch(
       CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] })
     );
+  };
+
+  const handleReturnToAdminMode = () => {
+    setAppMode('ADMIN');
+    navigation.navigate('Main');
   };
 
   return (
@@ -220,6 +232,18 @@ const ResidentDashboardScreen = () => {
             {dashData?.activePollsCount ?? 0}건
           </Text>
         </TouchableOpacity>
+
+        {/* ── Admin Mode Return (only shown when admin is in resident mode) ── */}
+        {userRole === 'ADMIN' && (
+          <TouchableOpacity
+            style={styles.adminReturnBtn}
+            onPress={handleReturnToAdminMode}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="shield-checkmark-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.adminReturnBtnText}>👑 관리자 모드로 복귀</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -346,6 +370,25 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     fontSize: 14,
     textDecorationLine: 'underline',
+  },
+  adminReturnBtn: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 16,
+    height: 52,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  adminReturnBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

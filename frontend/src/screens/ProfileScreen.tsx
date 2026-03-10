@@ -13,14 +13,17 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import { API_BASE_URL } from '../config';
+import { useAppMode } from '../context/AppModeContext';
 
 const ProfileScreen = ({ navigation }: any) => {
+  const { appMode, setAppMode } = useAppMode();
   const [userName, setUserName] = useState('');
   const [userContact, setUserContact] = useState('');
   const [userRole, setUserRole] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(true);
+  const [residentType, setResidentType] = useState<string>('HEAD');
 
   useFocusEffect(
     useCallback(() => {
@@ -32,6 +35,7 @@ const ProfileScreen = ({ navigation }: any) => {
         setUserContact(user.email || user.phone || '');
         setUserRole(user.role || 'RESIDENT');
         setRoomNumber(user.roomNumber || user.villa?.roomNumber || '');
+        setResidentType(user.residentType || 'HEAD');
 
         let uid = await AsyncStorage.getItem('userId');
         if (!uid) uid = user.id;
@@ -80,6 +84,11 @@ const ProfileScreen = ({ navigation }: any) => {
     );
   };
 
+  const handleReturnToAdminMode = () => {
+    setAppMode('ADMIN');
+    navigation.navigate('Main');
+  };
+
   const roleLabel = userRole === 'ADMIN' ? '관리자' : '입주민';
   const avatarInitial = userName ? userName.charAt(0) : '?';
 
@@ -102,6 +111,13 @@ const ProfileScreen = ({ navigation }: any) => {
             <View style={[styles.chip, userRole === 'ADMIN' ? styles.chipAdmin : styles.chipResident]}>
               <Text style={[styles.chipText, { color: '#fff' }]}>{roleLabel}</Text>
             </View>
+            {userRole !== 'ADMIN' && (
+              <View style={[styles.chip, { backgroundColor: residentType === 'HEAD' ? '#FF9500' : '#5AC8FA' }]}>
+                <Text style={[styles.chipText, { color: '#fff' }]}>
+                  {residentType === 'HEAD' ? '세대주(대표)' : '세대원'}
+                </Text>
+              </View>
+            )}
           </View>
           {userContact ? <Text style={styles.headerContact}>{userContact}</Text> : null}
         </View>
@@ -244,6 +260,17 @@ const ProfileScreen = ({ navigation }: any) => {
         {/* ── Section 6: Danger Zone ── */}
         <Text style={styles.sectionLabel}>계정 관리</Text>
         <View style={styles.card}>
+          {userRole === 'ADMIN' && appMode === 'RESIDENT' && (
+            <>
+              <TouchableOpacity style={styles.row} onPress={handleReturnToAdminMode}>
+                <View style={[styles.rowIcon, { backgroundColor: '#1C1C1E' }]}>
+                  <Ionicons name="shield-checkmark" size={18} color="#fff" />
+                </View>
+                <Text style={[styles.rowLabel, { color: '#1C1C1E', fontWeight: '700' }]}>👑 관리자 모드로 복귀</Text>
+              </TouchableOpacity>
+              <View style={styles.separator} />
+            </>
+          )}
           <TouchableOpacity style={styles.row} onPress={handleLogout}>
             <View style={[styles.rowIcon, { backgroundColor: '#FF3B30' }]}>
               <Ionicons name="log-out" size={18} color="#fff" />

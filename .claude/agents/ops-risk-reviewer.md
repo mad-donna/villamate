@@ -616,6 +616,62 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 
 ---
 
+### 2026-03-10 — 다중 역할, 듀얼 모드, 호수 정규화, 자동 독촉 알림 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] 호수 정규화 불일치 — 복합 버그**
+- 기존: `'101호'` / `'101'` 혼재 → HEAD 중복 생성 + 청구서 납부 내역 미조회
+- 해결: `normalizeRoom()` 유틸 전면 적용 + `migrateRoomNumbers()` 스타트업 마이그레이션 (idempotent)
+- **[RESOLVED]** 데이터 무결성 위험 해소
+
+**[NEW-LOW] migrateRoomNumbers() — 스타트업 무거운 쿼리**
+- 서버 시작 시 전체 `ResidentRecord`를 순회하며 정규화 적용 → 레코드 수가 많아지면 콜드 스타트 지연
+- 현재 MVP 규모(수백 레코드)에서는 문제 없음. 데이터 대규모화 시 일회성 마이그레이션 스크립트로 전환 필요
+
+**[NEW-MEDIUM] 독촉 크론 — 정확히 3일/7일 조건의 취약점**
+- `daysSince === 3` 방식 사용: 크론이 당일 실행 안 되면 해당 날짜를 영원히 건너뜀
+- 예: 3일차에 서버 다운 → 4일차 크론 실행 시 `daysSince === 4` → 3일 독촉 발송 누락
+- 완화 방법: `>= 3 && < 7` 범위 조건으로 교체하거나, 발송 여부를 DB에 기록
+- 현재 MVP 수용, 향후 개선 권장
+
+**[NEW-LOW] 청구서 생성 즉시 푸시 — 알림 레코드 미생성**
+- 청구서 생성 후 푸시 발송은 되지만 `Notification.createMany` 호출이 없음
+- 앱 내 알림함에는 표시 안 됨 (Expo 푸시만 발송)
+- 기존 `send-push` 엔드포인트와 달리 notification DB 기록 없음 → 일관성 부재
+- 향후: 독촉 크론 + 청구서 생성 푸시에도 `notification.create` 추가 권장
+
+**[GOOD] MEMBER 청구서 가드 — 잘못된 청구 방지**
+- 청구서 생성 시 `residentType: 'HEAD'` 필터 → MEMBER에게는 청구서 미생성
+- 자동결제 cron도 동일 필터 적용 — 일관성 보장
+
+#### 현재 누적 위험 현황 요약 (2026-03-10 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| API 인증 미들웨어 없음 (앱 API) | HIGH | 미해결 |
+| JWT_SECRET 하드코딩 폴백 | HIGH | 배포 전 필수 조치 |
+| termsAgreed 서버 미검증 | HIGH | 법적 리스크 |
+| 구독 쿠폰 서버 미검증 | HIGH | SaaS BM 리스크 |
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| 독촉 크론 날짜 조건 취약 (서버 다운 시 누락) | MEDIUM | **신규**, 수용 |
+| 청구서 알림 DB 기록 없음 | LOW | **신규**, 향후 개선 |
+| migrateRoomNumbers 스타트업 쿼리 | LOW | **신규**, 대규모화 시 교체 필요 |
+| billing adminId 클라이언트 전달 | MEDIUM | JWT 적용 시 해소 |
+| 모바일 앱 JWT token 미저장 | MEDIUM | 다음 스프린트 필수 |
+| 구독 만료 시 API 접근 제한 없음 | MEDIUM | JWT 적용 시 추가 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| ~~호수 정규화 불일치~~ | HIGH | **해결됨** (normalizeRoom + migration) |
+| ~~C2: password 필드 API 응답 노출~~ | HIGH | **해결됨** |
+| ~~C4: 구독 활성화 무인증~~ | HIGH | **해결됨** |
+| ~~C5: Admin 웹 XSS~~ | HIGH | **해결됨** |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+
+---
+
 ---
 
 ### 2026-03-08 — IA 개편, 전자투표 고도화, 모의 자동결제 세션

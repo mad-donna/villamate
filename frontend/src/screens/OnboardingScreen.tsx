@@ -64,6 +64,10 @@ const OnboardingScreen = ({ navigation }: any) => {
   const [totalUnits, setTotalUnits] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [bankName, setBankName] = useState('');
+  const [adminRoomNumber, setAdminRoomNumber] = useState('');
+
+  const [roomInput, setRoomInput] = useState('');
+  const [roomNumbers, setRoomNumbers] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [isPostcodeVisible, setIsPostcodeVisible] = useState(false);
@@ -83,6 +87,21 @@ const OnboardingScreen = ({ navigation }: any) => {
     };
     getAdminId();
   }, []);
+
+  const handleAddRoom = () => {
+    const trimmed = roomInput.trim();
+    if (!trimmed) return;
+    if (roomNumbers.includes(trimmed)) {
+      Alert.alert('알림', '이미 추가된 호수입니다.');
+      return;
+    }
+    setRoomNumbers(prev => [...prev, trimmed].sort());
+    setRoomInput('');
+  };
+
+  const handleRemoveRoom = (room: string) => {
+    setRoomNumbers(prev => prev.filter(r => r !== room));
+  };
 
   const handleAddressSelect = (data: any) => {
     setAddress(data.roadAddress || data.address);
@@ -118,6 +137,8 @@ const OnboardingScreen = ({ navigation }: any) => {
           adminId,
           accountNumber,
           bankName,
+          adminRoomNumber: adminRoomNumber.trim() || undefined,
+          roomNumbers,
         }),
       });
 
@@ -195,6 +216,49 @@ const OnboardingScreen = ({ navigation }: any) => {
               keyboardType="number-pad"
               value={totalUnits}
               onChangeText={setTotalUnits}
+            />
+
+            {/* ── 세대 호수 목록 ── */}
+            <Text style={styles.label}>세대 호수 목록 (선택사항)</Text>
+            <Text style={[styles.label, { fontSize: 12, color: '#8E8E93', fontWeight: '400', marginTop: -12 }]}>
+              호수를 입력하고 + 버튼을 눌러 추가하세요
+            </Text>
+            <View style={styles.roomInputRow}>
+              <TextInput
+                style={[styles.input, styles.roomInput]}
+                placeholder="예: 101"
+                value={roomInput}
+                onChangeText={setRoomInput}
+                keyboardType="default"
+                returnKeyType="done"
+                onSubmitEditing={handleAddRoom}
+              />
+              <TouchableOpacity style={styles.roomAddBtn} onPress={handleAddRoom}>
+                <Text style={styles.roomAddBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+            {roomNumbers.length > 0 && (
+              <View style={styles.roomChipContainer}>
+                {roomNumbers.map(room => (
+                  <TouchableOpacity
+                    key={room}
+                    style={styles.roomChip}
+                    onPress={() => handleRemoveRoom(room)}
+                  >
+                    <Text style={styles.roomChipText}>{room}호</Text>
+                    <Text style={styles.roomChipClose}>×</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.label}>내 호수 (선택사항)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="예: 101"
+              value={adminRoomNumber}
+              onChangeText={setAdminRoomNumber}
+              keyboardType="number-pad"
             />
 
             <Text style={styles.label}>은행 선택</Text>
@@ -498,6 +562,54 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     fontSize: 14,
     textDecorationLine: 'underline',
+  },
+  roomInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  roomInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  roomAddBtn: {
+    width: 50,
+    height: 50,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  roomAddBtnText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 28,
+  },
+  roomChipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  roomChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F0FF',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  roomChipText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  roomChipClose: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '700',
   },
 });
 

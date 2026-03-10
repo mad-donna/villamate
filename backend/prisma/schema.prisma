@@ -58,6 +58,7 @@ model Villa {
   billingKey            String?
   maskedCard            String?
   createdAt             DateTime            @default(now())
+  roomNumbers           String[]            @default([])
   residents        ResidentRecord[]
   transactions     LedgerTransaction[]
   invoices         Invoice[]
@@ -101,13 +102,14 @@ model InvoicePayment {
 }
 
 model ResidentRecord {
-  id         Int      @id @default(autoincrement())
-  villaId    Int
-  villa      Villa    @relation(fields: [villaId], references: [id])
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  roomNumber String
-  joinedAt   DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  villaId      Int
+  villa        Villa    @relation(fields: [villaId], references: [id])
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  roomNumber   String
+  residentType String   @default("HEAD")
+  joinedAt     DateTime @default(now())
 }
 
 model LedgerTransaction {

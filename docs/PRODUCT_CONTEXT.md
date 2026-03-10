@@ -1217,3 +1217,132 @@ Expo 푸시 알림(1단계)에 이어, 앱 내 영구 알림함(2단계) 구현.
 3. **동대표 교체/권한 위임**: ADMIN 역할 이전 UI + 백엔드
 4. **JWT 클라이언트 완성**: AsyncStorage 토큰 → API 헤더 일괄 적용 (보안 C1 완성)
 5. **구독 만료 미들웨어**: EXPIRED 상태 → 핵심 기능 제한
+
+---
+
+## 19. MVP 구현 현황 (2026-03-10 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### 다중 역할 입주민 — HEAD(세대주) vs MEMBER(세대원)
+
+같은 호수에 여러 사람이 입주할 수 있도록 역할을 분리. `ResidentRecord.residentType` 필드 추가.
+
+| 구분 | HEAD (세대주) | MEMBER (세대원) |
+|------|--------------|----------------|
+| 청구서 대상 | ✅ | ❌ |
+| 투표 참여 | ✅ | ❌ (비활성 UI + 안내) |
+| 납부 내역 조회 | ✅ | 빈 목록 즉시 반환 |
+| 역할 배지 | 👑 주황 | 👥 하늘색 |
+
+- 가입 시 자동 판별: `villaId + normalizedRoomNumber` 조합으로 기존 HEAD 존재 여부 확인
+- 스키마: `ResidentRecord.residentType String @default("HEAD")`
+
+#### 듀얼 모드 (ADMIN ↔ RESIDENT 전환)
+
+동대표 계정 하나로 관리자/입주민 화면을 전환할 수 있는 모드 스위치.
+
+| 구분 | 내용 |
+|------|------|
+| Context | `frontend/src/context/AppModeContext.tsx` 신규 — `AppMode: 'ADMIN' \| 'RESIDENT'` |
+| 전환 방향 | 관리자 홈 → "🔄 입주민 모드로 전환" (보라색 카드) |
+| 복귀 방향 | 입주민 홈/프로필 → "👑 관리자 모드로 복귀" (ADMIN 전용 버튼) |
+| 데이터 흐름 | 전환 시 villa 정보를 AsyncStorage `user`에 병합 후 `setAppMode` + 네비게이션 |
+
+#### 세대 호수 사전 지정
+
+관리자가 호수 목록을 미리 등록 → 입주민이 가입 시 목록에서 선택.
+
+| 구분 | 내용 |
+|------|------|
+| 스키마 | `Villa.roomNumbers String[] @default([])` 추가 |
+| 백엔드 | `POST /api/villas`: `roomNumbers[]` + `adminRoomNumber` 함께 수신 |
+| 백엔드 | `GET /api/villas/join/rooms?inviteCode=XXX`: 가입 전 호수 목록 조회 (신규) |
+| 백엔드 | `PUT /api/villas/:villaId/rooms`: 관리자 호수 목록 수정 (신규) |
+| ResidentJoinScreen | 6자리 코드 완성 시 자동 fetch → picker Modal (없으면 TextInput 폴백) |
+| OnboardingScreen | 호수 칩 UI (추가/삭제) + `adminRoomNumber` 입력 |
+| DashboardScreen | "세대 호수 관리" 카드 + 수정 Modal |
+
+#### 호수 정규화 버그 수정
+
+`'101호'` vs `'101'` 불일치로 발생한 복합 버그 수정.
+
+- `normalizeRoom(room)` 유틸: `room.replace(/호/g, '').trim()`
+- 모든 가입/저장 경로 및 조회 경로에 정규화 적용
+- `migrateRoomNumbers()` 스타트업 함수: 기존 더티 데이터 일괄 정규화 (idempotent)
+- MEMBER 납부 가드: `GET /api/residents/:id/payments`에서 MEMBER이면 즉시 `200 []` 반환
+
+#### 미납 관리비 자동 독촉 알림 — **핵심 기획 요구사항 달성** ✅
+
+초기 기획의 "미납자 알림" 요구사항이 드디어 구현됨.
+
+| 트리거 | 시점 | 제목 | 본문 |
+|--------|------|------|------|
+| 청구서 생성 즉시 | POST /invoices 응답 후 | 새 관리비 청구서 도착 📋 | ${billingMonth} 관리비가 청구되었습니다. ${amountPerResident}원 |
+| 3일차 리마인더 | 매일 오전 10시 cron | 관리비 미납 안내 ⚠️ | 기한 내 납부 부탁드립니다. |
+| 7일차 최종 안내 | 매일 오전 10시 cron | 관리비 미납 안내 ⚠️ | [최종 안내] 관리비 납부를 확인해주세요. |
+
+- 대상: PENDING InvoicePayment × HEAD 세대주 × expoPushToken 보유자
+- 7일 이후: 추가 알림 없음 (스팸 방지)
+- 격리: 청구서 생성 응답과 분리된 try/catch 블록 → 푸시 실패가 생성 실패로 이어지지 않음
+
+### 현재 구현된 전체 화면 목록 (2026-03-10 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `SignupAgreementScreen`, `SignupProfileScreen`, `SelectRoleScreen`
+- `OnboardingScreen` (호수 칩 UI 추가), `ResidentJoinScreen` (호수 picker 추가)
+
+#### 관리자 탭 (5개)
+- `DashboardScreen` (듀얼 모드 전환 버튼, 호수 관리 Modal), `ManagementScreen`, `CommunityTabScreen`, `LedgerTabScreen`, `ProfileScreen` (역할 배지)
+
+#### 입주민 탭 (4개)
+- `ResidentDashboardScreen` (관리자 복귀 버튼), `ResidentCommunityTabScreen`, `OurVillaScreen`, `ProfileScreen` (역할 배지)
+
+#### 스택 화면 (탭 위에 push)
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentManagementScreen`, `LedgerScreen`, `PaymentScreen`
+- `PostDetailScreen`, `CreatePostScreen`
+- `ParkingSearchScreen`, `VehicleManagementScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen` (MEMBER 가드 UI 추가)
+- `ChangePasswordScreen`, `MyPostsScreen`
+- `GuideScreen`, `NotificationScreen`
+- `CustomerCenterScreen`, `SystemNoticeScreen`
+- `VillaSearchScreen`, `ContractDetailScreen`, `AdminSubscriptionScreen`, `ResidentInvoiceScreen`
+- `GuideLibraryScreen`, `GuideDetailScreen`
+
+### 현재 기술 스택 (2026-03-10 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (단일 index.ts, ~2200+ 라인) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| API 설정 | `frontend/src/config.ts` (API_BASE_URL 중앙화) |
+| 결제 | PortOne (KG Inicis) 테스트 PG 연동 + 모의 자동결제 (Mock Toss Payments) |
+| 파일 업로드 | multer (로컬 디스크, `backend/uploads/`) |
+| 이미지 선택 | expo-image-picker |
+| 날짜 선택 | @react-native-community/datetimepicker v8.4.4 |
+| 키보드 처리 | 표준 KeyboardAvoidingView + ScrollView |
+| SafeArea | react-native-safe-area-context |
+| 푸시 알림 | expo-notifications + expo-device + expo-server-sdk |
+| 비밀번호 | bcryptjs (hash rounds: 10) |
+| 테스트 | Jest + supertest (30/32 통과, 2개 기존 버그) |
+| Admin 웹 | React + Vite + TypeScript (`admin-web/`) |
+| Admin 인증 | jsonwebtoken (JWT, SUPER_ADMIN 역할 기반) |
+| SaaS BM | 수동 계좌 송금 + 쿠폰 방식 (PG 없음) |
+| 리치 텍스트 편집 | @tiptap/react + StarterKit + Underline + Link |
+| HTML 렌더링 (모바일) | react-native-render-html |
+| 대시보드 차트 | Recharts (PieChart, BarChart, ResponsiveContainer) |
+| XSS 방지 | DOMPurify (admin-web) |
+| 상태 관리 | React Context (`AppModeContext`) |
+
+### 다음 개발 우선순위 (2026-03-10 업데이트)
+
+1. **JWT 클라이언트 저장 완성**: AsyncStorage 토큰 저장 → 모바일 API 인증 헤더 일괄 적용 (보안 C1 완성)
+2. **구독 쿠폰 검증 강화**: DB 기반 Coupon 테이블 + 원자적 사용 처리 (isUsed 플래그)
+3. **구독 만료 API 제한**: EXPIRED 상태 → 핵심 기능 제한 미들웨어
+4. **동대표 교체/권한 위임**: ADMIN 역할 이전 UI + 백엔드
+5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동

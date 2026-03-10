@@ -14,6 +14,28 @@ import { sendPushToTokens } from './utils/push';
 dotenv.config();
 
 const prisma = new PrismaClient();
+
+// One-time roomNumber normalization migration
+async function migrateRoomNumbers() {
+  try {
+    const records = await prisma.residentRecord.findMany({
+      select: { id: true, roomNumber: true },
+    });
+    for (const r of records) {
+      const clean = normalizeRoom(r.roomNumber);
+      if (clean !== r.roomNumber) {
+        await prisma.residentRecord.update({
+          where: { id: r.id },
+          data: { roomNumber: clean },
+        });
+      }
+    }
+    console.log('[MIGRATION] roomNumber normalization complete');
+  } catch (err) {
+    console.error('[MIGRATION] roomNumber normalization failed:', err);
+  }
+}
+
 const app = express();
 const expo = new Expo();
 const port = process.env.PORT || 3000;
@@ -25,6 +47,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'villamate-super-secret-2024';
 function sanitizeUser<T extends { password?: string | null; expoPushToken?: string | null; providerId?: string | null }>(user: T): Omit<T, 'password' | 'expoPushToken' | 'providerId'> {
   const { password: _p, expoPushToken: _e, providerId: _pr, ...safe } = user as any;
   return safe;
+}
+
+/** Strip '호' suffix and surrounding whitespace for consistent roomNumber storage. */
+function normalizeRoom(room: string): string {
+  return room.replace(/호/g, '').trim();
 }
 
 /** Middleware: verify mobile JWT and attach decoded payload to req. */
@@ -396,7 +423,7 @@ app.put('/api/users/:id', async (req: Request, res: Response) => {
 
 // Villa registration
 app.post('/api/villas', async (req: Request, res: Response) => {
-  const { name, address, totalUnits, adminId, accountNumber, bankName } = req.body;
+  const { name, address, totalUnits, adminId, accountNumber, bankName, adminRoomNumber, roomNumbers } = req.body;
 
   if (!name || !address || !adminId) {
     return res.status(400).json({ error: 'Name, address, and adminId are required' });
@@ -414,13 +441,49 @@ app.post('/api/villas', async (req: Request, res: Response) => {
         accountNumber: accountNumber || '',
         bankName: bankName || '',
         inviteCode,
+        roomNumbers: Array.isArray(roomNumbers) ? roomNumbers.map(String) : [],
       },
     });
+
+    // If admin provides their own room number, create a ResidentRecord for them
+    if (adminRoomNumber) {
+      const existingRecord = await prisma.residentRecord.findFirst({
+        where: { userId: adminId, villaId: villa.id },
+      });
+      if (!existingRecord) {
+        await prisma.residentRecord.create({
+          data: {
+            userId: adminId,
+            villaId: villa.id,
+            roomNumber: normalizeRoom(String(adminRoomNumber)),
+            residentType: 'HEAD',
+          },
+        });
+      }
+    }
 
     res.status(201).json(villa);
   } catch (error) {
     console.error('Villa registration error:', error);
     res.status(500).json({ error: 'Failed to register villa' });
+  }
+});
+
+// Get pre-defined room list by invite code (for resident join screen)
+app.get('/api/villas/join/rooms', async (req: Request, res: Response) => {
+  const inviteCode = String(req.query.inviteCode || '').trim().toUpperCase();
+  if (!inviteCode) return res.status(400).json({ error: 'inviteCode is required' });
+
+  try {
+    const villa = await prisma.villa.findFirst({
+      where: { inviteCode },
+      select: { id: true, name: true, roomNumbers: true },
+    });
+    if (!villa) return res.status(404).json({ error: '유효하지 않은 초대 코드입니다.' });
+    res.json({ villaId: villa.id, villaName: villa.name, roomNumbers: villa.roomNumbers });
+  } catch (error) {
+    console.error('Fetch room list error:', error);
+    res.status(500).json({ error: 'Failed to fetch room list' });
   }
 });
 
@@ -434,6 +497,7 @@ app.post('/api/villas/join', async (req: Request, res: Response) => {
 
   try {
     const normalizedCode = String(inviteCode).trim().toUpperCase();
+    const normalizedRoom = normalizeRoom(String(roomNumber));
     const villa = await prisma.villa.findFirst({
       where: { inviteCode: normalizedCode },
     });
@@ -442,17 +506,19 @@ app.post('/api/villas/join', async (req: Request, res: Response) => {
       return res.status(404).json({ error: '유효하지 않은 초대 코드입니다.' });
     }
 
+    const existingRecord = await prisma.residentRecord.findFirst({ where: { userId, villaId: villa.id } });
+    const headRecord = await prisma.residentRecord.findFirst({ where: { villaId: villa.id, roomNumber: normalizedRoom, residentType: 'HEAD' } });
+    const residentType = (!headRecord || headRecord.userId === userId) ? 'HEAD' : 'MEMBER';
+
     await prisma.residentRecord.upsert({
-      where: {
-        id: (await prisma.residentRecord.findFirst({ where: { userId, villaId: villa.id } }))?.id ?? 0,
-      },
-      update: { roomNumber },
-      create: { userId, villaId: villa.id, roomNumber },
+      where: { id: existingRecord?.id ?? 0 },
+      update: { roomNumber: normalizedRoom, residentType },
+      create: { userId, villaId: villa.id, roomNumber: normalizedRoom, residentType },
     });
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
-    res.status(200).json({ user, villa });
+    res.status(200).json({ user, villa, residentType });
   } catch (error) {
     console.error('Villa join error:', error);
     res.status(500).json({ error: 'Failed to join villa' });
@@ -470,6 +536,7 @@ app.post('/api/villas/:villaId/join', async (req: Request, res: Response) => {
   }
 
   try {
+    const normalizedRoom = normalizeRoom(String(roomNumber));
     const villa = await prisma.villa.findUnique({ where: { id: villaId } });
     if (!villa) return res.status(404).json({ error: '빌라를 찾을 수 없습니다.' });
 
@@ -477,14 +544,17 @@ app.post('/api/villas/:villaId/join', async (req: Request, res: Response) => {
       where: { userId: String(userId), villaId },
     });
 
+    const headRecord = await prisma.residentRecord.findFirst({ where: { villaId, roomNumber: normalizedRoom, residentType: 'HEAD' } });
+    const residentType = (!headRecord || headRecord.userId === String(userId)) ? 'HEAD' : 'MEMBER';
+
     if (existingRecord) {
       await prisma.residentRecord.update({
         where: { id: existingRecord.id },
-        data: { roomNumber: String(roomNumber) },
+        data: { roomNumber: normalizedRoom, residentType },
       });
     } else {
       await prisma.residentRecord.create({
-        data: { userId: String(userId), villaId, roomNumber: String(roomNumber) },
+        data: { userId: String(userId), villaId, roomNumber: normalizedRoom, residentType },
       });
     }
 
@@ -493,7 +563,7 @@ app.post('/api/villas/:villaId/join', async (req: Request, res: Response) => {
       data: { role: 'RESIDENT' },
     });
 
-    res.status(200).json({ user, villa });
+    res.status(200).json({ user, villa, residentType });
   } catch (error) {
     console.error('Villa join by ID error:', error);
     res.status(500).json({ error: 'Failed to join villa' });
@@ -525,7 +595,8 @@ app.post('/api/villas/:villaId/invoices', async (req: Request, res: Response) =>
 
   try {
     const residentRecords = await prisma.residentRecord.findMany({
-      where: { villaId },
+      where: { villaId, residentType: 'HEAD' },
+      include: { user: { select: { expoPushToken: true } } },
     });
 
     if (residentRecords.length === 0) {
@@ -567,6 +638,24 @@ app.post('/api/villas/:villaId/invoices', async (req: Request, res: Response) =>
       include: { payments: true },
     });
 
+    // Send push notification to all HEAD residents about the new invoice
+    try {
+      const tokens = residentRecords
+        .map((r) => r.user.expoPushToken)
+        .filter((t): t is string => !!t);
+
+      if (tokens.length > 0) {
+        await sendPushToTokens(
+          tokens,
+          '새 관리비 청구서 도착 📋',
+          `${billingMonth} 관리비가 청구되었습니다. ${amountPerResident.toLocaleString()}원`
+        );
+      }
+    } catch (pushErr) {
+      // Push failure must not block the invoice creation response
+      console.error('[INVOICE PUSH] Failed to send new invoice notification:', pushErr);
+    }
+
     res.status(201).json(invoice);
   } catch (error) {
     console.error('Create invoice error:', error);
@@ -600,6 +689,15 @@ app.get('/api/villas/:villaId/invoices', async (req: Request, res: Response) => 
 app.get('/api/residents/:residentId/payments', async (req: Request, res: Response) => {
   const residentId = String(req.params.residentId);
   try {
+    // MEMBER residents are sub-residents of a household — they have no invoice payments
+    const record = await prisma.residentRecord.findFirst({
+      where: { userId: residentId },
+      select: { residentType: true },
+    });
+    if (record && record.residentType === 'MEMBER') {
+      return res.status(200).json([]);
+    }
+
     const payments = await prisma.invoicePayment.findMany({
       where: { residentId },
       include: {
@@ -728,6 +826,26 @@ app.post('/api/villas/:villaId/billing', async (req: Request, res: Response) => 
   } catch (error) {
     console.error('Billing registration error:', error);
     res.status(500).json({ error: 'Failed to register billing' });
+  }
+});
+
+// Update pre-defined room numbers for a villa (admin only)
+app.put('/api/villas/:villaId/rooms', async (req: Request, res: Response) => {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  const { roomNumbers } = req.body;
+  if (!Array.isArray(roomNumbers)) return res.status(400).json({ error: 'roomNumbers must be an array' });
+
+  try {
+    const villa = await prisma.villa.update({
+      where: { id: villaId },
+      data: { roomNumbers: roomNumbers.map((r: any) => normalizeRoom(String(r))) },
+    });
+    res.json({ roomNumbers: villa.roomNumbers });
+  } catch (error) {
+    console.error('Update room numbers error:', error);
+    res.status(500).json({ error: 'Failed to update room numbers' });
   }
 });
 
@@ -1496,7 +1614,7 @@ cron.schedule('0 9 * * *', async () => {
     const villas = await prisma.villa.findMany({
       where: { autoBillingDay: today },
       include: {
-        residents: { include: { user: true } },
+        residents: { where: { residentType: 'HEAD' }, include: { user: true } },
       },
     });
 
@@ -1866,7 +1984,7 @@ app.get('/api/villas/:villaId/polls', async (req: Request, res: Response) => {
         },
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.residentRecord.count({ where: { villaId } }),
+      prisma.residentRecord.count({ where: { villaId, residentType: 'HEAD' } }),
     ]);
 
     const result = polls.map(poll => {
@@ -1908,6 +2026,10 @@ app.post('/api/villas/:villaId/polls/:pollId/vote', async (req: Request, res: Re
 
     let roomNumber: string;
     if (record) {
+      // Block MEMBER from voting (1-house-1-vote applies only to HEAD)
+      if (record.residentType === 'MEMBER') {
+        return res.status(403).json({ error: '투표권은 세대주에게만 있습니다.' });
+      }
       roomNumber = record.roomNumber;
     } else {
       // Check if the voter is the admin of this villa
@@ -2546,9 +2668,84 @@ app.delete('/api/guides/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Daily at 10 AM: send dunning push notifications for overdue (PENDING) invoice payments
+cron.schedule('0 10 * * *', async () => {
+  console.log('[CRON] Running dunning check');
+
+  try {
+    const now = new Date();
+
+    // Fetch all PENDING payments together with their invoice and the resident's push token
+    const pendingPayments = await prisma.invoicePayment.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        invoice: { select: { createdAt: true, billingMonth: true, amountPerResident: true } },
+        resident: { select: { expoPushToken: true } },
+      },
+    });
+
+    // Separate into 3-day and 7-day buckets
+    const tokens3day: string[] = [];
+    const tokens7day: string[] = [];
+    const billingMonths3day: string[] = [];
+    const billingMonths7day: string[] = [];
+
+    for (const payment of pendingPayments) {
+      const token = payment.resident.expoPushToken;
+      if (!token) continue;
+
+      const daysSince = Math.floor(
+        (now.getTime() - payment.invoice.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (daysSince === 3) {
+        tokens3day.push(token);
+        billingMonths3day.push(payment.invoice.billingMonth);
+      } else if (daysSince === 7) {
+        tokens7day.push(token);
+        billingMonths7day.push(payment.invoice.billingMonth);
+      }
+      // No reminders beyond 7 days
+    }
+
+    // 3-day reminders — send individually so each message carries the correct billingMonth
+    for (let i = 0; i < tokens3day.length; i++) {
+      try {
+        await sendPushToTokens(
+          [tokens3day[i]],
+          '관리비 미납 안내 ⚠️',
+          `${billingMonths3day[i]} 관리비가 아직 미납 상태입니다. 기한 내 납부 부탁드립니다.`
+        );
+      } catch (err) {
+        console.error('[DUNNING] 3-day push error:', err);
+      }
+    }
+
+    // 7-day final reminders
+    for (let i = 0; i < tokens7day.length; i++) {
+      try {
+        await sendPushToTokens(
+          [tokens7day[i]],
+          '관리비 미납 안내 ⚠️',
+          `[최종 안내] ${billingMonths7day[i]} 관리비 납부를 확인해주세요.`
+        );
+      } catch (err) {
+        console.error('[DUNNING] 7-day push error:', err);
+      }
+    }
+
+    console.log(
+      `[CRON] Dunning complete — 3-day: ${tokens3day.length}, 7-day: ${tokens7day.length}`
+    );
+  } catch (error) {
+    console.error('[CRON] Dunning error:', error);
+  }
+});
+
 export { app };
 
 if (require.main === module) {
+  migrateRoomNumbers();
   app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
   });

@@ -7,6 +7,9 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
+  Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { API_BASE_URL } from '../config';
 import RollingBanner from '../components/RollingBanner';
+import { useAppMode } from '../context/AppModeContext';
 
 interface Villa {
   id: number;
@@ -25,6 +29,7 @@ interface Villa {
   status?: string;
   subscriptionStatus?: string;
   subscriptionExpiry?: string;
+  roomNumbers?: string[];
   _count?: {
     residents: number;
   };
@@ -46,11 +51,15 @@ interface Resident {
 }
 
 const DashboardScreen = ({ navigation }: any) => {
+  const { setAppMode } = useAppMode();
   const [villaData, setVillaData] = useState<Villa | null>(null);
   const [dashData, setDashData] = useState<DashData | null>(null);
   const [residents, setResidents] = useState<Resident[]>([]);
   const [adminUserId, setAdminUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [villaRoomNumbers, setVillaRoomNumbers] = useState<string[]>([]);
+  const [roomMgmtVisible, setRoomMgmtVisible] = useState(false);
+  const [newRoomInput, setNewRoomInput] = useState('');
 
   const loadAll = useCallback(async () => {
     try {
@@ -86,6 +95,9 @@ const DashboardScreen = ({ navigation }: any) => {
       }
       const villa = villas[0] as Villa;
       setVillaData(villa);
+      if (villa.roomNumbers) {
+        setVillaRoomNumbers(villa.roomNumbers);
+      }
 
       // Check subscription status
       const isExpired = villa.subscriptionExpiry
@@ -131,6 +143,50 @@ const DashboardScreen = ({ navigation }: any) => {
       return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
     } catch {
       return iso;
+    }
+  };
+
+  const handleSaveRooms = async () => {
+    if (!villaData) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/villas/${villaData.id}/rooms`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomNumbers: villaRoomNumbers }),
+      });
+      if (res.ok) {
+        Alert.alert('저장 완료', '세대 호수 목록이 저장되었습니다.');
+        setRoomMgmtVisible(false);
+      }
+    } catch {
+      Alert.alert('오류', '저장에 실패했습니다.');
+    }
+  };
+
+  const handleAddNewRoom = () => {
+    const trimmed = newRoomInput.trim();
+    if (!trimmed || villaRoomNumbers.includes(trimmed)) return;
+    setVillaRoomNumbers(prev => [...prev, trimmed].sort());
+    setNewRoomInput('');
+  };
+
+  const handleSwitchToResidentMode = async () => {
+    if (!villaData) {
+      Alert.alert('알림', '빌라 정보가 없습니다. 빌라를 먼저 등록하거나 불러오세요.');
+      return;
+    }
+    try {
+      const userJson = await AsyncStorage.getItem('user');
+      const storedUser = userJson ? JSON.parse(userJson) : {};
+      const updated = {
+        ...storedUser,
+        villa: { id: villaData.id, name: villaData.name, accountNumber: villaData.accountNumber, bankName: villaData.bankName },
+      };
+      await AsyncStorage.setItem('user', JSON.stringify(updated));
+      setAppMode('RESIDENT');
+      navigation.navigate('ResidentDashboard');
+    } catch (e) {
+      console.error('Switch to resident mode error:', e);
     }
   };
 
@@ -194,6 +250,22 @@ const DashboardScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* ── Resident Mode Switch ── */}
+        <TouchableOpacity
+          style={styles.switchModeCard}
+          onPress={handleSwitchToResidentMode}
+          activeOpacity={0.75}
+        >
+          <View style={styles.switchModeRow}>
+            <Ionicons name="swap-horizontal-outline" size={22} color="#5856D6" style={{ marginRight: 10 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.switchModeTitle}>🔄 입주민 모드로 전환</Text>
+              <Text style={styles.switchModeSub}>내 관리비 납부 및 투표 참여를 입주민 시점으로 확인합니다</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+          </View>
+        </TouchableOpacity>
 
         {/* Widget row: 미납 관리비 + 확인 대기 */}
         <View style={styles.widgetRow}>
@@ -262,6 +334,29 @@ const DashboardScreen = ({ navigation }: any) => {
 
         {/* Resident list */}
         <Text style={styles.sectionLabel}>입주민 명단</Text>
+
+        {/* Room Numbers Management */}
+        <TouchableOpacity
+          style={styles.roomMgmtCard}
+          onPress={() => setRoomMgmtVisible(true)}
+          activeOpacity={0.75}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 16 }}>🏠</Text>
+              <View>
+                <Text style={styles.roomMgmtTitle}>세대 호수 관리</Text>
+                <Text style={styles.roomMgmtSub}>
+                  {villaRoomNumbers.length > 0
+                    ? `${villaRoomNumbers.length}개 세대 등록됨`
+                    : '세대 호수를 미리 등록해주세요'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+          </View>
+        </TouchableOpacity>
+
         {residents.length === 0 ? (
           <View style={styles.card}>
             <Text style={styles.emptyResidentText}>아직 등록된 입주민이 없습니다.</Text>
@@ -284,6 +379,59 @@ const DashboardScreen = ({ navigation }: any) => {
           />
         )}
       </ScrollView>
+
+      {/* Room Management Modal */}
+      <Modal
+        visible={roomMgmtVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setRoomMgmtVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>세대 호수 관리</Text>
+              <TouchableOpacity onPress={() => setRoomMgmtVisible(false)}>
+                <Ionicons name="close" size={24} color="#1C1C1E" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.roomAddRow}>
+              <TextInput
+                style={styles.roomAddInput}
+                placeholder="호수 입력 (예: 101)"
+                value={newRoomInput}
+                onChangeText={setNewRoomInput}
+                returnKeyType="done"
+                onSubmitEditing={handleAddNewRoom}
+              />
+              <TouchableOpacity style={styles.roomAddBtn} onPress={handleAddNewRoom}>
+                <Text style={styles.roomAddBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ flex: 1 }}>
+              {villaRoomNumbers.length === 0 ? (
+                <Text style={styles.roomEmptyText}>등록된 호수가 없습니다.</Text>
+              ) : (
+                <View style={styles.roomChipWrap}>
+                  {villaRoomNumbers.map(room => (
+                    <TouchableOpacity
+                      key={room}
+                      style={styles.roomChipItem}
+                      onPress={() => setVillaRoomNumbers(prev => prev.filter(r => r !== room))}
+                    >
+                      <Text style={styles.roomChipItemText}>{room}호</Text>
+                      <Text style={styles.roomChipItemClose}>×</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveRooms}>
+              <Text style={styles.saveBtnText}>저장하기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -504,6 +652,76 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1C1C1E',
   },
+  switchModeCard: {
+    backgroundColor: '#F0EEFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#DDD8FF',
+  },
+  switchModeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  switchModeTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#5856D6',
+    marginBottom: 2,
+  },
+  switchModeSub: {
+    fontSize: 12,
+    color: '#8E8E93',
+    lineHeight: 16,
+  },
+  roomMgmtCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  roomMgmtTitle: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
+  roomMgmtSub: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C1E' },
+  roomAddRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  roomAddInput: {
+    flex: 1, height: 48, backgroundColor: '#F2F2F7',
+    borderRadius: 10, paddingHorizontal: 14, fontSize: 16,
+  },
+  roomAddBtn: {
+    width: 48, height: 48, backgroundColor: '#007AFF',
+    borderRadius: 10, justifyContent: 'center', alignItems: 'center',
+  },
+  roomAddBtnText: { color: '#fff', fontSize: 24, fontWeight: '700' },
+  roomEmptyText: { textAlign: 'center', color: '#C7C7CC', fontSize: 15, marginTop: 32 },
+  roomChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 16 },
+  roomChipItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#E8F0FF', borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  roomChipItemText: { fontSize: 14, color: '#007AFF', fontWeight: '600' },
+  roomChipItemClose: { fontSize: 16, color: '#007AFF', fontWeight: '700' },
+  saveBtn: {
+    backgroundColor: '#007AFF', borderRadius: 14, height: 52,
+    justifyContent: 'center', alignItems: 'center', marginTop: 12,
+  },
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
 
 export default DashboardScreen;

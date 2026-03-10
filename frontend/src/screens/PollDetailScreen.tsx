@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 
 interface PollOption {
@@ -31,6 +32,7 @@ const PollDetailScreen = ({ navigation, route }: any) => {
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [voting, setVoting] = useState(false);
   const [reminding, setReminding] = useState(false);
+  const [residentType, setResidentType] = useState<string>('HEAD');
 
   const fetchPoll = useCallback(async () => {
     try {
@@ -49,6 +51,15 @@ const PollDetailScreen = ({ navigation, route }: any) => {
   }, [pollId, villaId]);
 
   useFocusEffect(useCallback(() => { fetchPoll(); }, [fetchPoll]));
+
+  useEffect(() => {
+    AsyncStorage.getItem('user').then(json => {
+      if (json) {
+        const u = JSON.parse(json);
+        setResidentType(u.residentType || 'HEAD');
+      }
+    });
+  }, []);
 
   const isActive = poll ? new Date(poll.endDate) > new Date() : false;
   // hasVoted: match by voterId (works for residents) OR by the 'admin' sentinel roomNumber (for admins)
@@ -229,14 +240,27 @@ const PollDetailScreen = ({ navigation, route }: any) => {
                 </Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity
-              style={[styles.voteBtn, (!selectedOptionId || voting) && { opacity: 0.5 }]}
-              onPress={handleVote}
-              disabled={!selectedOptionId || voting}
-            >
-              {voting ? <ActivityIndicator color="#fff" /> : <Text style={styles.voteBtnText}>투표하기</Text>}
-            </TouchableOpacity>
-            <Text style={styles.hintText}>* 1세대 1표 원칙이 적용됩니다</Text>
+            {userRole !== 'ADMIN' && residentType === 'MEMBER' ? (
+              <>
+                <View style={[styles.voteBtn, { opacity: 0.4, backgroundColor: '#8E8E93' }]}>
+                  <Text style={styles.voteBtnText}>투표하기</Text>
+                </View>
+                <View style={styles.memberNoticeBox}>
+                  <Text style={styles.memberNoticeText}>투표권은 세대주에게만 있습니다.</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[styles.voteBtn, (!selectedOptionId || voting) && { opacity: 0.5 }]}
+                  onPress={handleVote}
+                  disabled={!selectedOptionId || voting}
+                >
+                  {voting ? <ActivityIndicator color="#fff" /> : <Text style={styles.voteBtnText}>투표하기</Text>}
+                </TouchableOpacity>
+                <Text style={styles.hintText}>* 1세대 1표 원칙이 적용됩니다</Text>
+              </>
+            )}
           </>
         )}
 
@@ -306,6 +330,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  memberNoticeBox: { backgroundColor: '#FFF3CD', borderRadius: 12, padding: 14, marginTop: 12, alignItems: 'center' },
+  memberNoticeText: { fontSize: 14, color: '#856404', fontWeight: '600' },
 });
 
 export default PollDetailScreen;

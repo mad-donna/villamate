@@ -802,3 +802,68 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 - **무료 쿠폰 패턴**: `POST /api/subscriptions/redeem { code }` → DB `Coupon.isUsed = true`, `Villa.subscriptionStatus = 'FREE_TRIAL'`, `trialEndDate = now + 30days`
 - **역할 선택 params 체인 연장**: `email + password + name + termsAgreed` → `SelectRoleScreen` → role에 따라 분기
 - **탭 추가 시 순서 원칙**: 입주민 탭은 "홈(집) / 커뮤니티(말풍선) / 우리 빌라(건물) / 프로필(사람)" 순으로 직관적 아이콘 배치
+
+---
+
+### 2026-03-10 — 다중 역할(세대주/세대원), 듀얼 모드, 호수 사전 지정, 알림 자동화 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **다중 역할 입주민 (HEAD vs MEMBER)**
+   - `ResidentRecord.residentType String @default("HEAD")` 스키마 추가
+   - 가입 시 자동 판별: 해당 `villaId + normalizedRoomNumber`에 HEAD가 이미 있으면 MEMBER, 없으면 HEAD
+   - HEAD만 청구서 발행 대상 (`residentType: 'HEAD'` 필터) — 수동 발행 + 자동결제 cron 양쪽 적용
+   - HEAD만 투표 가능 — MEMBER는 403 반환(`'투표권은 세대주에게만 있습니다.'`)
+   - HEAD만 납부 내역 조회 — MEMBER는 빈 배열 즉시 반환
+   - 프론트: `ProfileScreen`에 역할 뱃지 (HEAD=주황 `👑 세대주(대표)`, MEMBER=하늘 `👥 세대원`)
+   - 프론트: `PollDetailScreen`에 MEMBER용 비활성 버튼 + 안내 노란 박스
+
+2. **듀얼 모드 (ADMIN ↔ RESIDENT 전환)**
+   - `frontend/src/context/AppModeContext.tsx` 신규 — `AppMode: 'ADMIN' | 'RESIDENT'`, `useAppMode()` hook
+   - `App.tsx` 최상위에 `<AppModeProvider>` 추가
+   - `DashboardScreen`: "🔄 입주민 모드로 전환" 보라색 카드 → AsyncStorage에 villa 병합 후 `ResidentDashboard`로 이동
+   - `ResidentDashboardScreen`: `userRole === 'ADMIN'`이면 "👑 관리자 모드로 복귀" 버튼 표시
+   - `ProfileScreen`: 동일 복귀 버튼 + 역할 뱃지
+
+3. **세대 호수 사전 지정**
+   - `Villa.roomNumbers String[] @default([])` 스키마 추가
+   - `POST /api/villas`: `adminRoomNumber`(admin ResidentRecord 생성), `roomNumbers[]` 저장
+   - `GET /api/villas/join/rooms?inviteCode=XXX`: 입주민 가입 전 호수 목록 조회 (라우트 순서 주의)
+   - `PUT /api/villas/:villaId/rooms`: 관리자가 호수 목록 수정
+   - `OnboardingScreen`: 호수 칩 UI (추가/삭제) + `adminRoomNumber` 입력 + 동시 전송
+   - `ResidentJoinScreen`: 6자리 초대코드 입력 완료 시 자동 fetch → 호수 picker Modal 표시 (없으면 TextInput 폴백)
+   - `DashboardScreen`: "세대 호수 관리" 카드 + 칩 관리 Modal
+
+4. **호수 정규화 버그 수정**
+   - `normalizeRoom(room)` 유틸 추가: `room.replace(/호/g, '').trim()`
+   - 모든 가입/저장 경로에 정규화 적용 (join, 투표, 청구서 모두)
+   - `migrateRoomNumbers()` 스타트업 마이그레이션: 기존 더티 데이터(`'101호'`) → `'101'` 일괄 정규화
+   - MEMBER 납부 가드: `residentType === 'MEMBER'`이면 `GET /api/residents/:id/payments` 즉시 `200 []` 반환
+
+5. **미납 관리비 자동 독촉 크론**
+   - `POST /api/villas/:villaId/invoices` 청구서 생성 시 즉시 세대주 전체 푸시:
+     - 제목: `새 관리비 청구서 도착 📋`, 본문: `${billingMonth} 관리비가 청구되었습니다. ${amountPerResident}원`
+   - `cron.schedule('0 10 * * *', ...)` 매일 오전 10시 독촉 크론:
+     - 모든 PENDING `InvoicePayment` 조회 → 청구서 생성일 기준 정확히 **3일차**, **7일차**에만 푸시 발송
+     - 3일차: `관리비 미납 안내 ⚠️`, 7일차: `[최종 안내] 관리비 납부를 확인해주세요.`
+     - 이후 추가 알림 없음
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **라우트 충돌 방지**: `GET /api/villas/join/rooms`를 반드시 `POST /api/villas/join`과 `GET /api/villas/:adminId` 앞에 등록
+- **HEAD/MEMBER 자동 판별**:
+  ```typescript
+  const existing = await prisma.residentRecord.findFirst({ where: { villaId, roomNumber: normalizedRoom } });
+  const residentType = existing ? 'MEMBER' : 'HEAD';
+  ```
+- **AppModeContext 듀얼 모드 패턴**:
+  ```typescript
+  // 전환 시 villa 데이터를 AsyncStorage에 먼저 병합 후 setAppMode + navigation
+  const existing = await AsyncStorage.getItem('user');
+  const merged = { ...JSON.parse(existing || '{}'), villa: villaData };
+  await AsyncStorage.setItem('user', JSON.stringify(merged));
+  setAppMode('RESIDENT');
+  navigation.replace('ResidentDashboard');
+  ```
+- **조건부 독촉 크론 패턴**: `daysSince === 3` 또는 `daysSince === 7`에만 발송 — `Math.floor((now - createdAt) / 86400000)`
+- **청구서 생성 후 즉시 푸시**: try/catch 독립 블록 — 푸시 실패가 청구서 생성 응답에 영향 없도록 격리
