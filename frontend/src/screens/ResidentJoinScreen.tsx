@@ -15,7 +15,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 const ResidentJoinScreen = ({ navigation }: any) => {
@@ -37,15 +37,9 @@ const ResidentJoinScreen = ({ navigation }: any) => {
     if (code.length !== 6) return;
     setFetchingRooms(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/join/rooms?inviteCode=${code.trim().toUpperCase()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAvailableRooms(data.roomNumbers || []);
-        setRoomsLoaded(true);
-      } else {
-        setAvailableRooms([]);
-        setRoomsLoaded(false);
-      }
+      const res = await api.get(`/api/villas/join/rooms?inviteCode=${code.trim().toUpperCase()}`);
+      setAvailableRooms(res.data.roomNumbers || []);
+      setRoomsLoaded(true);
     } catch {
       setAvailableRooms([]);
     } finally {
@@ -67,22 +61,12 @@ const ResidentJoinScreen = ({ navigation }: any) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/villas/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          inviteCode: inviteCode.trim().toUpperCase(),
-          roomNumber,
-        }),
+      const response = await api.post('/api/villas/join', {
+        userId,
+        inviteCode: inviteCode.trim().toUpperCase(),
+        roomNumber,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        Alert.alert('오류', data.error || '빌라 가입에 실패했습니다.');
-        return;
-      }
+      const data = response.data;
 
       const updatedUser = { ...data.user, villa: data.villa, residentType: data.residentType };
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));

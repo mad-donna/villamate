@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 const StepIndicator = ({ current, total }: { current: number; total: number }) => (
   <View style={stepStyles.container}>
@@ -56,8 +56,32 @@ const SignupProfileScreen = ({ navigation, route }: any) => {
   const { email, password, termsAgreed } = route.params || {};
 
   const [name, setName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('010-');
   const [loading, setLoading] = useState(false);
+
+  const handlePhoneChange = (text: string) => {
+    // Always enforce "010-" prefix
+    if (!text.startsWith('010-')) {
+      setPhoneNumber('010-');
+      return;
+    }
+
+    // Extract only digits after "010-"
+    const suffix = text.slice(4).replace(/\D/g, '');
+
+    // Limit to 8 digits
+    const limited = suffix.slice(0, 8);
+
+    // Format: insert hyphen after 4th digit
+    let formatted = '010-';
+    if (limited.length <= 4) {
+      formatted += limited;
+    } else {
+      formatted += limited.slice(0, 4) + '-' + limited.slice(4);
+    }
+
+    setPhoneNumber(formatted);
+  };
 
   const handleRegister = async () => {
     if (!name.trim()) {
@@ -67,39 +91,30 @@ const SignupProfileScreen = ({ navigation, route }: any) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password,
-          name: name.trim(),
-          phoneNumber: phoneNumber.trim() || undefined,
-          termsAgreed,
-        }),
+      const response = await api.post('/api/auth/register', {
+        email,
+        password,
+        name: name.trim(),
+        phoneNumber: phoneNumber.trim() || undefined,
+        termsAgreed,
       });
 
-      const data = await response.json();
-
-      if (response.status === 409) {
-        Alert.alert('오류', '이미 가입된 이메일입니다. 로그인해주세요.', [
-          { text: '확인', onPress: () => navigation.navigate('EmailLogin') },
-        ]);
-        return;
-      }
-
-      if (!response.ok) {
-        Alert.alert('오류', data.error || '회원가입에 실패했습니다.');
-        return;
-      }
+      const data = response.data;
 
       // Save user session
+      if (data.token) await AsyncStorage.setItem('token', data.token);
       await AsyncStorage.setItem('user', JSON.stringify(data));
       await AsyncStorage.setItem('userId', data.id);
 
       // Navigate to role selection screen
       navigation.replace('SelectRole');
-    } catch (error) {
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        Alert.alert('오류', '이미 가입된 이메일입니다. 로그인해주세요.', [
+          { text: '확인', onPress: () => navigation.navigate('EmailLogin') },
+        ]);
+        return;
+      }
       Alert.alert('오류', '서버에 연결할 수 없습니다.');
     } finally {
       setLoading(false);
@@ -148,8 +163,9 @@ const SignupProfileScreen = ({ navigation, route }: any) => {
               style={styles.input}
               placeholder="010-0000-0000"
               value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
+              onChangeText={handlePhoneChange}
+              keyboardType="number-pad"
+              maxLength={13}
               returnKeyType="done"
             />
           </View>

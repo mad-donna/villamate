@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface Post {
   id: string;
@@ -32,9 +32,8 @@ const MyPostsScreen = ({ navigation, route }: any) => {
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/users/${userId}/posts`);
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const data = await res.json();
+      const res = await api.get(`/api/users/${userId}/posts`);
+      const data = res.data;
       setPosts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Fetch my posts error:', err);

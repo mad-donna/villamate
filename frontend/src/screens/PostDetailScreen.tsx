@@ -12,7 +12,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 interface PostDetail {
@@ -64,12 +64,8 @@ const PostDetailScreen = ({ navigation, route }: any) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/posts/${postId}`);
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || `Server returned ${response.status}`);
-      }
-      const data = await response.json();
+      const response = await api.get(`/api/posts/${postId}`);
+      const data = response.data;
       setPost(data);
     } catch (err: any) {
       console.error('Fetch post detail error:', err);
@@ -81,11 +77,8 @@ const PostDetailScreen = ({ navigation, route }: any) => {
 
   const fetchComments = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`);
-      if (res.ok) {
-        const data = await res.json();
-        setComments(data);
-      }
+      const res = await api.get(`/api/posts/${postId}/comments`);
+      setComments(res.data);
     } catch (err) {
       console.error('Fetch comments error:', err);
     }
@@ -116,18 +109,10 @@ const PostDetailScreen = ({ navigation, route }: any) => {
         style: 'destructive',
         onPress: async () => {
           try {
-            const res = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
-              method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId }),
-            });
-            if (res.ok) {
+            await api.delete(`/api/posts/${postId}`, { data: { userId } });
               Alert.alert('삭제되었습니다.', '', [
                 { text: '확인', onPress: () => navigation.goBack() },
               ]);
-            } else {
-              Alert.alert('오류', '삭제에 실패했습니다.');
-            }
           } catch (err) {
             console.error('Delete post error:', err);
             Alert.alert('오류', '서버와 통신 중 문제가 발생했습니다.');
@@ -141,17 +126,9 @@ const PostDetailScreen = ({ navigation, route }: any) => {
     if (!commentText.trim()) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: commentText.trim(), authorId: userId }),
-      });
-      if (res.ok) {
-        setCommentText('');
-        await fetchComments();
-      } else {
-        Alert.alert('오류', '댓글 등록에 실패했습니다.');
-      }
+      await api.post(`/api/posts/${postId}/comments`, { content: commentText.trim(), authorId: userId });
+      setCommentText('');
+      await fetchComments();
     } finally {
       setSubmitting(false);
     }
@@ -170,16 +147,8 @@ const PostDetailScreen = ({ navigation, route }: any) => {
     if (!post) return;
     setUpdatingStatus(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${post.villaId}/posts/${post.id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, userRole }),
-      });
-      if (res.ok) {
-        setPost({ ...post, status: newStatus });
-      } else {
-        Alert.alert('오류', '상태 변경에 실패했습니다.');
-      }
+      await api.patch(`/api/villas/${post.villaId}/posts/${post.id}/status`, { status: newStatus, userRole });
+      setPost({ ...post, status: newStatus });
     } catch {
       Alert.alert('오류', '서버와 통신 중 문제가 발생했습니다.');
     } finally {
@@ -191,15 +160,8 @@ const PostDetailScreen = ({ navigation, route }: any) => {
     if (!post) return;
     setSendingPush(true);
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/villas/${post.villaId}/posts/${post.id}/send-push`,
-        { method: 'POST' }
-      );
-      if (res.ok) {
-        Alert.alert('푸시 알림이 발송되었습니다.');
-      } else {
-        Alert.alert('오류', '푸시 발송에 실패했습니다.');
-      }
+      await api.post(`/api/villas/${post.villaId}/posts/${post.id}/send-push`);
+      Alert.alert('푸시 알림이 발송되었습니다.');
     } catch {
       Alert.alert('오류', '서버와 통신 중 문제가 발생했습니다.');
     } finally {

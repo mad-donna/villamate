@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 const ChangePasswordScreen = ({ navigation, route }: any) => {
   const { userId } = route.params as { userId: string };
@@ -37,16 +37,7 @@ const ChangePasswordScreen = ({ navigation, route }: any) => {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/users/${userId}/password`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldPassword, newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        Alert.alert('오류', data.error || '비밀번호 변경에 실패했습니다.');
-        return;
-      }
+      await api.patch(`/api/users/${userId}/password`, { oldPassword, newPassword });
       Alert.alert('완료', '비밀번호가 변경되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);

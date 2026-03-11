@@ -1346,3 +1346,107 @@ Expo 푸시 알림(1단계)에 이어, 앱 내 영구 알림함(2단계) 구현.
 3. **구독 만료 API 제한**: EXPIRED 상태 → 핵심 기능 제한 미들웨어
 4. **동대표 교체/권한 위임**: ADMIN 역할 이전 UI + 백엔드
 5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
+
+---
+
+## 20. MVP 구현 현황 (2026-03-11 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### RDD (요구사항 정의서) 통합 문서 신규 작성
+
+`docs/RDD.md` 신규 생성 — 기존 PRODUCT_CONTEXT.md / IA.md / PHASE1_SCOPE.md 3개 문서를 단일 SSOT로 통합.
+기능 요구사항 F-01~F-80, 비기능 요구사항 NF-01~NF-13 전체 정의 및 상태 표시.
+
+#### 백엔드 모듈화 리팩토링 완료 (NF-12 달성)
+
+단일 `backend/src/index.ts` (~2200+ 라인)를 도메인별 파일로 분리.
+
+| 신규 파일/디렉토리 | 역할 |
+|--------------------|------|
+| `backend/src/prisma.ts` | PrismaClient 단일 인스턴스 |
+| `backend/src/helpers.ts` | normalizeRoom, sanitizeUser, formatBillingMonth 헬퍼 |
+| `backend/src/migrations.ts` | migrateRoomNumbers 스타트업 마이그레이션 |
+| `backend/src/cron.ts` | 자동 청구 + 자동 독촉 크론 로직 |
+| `backend/src/routes/` | 도메인별 Express Router (auth, villas, invoices, polls...) |
+| `backend/src/controllers/` | 라우트 핸들러 함수 |
+| `backend/src/middlewares/` | authenticateUser 등 미들웨어 |
+
+- `index.ts`는 라우트 등록 + 서버 시작만 담당하는 진입점으로 단순화
+
+#### 프론트엔드 전역 JWT 인증 완성 (F-08, NF-04 달성)
+
+`frontend/src/utils/api.ts` 신규 생성 — Axios interceptor 기반 공통 인스턴스.
+
+- **request interceptor**: `AsyncStorage.getItem('token')` → `Authorization: Bearer ${token}` 자동 주입
+- **response interceptor**: 401 응답 시 `AsyncStorage.multiRemove(['user', 'token'])` + 로그인 화면 리다이렉트
+- 35개+ 화면의 `fetch()` 직접 호출 → `axiosInstance` 호출로 일괄 교체
+- 이로써 보안 C1 완성: 서버 발급 JWT → 클라이언트 일괄 적용 완료
+
+#### 전자투표 UX 강화 — 투표 수정(Upsert) 도입
+
+마감 전 잘못 선택한 입주민의 재투표를 허용하는 UX 개선.
+
+| 항목 | 내용 |
+|------|------|
+| 투표 수정 | 마감 전 선택지 변경 → `prisma.vote.upsert` (@@unique 제약 활용) |
+| 투표 완료 배지 | `hasVoted`이면 해당 선택지에 "✅ 투표 완료" 초록 배지 표시 |
+| 이전 선택지 복원 | 화면 진입 시 기존 투표 조회 → `selectedOption` 자동 세팅 |
+
+#### 미납 독촉 알림 1일 1회 쿨타임 추가
+
+동일 청구서에 대해 당일 크론 + 수동 버튼 양쪽에서 중복 발송을 방지.
+- 당일 이미 독촉 발송된 경우 재발송 차단
+- 입주민이 알림을 스팸으로 인식하지 않도록 최대 1일 1회 보장
+
+### 현재 구현된 전체 화면 목록 (2026-03-11 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `SignupAgreementScreen`, `SignupProfileScreen`, `SelectRoleScreen`
+- `OnboardingScreen`, `ResidentJoinScreen` (호수 picker), `VillaSearchScreen`, `ProfileSetupScreen`
+
+#### 관리자 탭 (5개)
+- `DashboardScreen`, `ManagementScreen`, `CommunityTabScreen`, `LedgerTabScreen`, `ProfileScreen`
+
+#### 입주민 탭 (4개)
+- `ResidentDashboardScreen`, `ResidentCommunityTabScreen`, `OurVillaScreen`, `ProfileScreen`
+
+#### 스택 화면
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentInvoiceScreen` (PDF 저장/공유), `PaymentScreen`
+- `ResidentManagementScreen`, `LedgerScreen`
+- `PostDetailScreen`, `CreatePostScreen`, `MyPostsScreen`
+- `ParkingSearchScreen`, `VehicleManagementScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`, `ContractDetailScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen` (투표 수정 Upsert, 완료 배지)
+- `ChangePasswordScreen`, `GuideScreen`, `GuideLibraryScreen`, `GuideDetailScreen`
+- `NotificationScreen`, `SystemNoticeScreen`, `CustomerCenterScreen`
+- `AdminSubscriptionScreen`
+
+### 현재 기술 스택 (2026-03-11 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (**모듈형** — routes/controllers/middlewares 분리) |
+| HTTP 클라이언트 | **Axios** + interceptor 기반 JWT 인증 (`frontend/src/utils/api.ts`) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| 인증 | JWT (30일 만료), bcryptjs, **Axios interceptor 전역 헤더 적용** |
+| 결제 | PortOne (KG Inicis) 테스트 PG + Mock Toss Payments |
+| 파일 업로드 | multer (로컬 디스크) |
+| 푸시 알림 | expo-notifications + expo-server-sdk |
+| PDF | expo-print + expo-sharing |
+| 상태 관리 | React Context (AppModeContext) |
+| Admin 웹 | React + Vite + TypeScript + Recharts + Tiptap + DOMPurify |
+| HTML 렌더링 (모바일) | react-native-render-html |
+| 테스트 | Jest + supertest |
+
+### 다음 개발 우선순위 (2026-03-11 업데이트)
+
+1. **구독 만료 API 제한**: EXPIRED 상태 → 청구서 발행 등 핵심 기능 제한 미들웨어
+2. **구독료 자동결제 실 연동**: Toss Payments 빌링키 → 실제 월 자동청구
+3. **동대표 교체/권한 위임**: ADMIN 역할 이전 UI + 백엔드
+4. **PG 결제 서버 검증**: imp_uid → PortOne API 서버 검증
+5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동

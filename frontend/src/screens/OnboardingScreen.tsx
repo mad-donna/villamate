@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 const BANKS = [
@@ -125,33 +125,23 @@ const OnboardingScreen = ({ navigation }: any) => {
 
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/villas`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: buildingName,
-          address,
-          totalUnits: Number(totalUnits),
-          adminId,
-          accountNumber,
-          bankName,
-          adminRoomNumber: adminRoomNumber.trim() || undefined,
-          roomNumbers,
-        }),
+      const response = await api.post('/api/villas', {
+        name: buildingName,
+        address,
+        totalUnits: Number(totalUnits),
+        adminId,
+        accountNumber,
+        bankName,
+        adminRoomNumber: adminRoomNumber.trim() || undefined,
+        roomNumbers,
       });
-
-      if (response.ok) {
-        const villa = await response.json();
+      {
+        const villa = response.data;
         Alert.alert(
           '등록 완료',
           `빌라 등록이 완료되었습니다.\n\n초대 코드: ${villa.inviteCode}\n\n입주민에게 이 코드를 공유해주세요.`,
           [{ text: '확인', onPress: () => navigation.navigate('Main') }]
         );
-      } else {
-        const err = await response.json();
-        throw new Error(err.error || '등록 실패');
       }
     } catch (err: any) {
       Alert.alert('오류', err.message || '등록 중 문제가 발생했습니다. 다시 시도해주세요.');

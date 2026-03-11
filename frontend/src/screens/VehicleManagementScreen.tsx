@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface Vehicle {
   id: string;
@@ -47,11 +47,9 @@ const VehicleManagementScreen = ({ navigation }: any) => {
       setVillaId(user.villa.id);
     } else if (uid) {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/villas/${uid}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) setVillaId(data[0].id);
-        }
+        const res = await api.get(`/api/villas/${uid}`);
+        const data = res.data;
+        if (Array.isArray(data) && data.length > 0) setVillaId(data[0].id);
       } catch (e) {
         console.error('Failed to fetch villa:', e);
       }
@@ -67,9 +65,8 @@ const VehicleManagementScreen = ({ navigation }: any) => {
     if (!uid) return;
     try {
       setVehicleLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/users/${uid}/vehicles`);
-      if (!res.ok) throw new Error('fetch failed');
-      const data = await res.json();
+      const res = await api.get(`/api/users/${uid}/vehicles`);
+      const data = res.data;
       setVehicles(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Fetch vehicles error:', e);
@@ -109,22 +106,14 @@ const VehicleManagementScreen = ({ navigation }: any) => {
     }
     try {
       setRegistering(true);
-      const res = await fetch(`${API_BASE_URL}/api/vehicles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plateNumber: plateNumber.trim(),
-          modelName: modelName.trim() || null,
-          ownerId: uid,
-          villaId: vid,
-          isVisitor,
-          expectedDeparture: isVisitor && expectedDeparture.trim() ? expectedDeparture.trim() : null,
-        }),
+      await api.post('/api/vehicles', {
+        plateNumber: plateNumber.trim(),
+        modelName: modelName.trim() || null,
+        ownerId: uid,
+        villaId: vid,
+        isVisitor,
+        expectedDeparture: isVisitor && expectedDeparture.trim() ? expectedDeparture.trim() : null,
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || '등록 실패');
-      }
       setPlateNumber('');
       setModelName('');
       setIsVisitor(false);
@@ -146,8 +135,7 @@ const VehicleManagementScreen = ({ navigation }: any) => {
         style: 'destructive',
         onPress: async () => {
           try {
-            const res = await fetch(`${API_BASE_URL}/api/vehicles/${vehicleId}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('삭제 실패');
+            await api.delete(`/api/vehicles/${vehicleId}`);
             await fetchVehicles();
           } catch (e: any) {
             Alert.alert('오류', e.message || '차량 삭제에 실패했습니다.');

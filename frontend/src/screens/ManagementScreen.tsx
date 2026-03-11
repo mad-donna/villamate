@@ -12,7 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 interface MenuItem {
@@ -45,10 +45,8 @@ const ManagementScreen = () => {
       if (!userId) return;
       setUserId(userId);
 
-      const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
-      if (!response.ok) return;
-
-      const villas = await response.json();
+      const response = await api.get(`/api/villas/${userId}`);
+      const villas = response.data;
       if (Array.isArray(villas) && villas.length > 0) {
         setVillaId(villas[0].id);
       }

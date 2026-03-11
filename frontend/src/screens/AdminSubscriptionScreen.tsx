@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface BillingInfo {
   isAutoBilling: boolean;
@@ -45,11 +45,8 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
 
   const fetchBillingInfo = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/billing`);
-      if (res.ok) {
-        const data = await res.json();
-        setBillingInfo(data);
-      }
+      const res = await api.get(`/api/villas/${villaId}/billing`);
+      setBillingInfo(res.data);
     } catch (e) {
       // Non-fatal — UI will just show the register button
     }
@@ -87,10 +84,7 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
   const handleFreeTrial = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/subscribe`, {
-        method: 'PATCH',
-      });
-      if (!res.ok) throw new Error('failed');
+      await api.patch(`/api/villas/${villaId}/subscribe`);
       setShowSuccess(true);
     } catch (e) {
       Alert.alert('오류', '구독 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
@@ -146,22 +140,14 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
 
     setCardLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/billing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cardNumber: rawCard,
-          expireMonth,
-          expireYear,
-          password: cardPassword,
-          adminId,
-        }),
+      const res = await api.post(`/api/villas/${villaId}/billing`, {
+        cardNumber: rawCard,
+        expireMonth,
+        expireYear,
+        password: cardPassword,
+        adminId,
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || '카드 등록에 실패했습니다.');
-      }
+      const data = res.data;
 
       setShowCardModal(false);
       setCardNumber('');

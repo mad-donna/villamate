@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface Faq {
   id: string;
@@ -24,8 +24,8 @@ const CustomerCenterScreen = ({ navigation }: any) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/faqs`)
-      .then((r) => r.json())
+    api.get('/api/faqs')
+      .then((r) => r.data)
       .then((data) => setFaqs(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setLoading(false));

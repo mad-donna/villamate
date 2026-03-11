@@ -14,7 +14,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 type InvoiceType = 'FIXED' | 'VARIABLE';
@@ -67,10 +67,8 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
           return;
         }
 
-        const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
-        if (!response.ok) throw new Error('villa fetch failed');
-
-        const villas = await response.json();
+        const response = await api.get(`/api/villas/${userId}`);
+        const villas = response.data;
         if (!Array.isArray(villas) || villas.length === 0) {
           Alert.alert('오류', '등록된 빌라가 없습니다.');
           navigation.goBack();
@@ -181,16 +179,7 @@ const CreateInvoiceScreen = ({ navigation }: any) => {
         }));
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/villas/${villaId}/invoices`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || '발행 실패');
-      }
+      await api.post(`/api/villas/${villaId}/invoices`, body);
 
       Alert.alert('발행 완료', '청구서를 성공적으로 발행했습니다', [
         { text: '확인', onPress: () => navigation.goBack() },

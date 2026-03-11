@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import BoardScreen from './BoardScreen';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 /**
@@ -37,10 +37,8 @@ const CommunityTabScreen = ({ navigation }: any) => {
       setUserId(resolvedUserId);
 
       // Resolve villaId for admin
-      const response = await fetch(`${API_BASE_URL}/api/villas/${resolvedUserId}`);
-      if (!response.ok) return;
-
-      const villas = await response.json();
+      const response = await api.get(`/api/villas/${resolvedUserId}`);
+      const villas = response.data;
       if (Array.isArray(villas) && villas.length > 0) {
         setVillaId(villas[0].id);
       }

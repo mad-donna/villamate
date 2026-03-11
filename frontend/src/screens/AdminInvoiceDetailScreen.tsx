@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 interface PaymentRecord {
@@ -44,11 +44,8 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
   const fetchPayments = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `${API_BASE_URL}/api/invoices/${invoiceId}/payments`
-      );
-      if (!response.ok) throw new Error('Failed to fetch payments');
-      const data = await response.json();
+      const response = await api.get(`/api/invoices/${invoiceId}/payments`);
+      const data = response.data;
       setPayments(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('fetchPayments error:', err);
@@ -66,12 +63,7 @@ const AdminInvoiceDetailScreen = ({ route, navigation }: any) => {
   const handleConfirm = async (paymentId: string) => {
     setConfirming(paymentId);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/invoices/${invoiceId}/confirm`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId }),
-      });
-      if (!res.ok) throw new Error('failed');
+      await api.patch(`/api/invoices/${invoiceId}/confirm`, { paymentId });
       await fetchPayments();
     } catch (e) {
       Alert.alert('오류', '납부 확인 처리에 실패했습니다.');

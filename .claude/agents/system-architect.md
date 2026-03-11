@@ -1455,3 +1455,68 @@ cron.schedule('POST /api/villas/:villaId/invoices') — 청구서 생성 시
 - 인증 미들웨어 미적용 (앱 일반 API) → JWT 전체 확산 필요
 - 단일 index.ts (~2200+ 라인) → 도메인별 라우터 분리 시급
 - 업로드 파일 로컬 저장 → S3 마이그레이션
+
+---
+
+### 2026-03-11 — RDD 문서화, 백엔드 모듈화 완료, 전역 JWT 인증, 전자투표 Upsert 세션
+
+#### 아키텍처 주요 변경 사항
+
+**백엔드 모놀리스 → 모듈형 아키텍처 전환 완료 (NF-12)**
+
+```
+backend/src/ (이전: 단일 index.ts ~2200라인)
+├── index.ts             ← 라우트 등록 + 서버 시작만 담당
+├── prisma.ts            ← NEW: PrismaClient 단일 인스턴스
+├── helpers.ts           ← NEW: normalizeRoom, sanitizeUser, formatBillingMonth 등
+├── migrations.ts        ← NEW: migrateRoomNumbers 스타트업 함수
+├── cron.ts              ← NEW: 자동 독촉 크론 + 자동 청구 크론
+├── routes/              ← NEW: 도메인별 Express Router
+│   ├── auth.ts          (로그인/회원가입)
+│   ├── villas.ts        (빌라 관리)
+│   ├── invoices.ts      (청구서)
+│   ├── payments.ts      (납부)
+│   ├── posts.ts         (커뮤니티)
+│   ├── polls.ts         (전자투표)
+│   ├── vehicles.ts      (차량)
+│   ├── notifications.ts (알림)
+│   └── admin.ts         (SUPER_ADMIN 전용)
+├── controllers/         ← NEW: 라우트 핸들러 함수
+└── middlewares/         ← NEW: authenticateUser, 구독 체크 등
+```
+
+**프론트엔드 인증 레이어 신규 추가**
+
+```
+frontend/src/utils/api.ts  ← NEW: Axios 공통 인스턴스
+  ├── request interceptor: AsyncStorage 'token' → Authorization 헤더 자동 주입
+  └── response interceptor: 401 → multiRemove(['user','token']) + 로그인 리다이렉트
+
+frontend/src/utils/  ← NEW 디렉토리
+```
+
+#### 데이터 모델 변경 사항
+
+없음 (이 세션은 리팩토링 + 인증 레이어 구축 중심)
+
+#### 아키텍처 결정: Axios interceptor vs 개별 fetch
+
+- **선택**: Axios interceptor 기반 공통 인스턴스 (`api.ts`)
+- **이유**: 35개+ 화면에서 개별 `fetch()` 호출 시 인증 헤더 누락 위험 제거, 401 처리 단일화
+- **트레이드오프**: AsyncStorage 비동기 조회가 매 요청마다 발생 (MVP 규모에서 수용)
+- **향후**: 토큰 메모리 캐시 도입 시 `api.ts`만 수정하면 전체 반영
+
+#### 아키텍처 결정: 투표 수정(Upsert) 방식
+
+- **선택**: `prisma.vote.upsert({ where: { pollId_roomNumber: ... } })`
+- **이유**: 기존 `@@unique([pollId, roomNumber])` 제약을 그대로 활용 → 추가 스키마 변경 없이 Upsert 구현
+- **무결성**: DB 레벨 unique가 동시 요청 시 Race Condition 없이 원자적 처리 보장
+
+#### 알려진 기술 부채 (2026-03-11 업데이트)
+
+- ~~단일 index.ts~~ → **[RESOLVED]** 도메인별 모듈 분리 완료 (NF-12)
+- ~~모바일 JWT 클라이언트 미완~~ → **[RESOLVED]** Axios interceptor 완성 (F-08, NF-04)
+- 독촉 크론 `=== 3/7` 조건 → 서버 다운 시 발송 누락 가능
+- 업로드 파일 로컬 저장 → S3 마이그레이션 미완
+- 구독 만료 API 접근 제한 미들웨어 미구현
+- PG 결제 서버 검증 미구현

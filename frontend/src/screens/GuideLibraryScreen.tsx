@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - 40;
@@ -50,13 +50,10 @@ const GuideLibraryScreen = ({ navigation }: any) => {
       setLoading(true);
       const url =
         selectedCategory === '전체'
-          ? `${API_BASE_URL}/api/guides`
-          : `${API_BASE_URL}/api/guides?category=${encodeURIComponent(selectedCategory)}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setGuides(Array.isArray(data) ? data : []);
-      }
+          ? '/api/guides'
+          : `/api/guides?category=${encodeURIComponent(selectedCategory)}`;
+      const res = await api.get(url);
+      setGuides(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('GuideLibrary load error:', err);
     } finally {

@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 interface InvoicePayment {
@@ -62,9 +62,8 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
       }
       if (!userId) return null;
 
-      const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
-      if (!response.ok) return null;
-      const villas = await response.json();
+      const response = await api.get(`/api/villas/${userId}`);
+      const villas = response.data;
       if (!Array.isArray(villas) || villas.length === 0) return null;
       return villas[0].id;
     } catch (err) {
@@ -83,9 +82,8 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
       }
       if (!id) return;
 
-      const response = await fetch(`${API_BASE_URL}/api/villas/${id}/invoices`);
-      if (!response.ok) throw new Error('Failed to fetch invoices');
-      const data = await response.json();
+      const response = await api.get(`/api/villas/${id}/invoices`);
+      const data = response.data;
       setInvoices(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('fetchInvoices error:', err);
@@ -114,23 +112,12 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
 
     setAutoBillingLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/villas/${villaId}/auto-billing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ autoBillingDay: day }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        Alert.alert('오류', data.error || '자동 발행 설정이 실패했습니다.');
-        return;
-      }
-
+      await api.post(`/api/villas/${villaId}/auto-billing`, { autoBillingDay: day });
       Alert.alert('완료', `매월 ${day}일에 자동으로 청구서를 발행합니다`);
       setAutoBillingDay('');
-    } catch (err) {
+    } catch (err: any) {
       console.error('handleSetAutoBilling error:', err);
-      Alert.alert('오류', '서버에 연결할 수 없습니다.');
+      Alert.alert('오류', err.response?.data?.error || '서버에 연결할 수 없습니다.');
     } finally {
       setAutoBillingLoading(false);
     }

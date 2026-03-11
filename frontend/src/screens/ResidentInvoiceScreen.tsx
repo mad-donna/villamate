@@ -12,7 +12,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { API_BASE_URL } from '../config';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import api from '../utils/api';
 
 interface InvoiceItem {
   name: string;
@@ -53,23 +56,33 @@ const ResidentInvoiceScreen = ({ navigation }: any) => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  const [roomNumber, setRoomNumber] = useState<string>('');
 
   const loadPayments = useCallback(async () => {
     setLoading(true);
     try {
       let userId = await AsyncStorage.getItem('userId');
+      let room = '';
       if (!userId) {
         const raw = await AsyncStorage.getItem('user');
         if (raw) {
           const u = JSON.parse(raw);
           userId = u.id;
+          room = u.villa?.roomNumber ?? u.roomNumber ?? '';
+        }
+      } else {
+        const raw = await AsyncStorage.getItem('user');
+        if (raw) {
+          const u = JSON.parse(raw);
+          room = u.villa?.roomNumber ?? u.roomNumber ?? '';
         }
       }
+      if (room) setRoomNumber(room);
       if (!userId) return;
 
-      const res = await fetch(`${API_BASE_URL}/api/residents/${userId}/payments`);
-      if (!res.ok) throw new Error('fetch failed');
-      const data = await res.json();
+      const res = await api.get(`/api/residents/${userId}/payments`);
+      const data = res.data;
       setPayments(Array.isArray(data) ? data : []);
     } catch (e) {
       Alert.alert('오류', '납부 내역을 불러오지 못했습니다.');
@@ -77,6 +90,156 @@ const ResidentInvoiceScreen = ({ navigation }: any) => {
       setLoading(false);
     }
   }, []);
+
+  const downloadPDF = useCallback(async (payment: Payment) => {
+    setGeneratingPdf(payment.id);
+    try {
+      const invoice = payment.invoice;
+      const villaName = invoice.villa?.name ?? '빌라';
+      const billingLabel = formatBillingMonth(invoice.billingMonth);
+      const amountFormatted = payment.amount.toLocaleString('ko-KR');
+      const totalFormatted = invoice.totalAmount.toLocaleString('ko-KR');
+      const isCompleted = payment.status === 'COMPLETED';
+      const isTransferred = payment.status === 'TRANSFERRED';
+      const statusLabel = isCompleted ? '납부 완료' : isTransferred ? '입금 확인 중' : '미납';
+      const statusColor = isCompleted ? '#34C759' : isTransferred ? '#FF9500' : '#FF3B30';
+      const isVariable = invoice.type === 'VARIABLE';
+      const invoiceItems = isVariable && Array.isArray(invoice.items) ? invoice.items : [];
+
+      const itemsHtml = invoiceItems.length > 0
+        ? `
+          <table class="breakdown">
+            <thead>
+              <tr>
+                <th>항목</th>
+                <th class="right">금액</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${invoiceItems.map((it) =>
+                `<tr>
+                  <td>${it.name}</td>
+                  <td class="right">${Number(it.amount).toLocaleString('ko-KR')}원</td>
+                </tr>`
+              ).join('')}
+              <tr class="total-row">
+                <td><strong>합계</strong></td>
+                <td class="right"><strong>${totalFormatted}원</strong></td>
+              </tr>
+            </tbody>
+          </table>`
+        : '';
+
+      const memoHtml = invoice.memo
+        ? `<p class="memo">비고: ${invoice.memo}</p>`
+        : '';
+
+      const now = new Date();
+      const generatedAt = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      const html = `
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; background: #f5f5f5; padding: 24px; color: #1c1c1e; }
+    .page { background: #fff; max-width: 600px; margin: 0 auto; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .top-accent { height: 6px; background: linear-gradient(90deg, #007AFF, #5856D6); }
+    .inner { padding: 36px 32px 28px; }
+    .doc-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #8e8e93; margin-bottom: 6px; }
+    .doc-title { font-size: 26px; font-weight: 800; color: #007AFF; margin-bottom: 24px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+    .info-cell { background: #f8f9fa; border-radius: 10px; padding: 12px 14px; }
+    .info-label { font-size: 11px; color: #8e8e93; font-weight: 600; margin-bottom: 4px; }
+    .info-value { font-size: 15px; color: #1c1c1e; font-weight: 700; }
+    .status-badge { display: inline-block; background: ${statusColor}; color: #fff; border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 700; }
+    .divider { border: none; border-top: 1px solid #e5e5ea; margin: 20px 0; }
+    .amount-section { text-align: center; padding: 20px 0; }
+    .amount-label { font-size: 13px; color: #8e8e93; margin-bottom: 6px; }
+    .amount-value { font-size: 38px; font-weight: 900; color: #007AFF; letter-spacing: -1px; }
+    .amount-won { font-size: 22px; }
+    table.breakdown { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 16px; font-size: 14px; }
+    table.breakdown th { background: #f2f3f7; padding: 10px 12px; font-size: 11px; font-weight: 700; color: #8e8e93; text-align: left; text-transform: uppercase; letter-spacing: 0.5px; }
+    table.breakdown td { padding: 10px 12px; border-bottom: 1px solid #f2f2f7; color: #3a3a3c; }
+    table.breakdown tr.total-row td { border-bottom: none; border-top: 2px solid #e5e5ea; color: #1c1c1e; padding-top: 12px; }
+    .right { text-align: right; }
+    .memo { font-size: 13px; color: #6e6e73; font-style: italic; margin-bottom: 16px; }
+    .footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #f2f2f7; display: flex; justify-content: space-between; align-items: center; }
+    .footer-brand { font-size: 12px; color: #8e8e93; font-weight: 700; }
+    .footer-ts { font-size: 11px; color: #aeaeb2; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="top-accent"></div>
+    <div class="inner">
+      <div class="doc-label">Official Document</div>
+      <div class="doc-title">관리비 청구서</div>
+
+      <div class="info-grid">
+        <div class="info-cell">
+          <div class="info-label">빌라명</div>
+          <div class="info-value">${villaName}</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-label">호수</div>
+          <div class="info-value">${roomNumber ? roomNumber + '호' : '-'}</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-label">청구기간</div>
+          <div class="info-value">${billingLabel}</div>
+        </div>
+        <div class="info-cell">
+          <div class="info-label">납부상태</div>
+          <div class="info-value"><span class="status-badge">${statusLabel}</span></div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="amount-section">
+        <div class="amount-label">청구 금액</div>
+        <div class="amount-value">${amountFormatted}<span class="amount-won">원</span></div>
+      </div>
+
+      ${itemsHtml ? `<hr class="divider" />${itemsHtml}` : ''}
+      ${memoHtml}
+
+      <div class="footer">
+        <div class="footer-brand">빌라메이트</div>
+        <div class="footer-ts">발행일시: ${generatedAt}</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+
+      // Generate a descriptive filename
+      const [bmYear, bmMonth] = invoice.billingMonth.split('-');
+      const year = bmYear ?? String(new Date().getFullYear());
+      const month = bmMonth ?? String(new Date().getMonth() + 1);
+      const sanitizedVillaName = villaName.replace(/\s+/g, '_').replace(/[^\uAC00-\uD7A3\w\-]/g, '');
+      const sanitizedRoom = roomNumber.replace(/\s+/g, '_').replace(/[^\uAC00-\uD7A3\w\-]/g, '');
+      const filename = `${sanitizedVillaName}_${sanitizedRoom}호_${year}년_${String(month).padStart(2, '0')}월_관리비청구서.pdf`;
+      const newUri = (FileSystem.cacheDirectory ?? '') + filename;
+      await FileSystem.moveAsync({ from: uri, to: newUri });
+
+      await Sharing.shareAsync(newUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: filename,
+        UTI: 'com.adobe.pdf',
+      });
+    } catch (e) {
+      Alert.alert('오류', 'PDF 생성에 실패했습니다.');
+    } finally {
+      setGeneratingPdf(null);
+    }
+  }, [roomNumber]);
 
   useFocusEffect(
     useCallback(() => {
@@ -87,12 +250,7 @@ const ResidentInvoiceScreen = ({ navigation }: any) => {
   const handleTransfer = async (payment: Payment) => {
     setConfirming(payment.id);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/invoices/${payment.invoiceId}/transfer`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ residentId: payment.residentId }),
-      });
-      if (!res.ok) throw new Error('failed');
+      await api.patch(`/api/invoices/${payment.invoiceId}/transfer`, { residentId: payment.residentId });
       Alert.alert('완료', '관리자에게 송금 완료 알림이 전달되었습니다.');
       await loadPayments();
     } catch (e) {
@@ -177,6 +335,22 @@ const ResidentInvoiceScreen = ({ navigation }: any) => {
             <Text style={styles.transferredInfoText}>관리자 확인 후 납부 완료 처리됩니다.</Text>
           </View>
         )}
+
+        <TouchableOpacity
+          style={[styles.pdfBtn, generatingPdf === item.id && styles.pdfBtnDisabled]}
+          onPress={() => downloadPDF(item)}
+          disabled={generatingPdf === item.id}
+          activeOpacity={0.85}
+        >
+          {generatingPdf === item.id ? (
+            <ActivityIndicator color="#007AFF" size="small" />
+          ) : (
+            <>
+              <Ionicons name="download-outline" size={16} color="#007AFF" style={styles.pdfBtnIcon} />
+              <Text style={styles.pdfBtnText}>PDF로 저장 / 공유</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
     );
   };
@@ -359,6 +533,21 @@ const styles = StyleSheet.create({
   },
   emptyText: { fontSize: 16, fontWeight: '600', color: '#3A3A3C', marginBottom: 6 },
   emptySubText: { fontSize: 13, color: '#8E8E93', textAlign: 'center' },
+
+  pdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#007AFF',
+    backgroundColor: '#F0F7FF',
+    marginTop: 10,
+  },
+  pdfBtnDisabled: { opacity: 0.5 },
+  pdfBtnIcon: { marginRight: 6 },
+  pdfBtnText: { color: '#007AFF', fontSize: 14, fontWeight: '700' },
 });
 
 export default ResidentInvoiceScreen;

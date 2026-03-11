@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface Notification {
   id: string;
@@ -64,16 +64,11 @@ const NotificationScreen = () => {
         return;
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/users/${userId}/notifications`);
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(Array.isArray(data) ? data : []);
-      }
+      const res = await api.get(`/api/users/${userId}/notifications`);
+      setNotifications(Array.isArray(res.data) ? res.data : []);
 
       // Mark all as read
-      await fetch(`${API_BASE_URL}/api/users/${userId}/notifications/read-all`, {
-        method: 'PATCH',
-      });
+      await api.patch(`/api/users/${userId}/notifications/read-all`);
     } catch (err) {
       console.error('Fetch notifications error:', err);
     } finally {

@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../utils/api';
 import { API_BASE_URL } from '../config';
 
 
@@ -59,11 +60,9 @@ const BuildingHistoryScreen = ({ navigation }: any) => {
       if (user?.villa?.id) return user.villa.id;
       const uid = user.id;
       if (uid) {
-        const res = await fetch(`${API_BASE_URL}/api/villas/${uid}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) return data[0].id;
-        }
+        const res = await api.get(`/api/villas/${uid}`);
+        const data = res.data;
+        if (Array.isArray(data) && data.length > 0) return data[0].id;
       }
     }
     return null;
@@ -91,9 +90,8 @@ const BuildingHistoryScreen = ({ navigation }: any) => {
       }
       setUserRole(role);
 
-      const res = await fetch(`${API_BASE_URL}/api/villas/${vid}/building-events?role=${role}`);
-      if (!res.ok) throw new Error('fetch failed');
-      const data = await res.json();
+      const res = await api.get(`/api/villas/${vid}/building-events?role=${role}`);
+      const data = res.data;
       setEvents(Array.isArray(data) ? data : []);
     } catch (e) {
       Alert.alert('오류', '이력을 불러오지 못했습니다.');

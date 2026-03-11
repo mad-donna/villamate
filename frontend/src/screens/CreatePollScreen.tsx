@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 const CreatePollScreen = ({ navigation, route }: any) => {
   const { villaId, userId } = route.params ?? {};
@@ -36,12 +36,7 @@ const CreatePollScreen = ({ navigation, route }: any) => {
     if (endDate <= new Date()) return Alert.alert('오류', '종료일은 미래여야 합니다.');
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/polls`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, endDate: endDate.toISOString(), isAnonymous, creatorId: userId, options: filled }),
-      });
-      if (!res.ok) throw new Error('failed');
+      await api.post(`/api/villas/${villaId}/polls`, { title, description, endDate: endDate.toISOString(), isAnonymous, creatorId: userId, options: filled });
       navigation.goBack();
     } catch {
       Alert.alert('오류', '투표 생성에 실패했습니다.');

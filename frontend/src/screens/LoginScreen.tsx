@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -73,19 +74,17 @@ const LoginScreen = ({ navigation }: any) => {
           });
           const googleUser = await userInfoResponse.json();
 
-          const backendResponse = await fetch(`${API_BASE_URL}/api/auth/social-login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              provider: 'GOOGLE',
-              providerId: String(googleUser.id),
-              email: googleUser.email,
-              name: googleUser.name || '구글 사용자',
-            }),
+          const backendResponse = await api.post('/api/auth/social-login', {
+            provider: 'GOOGLE',
+            providerId: String(googleUser.id),
+            email: googleUser.email,
+            name: googleUser.name || '구글 사용자',
           });
 
-          const user = await backendResponse.json();
-          if (!backendResponse.ok) throw new Error(user.error || '백엔드 동작 실패');
+          const user = backendResponse.data;
+          if (user.token) {
+            await AsyncStorage.setItem('token', user.token);
+          }
           await navigateAfterLogin(user);
         } catch (error: any) {
           Alert.alert('구글 로그인 실패', error.message);
@@ -150,8 +149,8 @@ const LoginScreen = ({ navigation }: any) => {
           }
         } else {
           // ADMIN: check if they have created a villa
-          const response = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
-          const villas = await response.json();
+          const response = await api.get(`/api/villas/${userId}`);
+          const villas = response.data;
 
           if (Array.isArray(villas) && villas.length > 0) {
             navigation.replace('Main');
@@ -189,9 +188,9 @@ const LoginScreen = ({ navigation }: any) => {
       // If it is missing (e.g. first login on a new device), query the backend.
       if (!merged.villa) {
         try {
-          const villaRes = await fetch(`${API_BASE_URL}/api/users/${user.id}/villa`);
-          const villaData = await villaRes.json();
-          if (villaRes.ok && villaData.villa) {
+          const villaRes = await api.get(`/api/users/${user.id}/villa`);
+          const villaData = villaRes.data;
+          if (villaData.villa) {
             merged = { ...merged, villa: villaData.villa };
           }
         } catch (error) {
@@ -213,8 +212,8 @@ const LoginScreen = ({ navigation }: any) => {
       await AsyncStorage.setItem('userId', user.id);
 
       try {
-        const villaResponse = await fetch(`${API_BASE_URL}/api/villas/${user.id}`);
-        const villas = await villaResponse.json();
+        const villaResponse = await api.get(`/api/villas/${user.id}`);
+        const villas = villaResponse.data;
 
         if (Array.isArray(villas) && villas.length > 0) {
           navigation.replace('Main');
@@ -236,29 +235,23 @@ const LoginScreen = ({ navigation }: any) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone,
-          role,
-          name: role === 'ADMIN' ? '관리자' : '입주민'
-        }),
+      const response = await api.post('/api/auth/login', {
+        phone,
+        role,
+        name: role === 'ADMIN' ? '관리자' : '입주민',
       });
 
-      const user = await response.json();
+      const user = response.data;
 
-      if (response.ok) {
-        setIsTestModalVisible(false);
-        await navigateAfterLogin(user);
-      } else {
-        Alert.alert('오류', user.error || '로그인에 실패했습니다.');
+      if (user.token) {
+        await AsyncStorage.setItem('token', user.token);
       }
-    } catch (error) {
+
+      setIsTestModalVisible(false);
+      await navigateAfterLogin(user);
+    } catch (error: any) {
       console.error('Login error:', error);
-      Alert.alert('오류', '서버에 연결할 수 없습니다. IP 주소를 확인해주세요.');
+      Alert.alert('오류', error.response?.data?.error || '서버에 연결할 수 없습니다. IP 주소를 확인해주세요.');
     } finally {
       setLoading(false);
     }
@@ -279,25 +272,17 @@ const LoginScreen = ({ navigation }: any) => {
     }
 
     // 2. Call our backend social-login
-    const backendResponse = await fetch(`${API_BASE_URL}/api/auth/social-login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        provider: 'KAKAO',
-        providerId: String(kakaoData.id),
-        email: null,
-        name: kakaoData.properties?.nickname || '카카오 사용자',
-      }),
+    const backendResponse = await api.post('/api/auth/social-login', {
+      provider: 'KAKAO',
+      providerId: String(kakaoData.id),
+      email: null,
+      name: kakaoData.properties?.nickname || '카카오 사용자',
     });
 
-    if (!backendResponse.ok) {
-      const errorData = await backendResponse.json();
-      throw new Error(errorData.error || `서버 오류: ${backendResponse.statusText}`);
+    const user = backendResponse.data;
+    if (user.token) {
+      await AsyncStorage.setItem('token', user.token);
     }
-
-    const user = await backendResponse.json();
     await navigateAfterLogin(user);
   };
 

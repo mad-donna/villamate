@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import IMP from 'iamport-react-native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 export default function PaymentScreen({ route, navigation }: any) {
@@ -25,11 +25,7 @@ export default function PaymentScreen({ route, navigation }: any) {
   const callback = async (response: any) => {
     if (response.success) {
       try {
-        await fetch(`${API_BASE_URL}/api/payments/${paymentId}/status`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'COMPLETED' }),
-        });
+        await api.put(`/api/payments/${paymentId}/status`, { status: 'COMPLETED' });
         Alert.alert('결제 완료', '결제가 성공적으로 완료되었습니다.', [
           { text: '확인', onPress: () => navigation.goBack() },
         ]);

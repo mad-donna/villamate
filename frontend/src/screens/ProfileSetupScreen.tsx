@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 const ProfileSetupScreen = ({ navigation }: any) => {
@@ -55,27 +55,16 @@ const ProfileSetupScreen = ({ navigation }: any) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, phone, role }),
-      });
+      const response = await api.put(`/api/users/${userId}`, { name, phone, role });
+      const updatedUser = response.data;
 
-      const updatedUser = await response.json();
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      await AsyncStorage.setItem('userId', updatedUser.id);
 
-      if (response.ok) {
-        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
-        await AsyncStorage.setItem('userId', updatedUser.id);
-
-        if (role === 'ADMIN') {
-          navigation.replace('Onboarding');
-        } else {
-          navigation.replace('ResidentJoin');
-        }
+      if (role === 'ADMIN') {
+        navigation.replace('Onboarding');
       } else {
-        Alert.alert('오류', updatedUser.error || '프로필 설정이 실패했습니다.');
+        navigation.replace('ResidentJoin');
       }
     } catch (error) {
       console.error('Profile setup error:', error);

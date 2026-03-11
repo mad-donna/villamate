@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 import RollingBanner from '../components/RollingBanner';
 import { useAppMode } from '../context/AppModeContext';
 
@@ -71,12 +71,10 @@ const ResidentDashboardScreen = () => {
       // Fallback: fetch villa from server if not in storage
       if (!villaId) {
         try {
-          const res = await fetch(`${API_BASE_URL}/api/users/${userId}/villa`);
-          if (res.ok) {
-            const data = await res.json();
-            villaId = data?.id ?? null;
-            if (data?.name) setVillaName(data.name);
-          }
+          const res = await api.get(`/api/users/${userId}/villa`);
+          const data = res.data;
+          villaId = data?.id ?? null;
+          if (data?.name) setVillaName(data.name);
         } catch (e) {
           console.error('Villa fallback fetch error:', e);
         }
@@ -86,13 +84,8 @@ const ResidentDashboardScreen = () => {
 
       // Fetch dashboard stats
       if (villaId) {
-        const dashRes = await fetch(
-          `${API_BASE_URL}/api/dashboard/${userId}?villaId=${villaId}&role=RESIDENT`
-        );
-        if (dashRes.ok) {
-          const dd = await dashRes.json();
-          setDashData(dd);
-        }
+        const dashRes = await api.get(`/api/dashboard/${userId}?villaId=${villaId}&role=RESIDENT`);
+        setDashData(dashRes.data);
       }
     } catch (err) {
       console.error('Resident dashboard load error:', err);

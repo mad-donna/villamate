@@ -867,3 +867,83 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
   ```
 - **조건부 독촉 크론 패턴**: `daysSince === 3` 또는 `daysSince === 7`에만 발송 — `Math.floor((now - createdAt) / 86400000)`
 - **청구서 생성 후 즉시 푸시**: try/catch 독립 블록 — 푸시 실패가 청구서 생성 응답에 영향 없도록 격리
+
+---
+
+### 2026-03-11 — RDD 문서화, 백엔드 모듈화, 전역 JWT 인증, 전자투표 UX, 독촉 쿨타임 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **RDD (요구사항 정의서) 최초 작성** (`docs/RDD.md` 신규)
+   - `PRODUCT_CONTEXT.md`, `IA.md`, `PHASE1_SCOPE.md` 3개 문서를 단일 SSOT(Single Source of Truth)로 통합
+   - 전체 기능 요구사항(F-01~F-80) + 비기능 요구사항(NF-01~NF-13) 정의, 완료/진행/미구현 상태 표시
+   - 백로그 우선순위(즉시/Q2/장기/하지 않을 것) 명시
+
+2. **백엔드 모듈화 리팩토링** (단일 `index.ts` → 도메인별 파일 분리)
+   - `backend/src/routes/` — 도메인별 라우트 파일 분리
+   - `backend/src/controllers/` — 컨트롤러 함수 분리
+   - `backend/src/middlewares/` — `authenticateUser` 등 미들웨어 분리
+   - `backend/src/cron.ts` — 자동 독촉 크론 로직 분리
+   - `backend/src/helpers.ts` — `normalizeRoom`, `sanitizeUser`, `formatBillingMonth` 헬퍼 분리
+   - `backend/src/migrations.ts` — `migrateRoomNumbers` 스타트업 마이그레이션 분리
+   - `backend/src/prisma.ts` — Prisma 클라이언트 단일 인스턴스 분리
+
+3. **프론트엔드 전역 JWT 인증** (Axios Interceptor 기반)
+   - `frontend/src/utils/api.ts` 신규 — `axios.create()` 기반 공통 인스턴스
+   - `request interceptor`: AsyncStorage에서 `token`을 읽어 `Authorization: Bearer ${token}` 자동 주입
+   - `response interceptor`: 401 응답 시 AsyncStorage 전체 초기화 + `LoginScreen`으로 자동 리다이렉트
+   - 35개 이상 스크린의 `fetch()` 직접 호출을 axiosInstance 호출로 일괄 교체
+   - 이로써 F-08(클라이언트 JWT 헤더 적용), NF-04(JWT 클라이언트 완성) 달성
+
+4. **전자투표 UX 강화** (`PollDetailScreen.tsx`)
+   - **투표 수정(Upsert)**: 마감 전 이미 투표한 경우에도 다른 선택지 선택 후 재투표 가능
+     - 백엔드: `Vote` upsert 방식으로 변경 (`@@unique([pollId, roomNumber])` 활용)
+   - **"✅ 투표 완료" 배지**: `hasVoted === true`이면 해당 선택지 카드에 초록 체크 배지 표시
+   - **이전 선택지 자동 선택**: 화면 진입 시 기존 투표 데이터 조회 → `selectedOption`에 사전 세팅
+
+5. **미납 독촉 알림 1일 1회 쿨타임** (`backend/src/cron.ts`)
+   - 동일 `InvoicePayment`에 대해 당일 이미 독촉 알림이 발송된 경우 재발송 방지
+   - `lastReminderSentAt` 필드 또는 당일 날짜 비교 로직으로 중복 방지
+   - 수동 알림 버튼(`PostDetailScreen`)에도 동일 쿨타임 적용
+
+#### 핵심 구현 패턴 (신규)
+
+- **Axios Interceptor 패턴** (`frontend/src/utils/api.ts`):
+  ```typescript
+  const axiosInstance = axios.create({ baseURL: API_BASE_URL });
+  axiosInstance.interceptors.request.use(async (config) => {
+    const token = await AsyncStorage.getItem('token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+  axiosInstance.interceptors.response.use(
+    (res) => res,
+    async (error) => {
+      if (error.response?.status === 401) {
+        await AsyncStorage.multiRemove(['user', 'token']);
+        // navigation.replace('Login') — 최상단 네비게이션 ref로 처리
+      }
+      return Promise.reject(error);
+    }
+  );
+  ```
+
+- **투표 Upsert 패턴**:
+  ```typescript
+  await prisma.vote.upsert({
+    where: { pollId_roomNumber: { pollId, roomNumber } },
+    update: { optionId },
+    create: { pollId, optionId, voterId, roomNumber },
+  });
+  ```
+
+- **백엔드 모듈화 import 패턴**:
+  ```typescript
+  // backend/src/prisma.ts
+  export const prisma = new PrismaClient();
+  // backend/src/helpers.ts
+  export function normalizeRoom(room: string) { return room.replace(/호/g, '').trim(); }
+  // backend/src/routes/villas.ts
+  import { prisma } from '../prisma';
+  import { normalizeRoom } from '../helpers';
+  ```

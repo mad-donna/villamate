@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 interface VehicleItem {
@@ -33,8 +33,8 @@ const ParkingSearchScreen = ({ route }: any) => {
     if (!villaId) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/vehicles`);
-      const data = await res.json();
+      const res = await api.get(`/api/villas/${villaId}/vehicles`);
+      const data = res.data;
       setAllVehicles(Array.isArray(data) ? data : []);
     } catch (e) {
       Alert.alert('오류', '차량 목록을 불러오지 못했습니다.');

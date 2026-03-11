@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface VillaResult {
   id: number;
@@ -43,11 +43,8 @@ const VillaSearchScreen = ({ navigation }: any) => {
     setSearching(true);
     setSearched(false);
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/villas/search?q=${encodeURIComponent(query.trim())}`
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '검색 실패');
+      const res = await api.get(`/api/villas/search?q=${encodeURIComponent(query.trim())}`);
+      const data = res.data;
       setResults(Array.isArray(data) ? data : []);
     } catch (err: any) {
       Alert.alert('오류', err.message || '서버에 연결할 수 없습니다.');
@@ -80,16 +77,8 @@ const VillaSearchScreen = ({ navigation }: any) => {
 
     setJoining(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${selectedVilla.id}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, roomNumber: roomNumber.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        Alert.alert('오류', data.error || '가입에 실패했습니다.');
-        return;
-      }
+      const response = await api.post(`/api/villas/${selectedVilla.id}/join`, { userId, roomNumber: roomNumber.trim() });
+      const data = response.data;
 
       const updatedUser = { ...data.user, villa: data.villa };
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));

@@ -767,3 +767,53 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 | notification.createMany 트랜잭션 없음 | LOW | 수용 |
 | ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
 | ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+
+---
+
+### 2026-03-11 — RDD 문서화, 백엔드 모듈화, 전역 JWT 인증, 전자투표 UX, 독촉 쿨타임 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] 모바일 앱 JWT token 미저장 — 기존 MEDIUM 위험 해소**
+- 기존: 서버가 JWT를 발급했지만 클라이언트가 저장하지 않아 인증 미들웨어 실질적 무력화
+- 해결: `frontend/src/utils/api.ts` Axios interceptor로 `AsyncStorage` 토큰 자동 주입
+- NF-04(JWT 클라이언트 완성), F-08(클라이언트 헤더 일괄 적용) 달성
+
+**[RESOLVED] 백엔드 단일 index.ts 유지보수 리스크**
+- 기존: 단일 `index.ts` ~2200+ 라인 → 라우트 순서 실수, 수정 충돌 위험
+- 해결: `routes/`, `controllers/`, `middlewares/`, `cron.ts`, `helpers.ts`, `migrations.ts`, `prisma.ts` 분리
+- NF-12(백엔드 모듈화) 완성
+
+**[NEW-LOW] 독촉 알림 1일 1회 쿨타임 — 중복 발송 방지**
+- 기존: 크론 + 수동 버튼 양쪽에서 당일 중복 발송 가능
+- 해결: 당일 발송 여부 비교 로직 추가 → 재발송 차단
+
+**[NEW-LOW] Axios interceptor 비동기 토큰 조회 지연**
+- 매 요청마다 `AsyncStorage.getItem('token')` I/O → MVP 수준에서 수용
+- 향후: 메모리 캐시 패턴 도입 고려
+
+**[GOOD] 401 자동 로그아웃 — 토큰 만료 UX 안정성**
+- `AsyncStorage.multiRemove(['user', 'token'])` 원자적 제거 + 네비게이션 초기화
+
+#### 현재 누적 위험 현황 요약 (2026-03-11 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| JWT_SECRET 하드코딩 폴백 | HIGH | 배포 전 필수 조치 |
+| termsAgreed 서버 미검증 | HIGH | 법적 리스크 |
+| 구독 쿠폰 서버 미검증 | HIGH | SaaS BM 리스크 |
+| 구독 만료 시 API 접근 제한 없음 | MEDIUM | 미해결 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| Axios 토큰 메모리 미캐시 | LOW | **신규**, MVP 수용 |
+| 독촉 크론 날짜 조건 취약 | MEDIUM | 쿨타임으로 부분 개선 |
+| 청구서 알림 DB 기록 없음 | LOW | 향후 개선 |
+| ~~모바일 앱 JWT token 미저장~~ | MEDIUM | **해결됨** (Axios interceptor) |
+| ~~단일 index.ts 유지보수 리스크~~ | MEDIUM | **해결됨** (모듈화 완료) |
+| ~~C2: password 필드 API 응답 노출~~ | HIGH | **해결됨** |
+| ~~C4: 구독 활성화 무인증~~ | HIGH | **해결됨** |
+| ~~C5: Admin 웹 XSS~~ | HIGH | **해결됨** |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |

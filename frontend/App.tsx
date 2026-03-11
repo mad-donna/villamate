@@ -6,8 +6,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import AppNavigator from './src/navigation/AppNavigator';
-import { API_BASE_URL } from './src/config';
+import api from './src/utils/api';
+import { navigationRef } from './src/utils/navigationRef';
 import { AppModeProvider } from './src/context/AppModeContext';
+
 
 // Show notifications when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -72,11 +74,7 @@ export default function App() {
 
         if (!userId) return;
 
-        await fetch(`${API_BASE_URL}/api/users/${userId}/push-token`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        });
+        await api.patch(`/api/users/${userId}/push-token`, { token });
       } catch (error) {
         // Push token registration failure must not crash the app
         console.error('Failed to register push token:', error);
@@ -87,7 +85,7 @@ export default function App() {
   return (
     <AppModeProvider>
       <SafeAreaProvider>
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
           <AppNavigator />
         </NavigationContainer>
       </SafeAreaProvider>

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 interface PostAuthor {
@@ -42,9 +42,8 @@ const BoardScreen = ({ navigation, route }: any) => {
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/villas/${villaId}/posts`);
-      if (!response.ok) throw new Error(`Server returned ${response.status}`);
-      const data = await response.json();
+      const response = await api.get(`/api/villas/${villaId}/posts`);
+      const data = response.data;
       setPosts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Fetch posts error:', err);
@@ -64,17 +63,7 @@ const BoardScreen = ({ navigation, route }: any) => {
     const newIsNotice = !item.isNotice;
     setTogglingId(item.id);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/posts/${item.id}/notice`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isNotice: newIsNotice, villaId }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        Alert.alert('오류', errorData.message || '처리 중 문제가 발생했습니다.');
-        return;
-      }
+      await api.put(`/api/posts/${item.id}/notice`, { isNotice: newIsNotice, villaId });
 
       // Refresh list on success
       await fetchPosts();

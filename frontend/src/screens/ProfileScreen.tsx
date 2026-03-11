@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CommonActions, useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 import { useAppMode } from '../context/AppModeContext';
 
 const ProfileScreen = ({ navigation }: any) => {
@@ -71,8 +71,7 @@ const ProfileScreen = ({ navigation }: any) => {
           onPress: async () => {
             if (!userId) return;
             try {
-              const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, { method: 'DELETE' });
-              if (!res.ok) throw new Error('탈퇴 처리 실패');
+              await api.delete(`/api/users/${userId}`);
               await AsyncStorage.clear();
               navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] }));
             } catch (e: any) {

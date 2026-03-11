@@ -870,3 +870,65 @@ jest.mock('expo-server-sdk', () => {
     : availableRooms.length > 0 ? <TouchableOpacity onPress={() => setRoomPickerVisible(true)}>...</>
     : <TextInput ... />}
   ```
+
+---
+
+### 2026-03-11 — RDD 문서화, 백엔드 모듈화, 전역 JWT 인증, 전자투표 UX, 독촉 쿨타임 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **백엔드 모듈화 리팩토링** 아키텍처 검토 (routes/controllers/middlewares 분리)
+- **Axios Interceptor 기반 전역 JWT 인증** 구현 검토
+- **전자투표 Upsert 패턴** 정확성 검증
+- **독촉 쿨타임 로직** 중복 발송 방지 검증
+
+#### 발견된 주요 버그 패턴
+
+**[RESOLVED] 모바일 API 전체 JWT 헤더 미적용 — 기존 HIGH 위험 해소**
+- 기존: 35개 이상 화면에서 `fetch()` 직접 호출 시 `Authorization` 헤더 없음
+- 해결: `frontend/src/utils/api.ts` Axios 공통 인스턴스 + request interceptor로 일괄 처리
+- `AsyncStorage.getItem('token')` 비동기 조회 → 헤더 자동 주입 패턴 확립
+- **교훈**: `fetch()`를 직접 사용하면 인증 헤더 추가가 화면별로 산발적으로 누락됨. Axios interceptor로 단일 진입점 관리가 필수
+
+**[GOOD] Axios 401 자동 로그아웃 패턴**
+- `response interceptor`에서 401 감지 시 `AsyncStorage.multiRemove(['user', 'token'])` + 네비게이션 초기화
+- 최상단 네비게이션 ref(`navigationRef.current?.resetRoot()`)로 어느 화면에서나 로그인 화면 복귀 보장
+- **패턴**: 인증 만료를 전역에서 처리하므로 개별 화면에서 401 처리 코드 불필요
+
+**[GOOD] 투표 Upsert — `@@unique` 재활용으로 코드 단순화**
+- 기존 `findFirst` → 중복 시 409 반환 방식에서 `prisma.vote.upsert` 방식으로 전환
+- `@@unique([pollId, roomNumber])` 제약을 그대로 활용하여 원자적 삽입/수정 보장
+- Race condition 없음 — DB 레벨 제약이 최종 무결성 보장
+
+**[PATTERN] 백엔드 모듈화 임포트 순환 참조 주의**
+- `prisma.ts` → `controllers/` → `helpers.ts` 방향의 의존성은 안전
+- `routes/` → `controllers/` → `prisma.ts` + `helpers.ts` 단방향 의존 유지 필수
+- **교훈**: Express 단일 파일을 분리할 때 순환 import가 없도록 의존성 방향을 먼저 설계할 것
+
+#### 이 세션에서 추가된 코딩 패턴
+
+- **Axios 공통 인스턴스 패턴** (`frontend/src/utils/api.ts`):
+  ```typescript
+  import axios from 'axios';
+  import AsyncStorage from '@react-native-async-storage/async-storage';
+  import { API_BASE_URL } from '../config';
+
+  const api = axios.create({ baseURL: API_BASE_URL });
+  api.interceptors.request.use(async (config) => {
+    const token = await AsyncStorage.getItem('token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+  export default api;
+  ```
+
+- **모듈화 후 index.ts 역할**: 라우트 등록 + 서버 시작만 담당, 비즈니스 로직 없음
+
+- **투표 완료 배지 표시 패턴**:
+  ```tsx
+  {hasVoted && selectedOption?.id === option.id && (
+    <View style={styles.votedBadge}>
+      <Text style={styles.votedBadgeText}>✅ 투표 완료</Text>
+    </View>
+  )}
+  ```

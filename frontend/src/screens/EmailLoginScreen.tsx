@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 const EmailLoginScreen = ({ navigation }: any) => {
@@ -42,9 +42,9 @@ const EmailLoginScreen = ({ navigation }: any) => {
       // If it is missing (e.g. first login on a new device), query the backend.
       if (!merged.villa) {
         try {
-          const villaRes = await fetch(`${API_BASE_URL}/api/users/${user.id}/villa`);
-          const villaData = await villaRes.json();
-          if (villaRes.ok && villaData.villa) {
+          const villaRes = await api.get(`/api/users/${user.id}/villa`);
+          const villaData = villaRes.data;
+          if (villaData.villa) {
             merged = { ...merged, villa: villaData.villa };
           }
         } catch (error) {
@@ -65,8 +65,8 @@ const EmailLoginScreen = ({ navigation }: any) => {
       await AsyncStorage.setItem('userId', user.id);
 
       try {
-        const villaResponse = await fetch(`${API_BASE_URL}/api/villas/${user.id}`);
-        const villas = await villaResponse.json();
+        const villaResponse = await api.get(`/api/villas/${user.id}`);
+        const villas = villaResponse.data;
 
         if (Array.isArray(villas) && villas.length > 0) {
           navigation.replace('Main');
@@ -92,33 +92,30 @@ const EmailLoginScreen = ({ navigation }: any) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/email-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await api.post('/api/auth/email-login', { email, password });
+      const data = response.data;
 
-      const data = await response.json();
+      if (data.token) {
+        await AsyncStorage.setItem('token', data.token);
+      }
 
-      if (response.status === 404 && data.error === 'USER_NOT_FOUND') {
+      await navigateAfterLogin(data);
+    } catch (error: any) {
+      const status = error.response?.status;
+      const data = error.response?.data;
+
+      if (status === 404 && data?.error === 'USER_NOT_FOUND') {
         // New user → go to signup agreement screen
         navigation.navigate('SignupAgreement', { email, password });
         return;
       }
 
-      if (response.status === 401) {
+      if (status === 401) {
         Alert.alert('오류', '비밀번호가 올바르지 않습니다.');
         return;
       }
 
-      if (!response.ok) {
-        Alert.alert('오류', data.error || '로그인에 실패했습니다.');
-        return;
-      }
-
-      await navigateAfterLogin(data);
-    } catch (error) {
-      Alert.alert('오류', '서버에 연결할 수 없습니다.');
+      Alert.alert('오류', data?.error || '서버에 연결할 수 없습니다.');
     } finally {
       setLoading(false);
     }

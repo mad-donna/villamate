@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import RenderHtml from 'react-native-render-html';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 const CATEGORY_COLORS: Record<string, string> = {
   '하자관리': '#FF6B6B',
@@ -50,11 +50,8 @@ const GuideDetailScreen = ({ route, navigation }: any) => {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/guides/${guideId}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error('not found');
-        return res.json();
-      })
+    api.get(`/api/guides/${guideId}`)
+      .then((res) => res.data)
       .then((data) => setGuide(data))
       .catch(() => setError(true))
       .finally(() => setLoading(false));

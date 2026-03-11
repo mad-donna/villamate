@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 const CreatePostScreen = ({ navigation, route }: any) => {
@@ -37,21 +37,12 @@ const CreatePostScreen = ({ navigation, route }: any) => {
     try {
       setLoading(true);
 
-      const response = await fetch(`${API_BASE_URL}/api/villas/${villaId}/posts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          content: content.trim(),
-          authorId: userId,
-          category,
-        }),
+      await api.post(`/api/villas/${villaId}/posts`, {
+        title: title.trim(),
+        content: content.trim(),
+        authorId: userId,
+        category,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || '등록 실패');
-      }
 
       Alert.alert('등록 완료', '게시글이 등록되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },

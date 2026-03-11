@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, ScrollView, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface PollOption {
   id: string;
@@ -21,6 +21,7 @@ interface Poll {
   options: PollOption[];
   _count: { votes: number };
   createdAt: string;
+  hasVoted?: boolean;
 }
 
 const PollListScreen = ({ navigation, route }: any) => {
@@ -31,14 +32,14 @@ const PollListScreen = ({ navigation, route }: any) => {
   const fetchPolls = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/polls`);
-      if (res.ok) setPolls(await res.json());
+      const res = await api.get(`/api/villas/${villaId}/polls`, { params: { userId } });
+      setPolls(res.data);
     } catch (e) {
       console.error('Fetch polls error:', e);
     } finally {
       setLoading(false);
     }
-  }, [villaId]);
+  }, [villaId, userId]);
 
   useFocusEffect(useCallback(() => { fetchPolls(); }, [fetchPolls]));
 
@@ -74,10 +75,17 @@ const PollListScreen = ({ navigation, route }: any) => {
               >
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle} numberOfLines={2}>{poll.title}</Text>
-                  <View style={[styles.badge, { backgroundColor: poll.isAnonymous ? '#8E8E9320' : '#007AFF20' }]}>
-                    <Text style={[styles.badgeText, { color: poll.isAnonymous ? '#8E8E93' : '#007AFF' }]}>
-                      {poll.isAnonymous ? '익명' : '기명'}
-                    </Text>
+                  <View style={styles.cardBadgeGroup}>
+                    {poll.hasVoted && (
+                      <View style={styles.votedBadge}>
+                        <Text style={styles.votedBadgeText}>투표 완료</Text>
+                      </View>
+                    )}
+                    <View style={[styles.badge, { backgroundColor: poll.isAnonymous ? '#8E8E9320' : '#007AFF20' }]}>
+                      <Text style={[styles.badgeText, { color: poll.isAnonymous ? '#8E8E93' : '#007AFF' }]}>
+                        {poll.isAnonymous ? '익명' : '기명'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
                 <View style={styles.cardFooter}>
@@ -112,8 +120,11 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 18, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1E', flex: 1, marginRight: 8 },
+  cardBadgeGroup: { flexDirection: 'column', alignItems: 'flex-end', gap: 4 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   badgeText: { fontSize: 12, fontWeight: '700' },
+  votedBadge: { backgroundColor: '#34C759', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  votedBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
   cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   statusText: { fontSize: 12, fontWeight: '600' },

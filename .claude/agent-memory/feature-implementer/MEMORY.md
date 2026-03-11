@@ -128,7 +128,15 @@
 - Dashboard RESIDENT adds `activePollsCount` = active polls minus polls already voted on (fetches `votedPollIds` first via `vote.findMany`)
 
 ## Key Files
-- `backend/src/index.ts` — all API routes
+- `backend/src/index.ts` — app init, global middleware, router mounting, cron start (refactored Mar 2026 from monolith)
+- `backend/src/prisma.ts` — shared PrismaClient singleton (import this in all controllers)
+- `backend/src/helpers.ts` — `sanitizeUser()` and `normalizeRoom()` shared utilities
+- `backend/src/cron.ts` — `startAutoBillingCron()` and `startDunningCron()` cron jobs
+- `backend/src/migrations.ts` — `migrateRoomNumbers()` startup migration
+- `backend/src/middlewares/authenticateUser.ts` — JWT auth middleware
+- `backend/src/middlewares/upload.ts` — multer config; `__dirname/../../uploads` (2 levels up, since file is in src/middlewares/)
+- `backend/src/routes/` — domain routers: authRoutes, userRoutes, villaRoutes, invoiceRoutes, paymentRoutes, residentRoutes, postRoutes, vehicleRoutes, pollRoutes, superAdminRoutes, systemNoticeRoutes, faqRoutes, guideRoutes, dashboardRoutes
+- `backend/src/controllers/` — domain controllers matching route files
 - `backend/prisma/schema.prisma` — database schema
 - `frontend/src/navigation/AppNavigator.tsx` — all screen registrations
 - `frontend/src/navigation/MainTabNavigator.tsx` — admin 4-tab navigator (홈/커뮤니티/관리/프로필)
@@ -176,6 +184,19 @@
 - Android requires `setNotificationChannelAsync('default', ...)` before requesting permissions
 - UserId lookup order: `AsyncStorage.getItem('userId')` first, then fallback to `AsyncStorage.getItem('user') -> JSON.parse -> .id`
 - PATCH push-token route placed between email-login route and the Social Login proxy route in index.ts
+
+### API Client / HTTP Layer (added Mar 2026 — replaces raw fetch)
+- Centralized axios client at `frontend/src/utils/api.ts`; `baseURL` = `API_BASE_URL`
+- JWT token stored as `'token'` in AsyncStorage; attached via axios request interceptor
+- 401 response: clears `['token', 'userId', 'user']` and navigates to `Login` via `navigationRef`
+- `navigationRef` at `frontend/src/utils/navigationRef.ts`; `App.tsx` passes `ref={navigationRef}` to `<NavigationContainer>`
+- Login/register screens must `await AsyncStorage.setItem('token', data.token)` before navigation
+- fetch() → axios: `const { data } = await api.get(url)` replaces `const data = await fetch(url).then(r => r.json())`
+- Status code checks move to catch: `error.response?.status === 409`
+- Multipart upload: `api.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' } })`
+- DELETE with body: `api.delete(url, { data: { field } })`
+- Screens that still keep `API_BASE_URL` (not for fetch): BuildingHistoryScreen + ContractDetailScreen (image URL prefix), ExternalBillingScreen (payment link URL), LoginScreen (OAuth redirect URI)
+- Pure UI screens with no API calls: ContractDetailScreen, GuideScreen, LedgerScreen, LedgerTabScreen, OurVillaScreen, ResidentCommunityTabScreen, SelectRoleScreen, SignupAgreementScreen
 
 ### Testing (added Feb 2026)
 - Test file: `backend/src/api.spec.ts` — Jest + supertest integration tests (no real DB)

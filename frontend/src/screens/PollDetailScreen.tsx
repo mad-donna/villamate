@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface PollOption {
   id: string;
@@ -37,18 +37,25 @@ const PollDetailScreen = ({ navigation, route }: any) => {
   const fetchPoll = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/polls`);
-      if (res.ok) {
-        const polls: Poll[] = await res.json();
-        const found = polls.find(p => p.id === pollId);
-        if (found) setPoll(found);
+      const res = await api.get(`/api/villas/${villaId}/polls`, { params: { userId } });
+      const polls: Poll[] = res.data;
+      const found = polls.find(p => p.id === pollId);
+      if (found) {
+        setPoll(found);
+        // Pre-select the option the user previously voted for when the poll is still active
+        const prevOptionId = found.options.find(o =>
+          o.votes.some(v => v.voterId === userId || (userRole === 'ADMIN' && v.roomNumber === 'admin'))
+        )?.id ?? null;
+        if (prevOptionId && new Date(found.endDate) > new Date()) {
+          setSelectedOptionId(prevOptionId);
+        }
       }
     } catch (e) {
       console.error('Fetch poll detail error:', e);
     } finally {
       setLoading(false);
     }
-  }, [pollId, villaId]);
+  }, [pollId, villaId, userId, userRole]);
 
   useFocusEffect(useCallback(() => { fetchPoll(); }, [fetchPoll]));
 
@@ -77,22 +84,22 @@ const PollDetailScreen = ({ navigation, route }: any) => {
 
   const handleVote = async () => {
     if (!selectedOptionId) return Alert.alert('알림', '옵션을 선택해주세요.');
+    const isModifying = hasVoted && isActive;
     setVoting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/polls/${pollId}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voterId: userId, optionId: selectedOptionId }),
-      });
-      if (res.status === 409) {
-        Alert.alert('알림', '이미 투표한 세대입니다. (1세대 1표)');
-      } else if (res.status === 403) {
-        Alert.alert('투표 불가', '해당 빌라의 구성원이 아닙니다. 빌라 등록 상태를 확인해 주세요.');
-      } else if (!res.ok) {
-        const err = await res.json();
-        Alert.alert('오류', err.error || '투표에 실패했습니다.');
-      } else {
+      try {
+        await api.post(`/api/villas/${villaId}/polls/${pollId}/vote`, { voterId: userId, optionId: selectedOptionId });
         await fetchPoll();
+        if (isModifying) {
+          Alert.alert('완료', '투표가 수정되었습니다.');
+        }
+      } catch (voteErr: any) {
+        const status = voteErr.response?.status;
+        if (status === 403) {
+          Alert.alert('투표 불가', '해당 빌라의 구성원이 아닙니다. 빌라 등록 상태를 확인해 주세요.');
+        } else {
+          Alert.alert('오류', voteErr.response?.data?.error || '투표에 실패했습니다.');
+        }
       }
     } catch {
       Alert.alert('오류', '투표에 실패했습니다.');
@@ -104,18 +111,9 @@ const PollDetailScreen = ({ navigation, route }: any) => {
   const handleRemind = async () => {
     setReminding(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/polls/${pollId}/remind`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminId: userId }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        Alert.alert('오류', err.error || '알림 발송에 실패했습니다.');
-      } else {
-        const data = await res.json();
-        Alert.alert('발송 완료', `미참여자 ${data.nonVoterCount}명에게 알림을 발송했습니다!`);
-      }
+      const remindRes = await api.post(`/api/polls/${pollId}/remind`, { adminId: userId });
+      const data = remindRes.data;
+      Alert.alert('발송 완료', `미참여자 ${data.nonVoterCount}명에게 알림을 발송했습니다!`);
     } catch {
       Alert.alert('오류', '알림 발송에 실패했습니다.');
     } finally {
@@ -154,6 +152,11 @@ const PollDetailScreen = ({ navigation, route }: any) => {
                 {poll.isAnonymous ? '익명 투표' : '기명 투표'}
               </Text>
             </View>
+            {hasVoted && (
+              <View style={styles.votedBadge}>
+                <Text style={styles.votedBadgeText}>투표 완료</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.pollTitle}>{poll.title}</Text>
           {poll.description ? <Text style={styles.pollDesc}>{poll.description}</Text> : null}
@@ -256,7 +259,10 @@ const PollDetailScreen = ({ navigation, route }: any) => {
                   onPress={handleVote}
                   disabled={!selectedOptionId || voting}
                 >
-                  {voting ? <ActivityIndicator color="#fff" /> : <Text style={styles.voteBtnText}>투표하기</Text>}
+                  {voting
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.voteBtnText}>{hasVoted ? '투표 수정하기' : '투표하기'}</Text>
+                  }
                 </TouchableOpacity>
                 <Text style={styles.hintText}>* 1세대 1표 원칙이 적용됩니다</Text>
               </>
@@ -278,9 +284,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F2F3F7' },
   content: { padding: 20, paddingBottom: 48 },
   headerCard: { backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4 },
-  headerBadgeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  headerBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   badgeText: { fontSize: 12, fontWeight: '700' },
+  votedBadge: { backgroundColor: '#34C759', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  votedBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   pollTitle: { fontSize: 22, fontWeight: '800', color: '#1C1C1E', marginBottom: 8 },
   pollDesc: { fontSize: 15, color: '#3C3C43', lineHeight: 22, marginBottom: 8 },
   pollEndDate: { fontSize: 13, color: '#8E8E93' },

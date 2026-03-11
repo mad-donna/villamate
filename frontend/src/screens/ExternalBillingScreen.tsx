@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import api from '../utils/api';
 import { API_BASE_URL } from '../config';
 
 
@@ -70,17 +71,14 @@ const ExternalBillingScreen = () => {
       }
       if (!userId) return;
 
-      const villaRes = await fetch(`${API_BASE_URL}/api/villas/${userId}`);
-      if (!villaRes.ok) return;
-      const villas = await villaRes.json();
+      const villaRes = await api.get(`/api/villas/${userId}`);
+      const villas = villaRes.data;
       if (!Array.isArray(villas) || villas.length === 0) return;
       const id = villas[0].id;
       setVillaId(id);
 
-      const billsRes = await fetch(`${API_BASE_URL}/api/villas/${id}/external-bills`);
-      if (!billsRes.ok) return;
-      const data = await billsRes.json();
-      setBills(data);
+      const billsRes = await api.get(`/api/villas/${id}/external-bills`);
+      setBills(billsRes.data);
     } catch (err) {
       console.error('ExternalBillingScreen fetchData error:', err);
     } finally {
@@ -93,9 +91,7 @@ const ExternalBillingScreen = () => {
   const handleConfirm = async (billId: string) => {
     if (!villaId) return;
     try {
-      await fetch(`${API_BASE_URL}/api/villas/${villaId}/external-bills/${billId}/confirm`, {
-        method: 'PATCH',
-      });
+      await api.patch(`/api/villas/${villaId}/external-bills/${billId}/confirm`);
       fetchData();
     } catch (err) {
       console.error('Confirm error:', err);
@@ -110,19 +106,14 @@ const ExternalBillingScreen = () => {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/external-bills`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetName,
-          phoneNumber,
-          amount: parseInt(amount, 10),
-          description,
-          dueDate,
-        }),
+      const billRes = await api.post(`/api/villas/${villaId}/external-bills`, {
+        targetName,
+        phoneNumber,
+        amount: parseInt(amount, 10),
+        description,
+        dueDate,
       });
-      if (!res.ok) throw new Error('Failed to create bill');
-      const newBill = await res.json();
+      const newBill = billRes.data;
       setModalVisible(false);
       setTargetName(''); setPhoneNumber(''); setAmount(''); setDescription(''); setDueDate('');
       fetchData();

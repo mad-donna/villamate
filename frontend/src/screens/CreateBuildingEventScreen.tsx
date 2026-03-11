@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 
 const CATEGORIES = ['하자보수', '정기점검', '유지계약', '청소', '기타'];
@@ -68,13 +68,10 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
     const type = match ? `image/${match[1]}` : 'image/jpeg';
     formData.append('file', { uri, name: filename, type } as any);
 
-    const res = await fetch(`${API_BASE_URL}/api/upload`, {
-      method: 'POST',
-      body: formData,
+    const res = await api.post('/api/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
-    if (!res.ok) throw new Error('이미지 업로드 실패');
-    const data = await res.json();
-    return data.fileUrl;
+    return res.data.fileUrl;
   };
 
   const handleSubmit = async () => {
@@ -103,26 +100,18 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
         attachmentUrl = await uploadImage(imageUri);
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/villas/${villaId}/building-events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          description: description.trim() || null,
-          category,
-          eventDate: formatDate(eventDate),
-          contractorName: contractorName.trim() || null,
-          contactNumber: contactNumber.trim() || null,
-          creatorId,
-          attachmentUrl,
-          isPublic,
-          cost: cost ? Number(cost.replace(/[^0-9]/g, '')) : 0,
-        }),
+      await api.post(`/api/villas/${villaId}/building-events`, {
+        title: title.trim(),
+        description: description.trim() || null,
+        category,
+        eventDate: formatDate(eventDate),
+        contractorName: contractorName.trim() || null,
+        contactNumber: contactNumber.trim() || null,
+        creatorId,
+        attachmentUrl,
+        isPublic,
+        cost: cost ? Number(cost.replace(/[^0-9]/g, '')) : 0,
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || '등록 실패');
-      }
       Alert.alert('등록 완료', '이력이 등록되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() },
       ]);

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { API_BASE_URL } from '../config';
+import api from '../utils/api';
 
 interface Notice {
   id: string;
@@ -24,8 +24,8 @@ const SystemNoticeScreen = ({ navigation }: any) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/system-notices`)
-      .then((r) => r.json())
+    api.get('/api/system-notices')
+      .then((r) => r.data)
       .then((data) => setNotices(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setLoading(false));
