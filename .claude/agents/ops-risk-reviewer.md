@@ -817,3 +817,75 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
 | ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
 | ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
 | ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |
+
+---
+
+### 2026-03-12 — Paywall 버그 수정, 구독 만료 Cron, Ticket 시스템, 장부/이미지 실데이터 세션
+
+#### 이 세션에서 추가된 운영 위험 및 완화 조치
+
+**[RESOLVED] Paywall 무한 내비게이션 루프**
+- 기존: 403 인터셉터 → AdminSubscription 이동 → AdminSubscription API도 403 → 다시 이동 반복
+- 해결:
+  1. `isHandlingSubscriptionExpiry` 모듈 플래그로 재진입 방지
+  2. 현재 경로 `=== 'AdminSubscription'`이면 인터셉터 조기 반환
+  3. `DashboardScreen`의 구독 상태 체크를 `ALLOWED_STATUSES.includes()` 패턴으로 수정 (FREE_TRIAL 포함)
+  4. 홈 이동 시 `navigation.reset({ index: 0, routes: [{ name: 'Main' }] })`으로 스택 초기화
+- **[RESOLVED]**
+
+**[RESOLVED] phone/phoneNumber 컬럼 중복 — DB 스키마 버그**
+- 기존: `User` 모델에 `phone`과 `phoneNumber` 두 컬럼이 혼재 → 일부 경로에서 잘못된 컬럼에 저장/조회
+- 해결: `phoneNumber` 컬럼 제거(`prisma db push --accept-data-loss`), `authController.ts`에서 `phone`만 사용
+- **[RESOLVED]** 데이터 무결성 버그 해소
+
+**[RESOLVED] 구독 만료 자동화 — 수동 EXPIRED 처리 필요성 제거**
+- 기존: 구독 만료 시 DB를 수동으로 업데이트하거나 EXPIRED 상태 전환 없이 무한 FREE_TRIAL 유지 가능
+- 해결: `startSubscriptionExpiryCron()` — 매일 자정 `subscriptionExpiry < now`인 빌라를 EXPIRED로 일괄 업데이트 + 관리자 푸시 알림
+- **[RESOLVED]** F-65 만료 흐름 자동화 완성
+
+**[RESOLVED] 구독 만료 API 접근 제한 없음**
+- 기존: EXPIRED 상태 빌라도 청구서 발행, 공지, 투표 등 모든 핵심 API 사용 가능
+- 해결: `backend/src/middlewares/checkSubscription.ts` 신규 구현 — `subscriptionStatus`가 ACTIVE/FREE_TRIAL이 아니면 403 반환
+- 적용 엔드포인트: 청구서 발행, 공지/게시글 작성, 전자투표 생성, 건물 이력 작성, 외부 청구 생성
+- **[RESOLVED]** F-68 완성
+
+**[RESOLVED] ACTIVE → FREE_TRIAL 구독 다운그레이드 가능**
+- 기존: `subscribe` 엔드포인트가 현재 상태 확인 없이 임의 상태로 덮어쓰기 가능
+- 해결: ADMIN 역할이 ACTIVE 상태인 빌라에 FREE_TRIAL 재설정 시도 시 409 반환
+- **[RESOLVED]**
+
+**[NEW-LOW] 구독 만료 Cron — 자정 실행 시 타임존 주의**
+- `0 0 * * *` 크론은 서버 로컬 타임 기준 → UTC 서버(Supabase/클라우드)면 한국 시각과 9시간 차이
+- 현재 로컬 개발 환경에서는 문제 없으나, 클라우드 배포 시 타임존 확인 필요 (KST = UTC+9)
+
+**[NEW-LOW] checkSubscription 미들웨어 — 일부 엔드포인트 누락 가능성**
+- 현재 적용: invoices 생성, posts 생성, polls 생성, building-events 생성, external-bills 생성
+- 미적용: tickets 생성, ledger 트랜잭션 생성 — 만료 후에도 접근 가능
+- 향후: 모든 "생성" 엔드포인트에 일관성 있게 적용 권장
+
+#### 현재 누적 위험 현황 요약 (2026-03-12 기준)
+
+| 위험 | 수준 | 상태 |
+|------|------|------|
+| PortOne 결제 서버 검증 없음 | HIGH | 미해결 |
+| JWT_SECRET 하드코딩 폴백 | HIGH | 배포 전 필수 조치 |
+| termsAgreed 서버 미검증 | HIGH | 법적 리스크 |
+| 구독 쿠폰 서버 미검증 | HIGH | SaaS BM 리스크 |
+| multer 파일 타입 검증 부재 | MEDIUM | 미해결 |
+| 업로드 파일 공개 접근 | MEDIUM | 미해결 |
+| 구독 만료 Cron 타임존 | LOW | **신규**, 클라우드 배포 시 확인 필요 |
+| checkSubscription 누락 엔드포인트 | LOW | **신규**, tickets/ledger |
+| Axios 토큰 메모리 미캐시 | LOW | MVP 수용 |
+| 독촉 크론 날짜 조건 취약 | MEDIUM | 쿨타임으로 부분 개선 |
+| ~~Paywall 무한 루프~~ | HIGH | **해결됨** (isHandlingSubscriptionExpiry 플래그) |
+| ~~구독 만료 API 접근 제한 없음~~ | MEDIUM | **해결됨** (checkSubscription 미들웨어) |
+| ~~ACTIVE→FREE_TRIAL 다운그레이드~~ | MEDIUM | **해결됨** (409 반환) |
+| ~~phone/phoneNumber 컬럼 중복~~ | MEDIUM | **해결됨** (phoneNumber 제거) |
+| ~~모바일 앱 JWT token 미저장~~ | MEDIUM | **해결됨** |
+| ~~단일 index.ts 유지보수 리스크~~ | MEDIUM | **해결됨** |
+| ~~C2: password 필드 API 응답 노출~~ | HIGH | **해결됨** |
+| ~~C4: 구독 활성화 무인증~~ | HIGH | **해결됨** |
+| ~~C5: Admin 웹 XSS~~ | HIGH | **해결됨** |
+| ~~API_BASE_URL 하드코딩~~ | MEDIUM | **해결됨** |
+| ~~비밀번호 해싱 없음~~ | HIGH | **해결됨** |
+| ~~Admin 투표 차단 버그~~ | CRITICAL | **해결됨** |

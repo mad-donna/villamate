@@ -226,6 +226,26 @@ const ResidentDashboardScreen = () => {
           </Text>
         </TouchableOpacity>
 
+        {/* Ticket / 민원 접수 quick-access */}
+        <TouchableOpacity
+          style={styles.widget}
+          onPress={() =>
+            navigation.navigate('TicketList', { userRole: 'RESIDENT' })
+          }
+          activeOpacity={0.7}
+        >
+          <View style={styles.widgetHeader}>
+            <Text style={styles.widgetSmallLabel}>민원 및 수리 요청</Text>
+            <Ionicons name="chevron-forward" size={14} color="#C7C7CC" />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="construct-outline" size={22} color="#FF9500" />
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#3A3A3C' }}>
+              민원 접수 및 처리 현황 보기
+            </Text>
+          </View>
+        </TouchableOpacity>
+
         {/* ── Admin Mode Return (only shown when admin is in resident mode) ── */}
         {userRole === 'ADMIN' && (
           <TouchableOpacity

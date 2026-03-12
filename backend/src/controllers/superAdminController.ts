@@ -171,6 +171,54 @@ export async function getVillaUsers(req: Request, res: Response) {
   }
 }
 
+export async function updateVillaSubscription(req: Request, res: Response) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
+    if (decoded.role !== 'SUPER_ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
+    const villaId = parseInt(String(req.params.villaId), 10);
+    if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+    const { status } = req.body;
+    const ALLOWED_STATUSES = ['ACTIVE', 'FREE_TRIAL', 'EXPIRED', 'NONE'];
+    if (!ALLOWED_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${ALLOWED_STATUSES.join(', ')}` });
+    }
+
+    let subscriptionExpiry: Date | null = null;
+    if (status === 'ACTIVE') {
+      subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const villa = await prisma.villa.update({
+      where: { id: villaId },
+      data: {
+        subscriptionStatus: status,
+        subscriptionExpiry,
+      },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        totalUnits: true,
+        status: true,
+        subscriptionStatus: true,
+        subscriptionExpiry: true,
+        createdAt: true,
+      },
+    });
+    res.status(200).json(villa);
+  } catch (error) {
+    console.error('Villa subscription update error:', error);
+    res.status(500).json({ error: 'Failed to update villa subscription' });
+  }
+}
+
 export async function getStats(req: Request, res: Response) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

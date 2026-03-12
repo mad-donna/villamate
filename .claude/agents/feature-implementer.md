@@ -947,3 +947,122 @@ Your MEMORY.md is currently empty. When you notice a pattern worth preserving ac
   import { prisma } from '../prisma';
   import { normalizeRoom } from '../helpers';
   ```
+
+---
+
+### 2026-03-12 — Paywall 버그 수정, 구독 만료 Cron, Ticket 시스템, 장부/이미지 실데이터 세션
+
+#### 이 세션에서 구현한 기능
+
+1. **Paywall 무한루프 및 BackHandler 버그 수정**
+   - `frontend/src/screens/AdminSubscriptionScreen.tsx`:
+     - `BackHandler.removeEventListener` → `subscription.remove()` 패턴으로 수정
+     - `resolvedVillaId` state 추가 — `route.params → user.villa.id → villaId 키 → API 조회` 3단계 폴백
+     - 홈 이동: `navigation.reset({ index: 0, routes: [{ name: 'Main' }] })`
+   - `frontend/src/utils/api.ts`:
+     - `let isHandlingSubscriptionExpiry = false` 모듈 플래그 추가
+     - 403 인터셉터: 현재 경로 === 'AdminSubscription' 또는 플래그 on이면 조기 반환
+     - 플래그를 `onPress` 콜백 내에서 리셋
+   - `frontend/src/screens/DashboardScreen.tsx`:
+     - `ALLOWED_STATUSES = ['ACTIVE', 'FREE_TRIAL']` 배열 허용 목록으로 변경
+
+2. **구독 만료 자동화 Cron** (`backend/src/cron.ts`)
+   - `startSubscriptionExpiryCron()` 신규 추가 (매일 자정 `0 0 * * *`)
+   - `subscriptionExpiry < now`인 ACTIVE/FREE_TRIAL 빌라 → EXPIRED 일괄 업데이트 (`updateMany`)
+   - 각 빌라 admin에게 "구독이 만료되었습니다" 푸시 알림
+   - `backend/src/index.ts`에 `startSubscriptionExpiryCron()` 호출 추가
+
+3. **phone/phoneNumber 컬럼 중복 버그 수정**
+   - `backend/prisma/schema.prisma`: `User.phoneNumber String?` 제거 (→ `phone String? @unique`만 유지)
+   - `backend/src/controllers/authController.ts`: `phoneNumber:` → `phone:`
+   - `npx prisma db push --accept-data-loss` 적용
+
+4. **checkSubscription 미들웨어 신규 구현** (`backend/src/middlewares/checkSubscription.ts`)
+   - JWT에서 `userId` 조회 → `Villa.adminId` 확인 → `subscriptionStatus`가 ACTIVE/FREE_TRIAL 아니면 403
+   - 적용 라우트: 청구서 생성, 공지 작성, 투표 생성, 건물 이력 등록, 외부 청구 생성
+
+5. **구독 다운그레이드 방지** (`backend/src/controllers/villaController.ts`)
+   - `subscribe` 함수: ADMIN 역할 호출 시 현재 상태가 ACTIVE이면 409 반환
+
+6. **Ticket(민원/수리) 독립 시스템 재구현**
+   - `frontend/src/screens/TicketListScreen.tsx` 신규:
+     - 상태 배지: PENDING(노랑)/IN_PROGRESS(파랑)/RESOLVED(초록)
+     - 관리자: 탭 → ActionSheet(iOS)/Alert(Android)로 상태 변경
+     - 입주민: `residentId` 기준 본인 민원만 필터링, 읽기 전용
+     - FAB → CreateTicket 화면 이동
+   - `frontend/src/screens/CreateTicketScreen.tsx` 신규:
+     - 카테고리 칩: COMMON_FACILITY/PARKING/NOISE_COMPLAINT/ETC
+     - `POST /api/villas/:villaId/tickets` 연동
+   - `frontend/src/screens/ManagementScreen.tsx`: "민원 및 수리 요청" 메뉴 추가
+   - `frontend/src/screens/ResidentDashboardScreen.tsx`: "민원 및 수리 요청" 위젯 카드 추가
+   - `frontend/src/navigation/AppNavigator.tsx`: TicketList, CreateTicket 스크린 등록
+
+7. **장부(Ledger) 실데이터 연동** (`frontend/src/screens/LedgerScreen.tsx` 완전 재작성)
+   - 더미 TRANSACTIONS 배열 제거 → `api.get('/api/villas/${villaId}/ledger')` 실 조회
+   - 동적 잔액: INCOME - EXPENSE 합산
+   - "+ 내역 추가" 모달: 날짜/유형/제목/금액 입력 → `POST /api/villas/${villaId}/ledger`
+   - villaId: params → user.villa.id → admin API 폴백
+   - `backend/src/controllers/villaController.ts`: `getLedger`, `createLedgerTransaction` 추가
+   - `backend/src/routes/villaRoutes.ts`: `/api/villas/:villaId/ledger` GET/POST 라우트 추가 (`:adminId` 와일드카드 앞에 배치)
+
+8. **건물 이력 이미지 업로드 실 연동** (`frontend/src/screens/CreateBuildingEventScreen.tsx`)
+   - `expo-image-picker`로 사진 선택
+   - native `fetch()` + `FormData`로 `POST /api/public/upload` 멀티파트 업로드
+   - `Authorization: Bearer ${token}` 헤더 직접 포함 (Axios 경유 안 함)
+   - 업로드 중 `uploading` state → 버튼 비활성화 + "업로드 중..." 텍스트
+   - 이미지 미리보기 + ✕ 제거 버튼
+   - `frontend/app.json`: expo-image-picker 플러그인 + 한국어 `photosPermission` 추가
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **BackHandler 구독 패턴** (React Native 0.65+):
+  ```typescript
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handler);
+    return () => subscription.remove();
+  }, []);
+  ```
+
+- **구독 만료 Cron 패턴**:
+  ```typescript
+  cron.schedule('0 0 * * *', async () => {
+    const expired = await prisma.villa.findMany({
+      where: {
+        subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] },
+        subscriptionExpiry: { not: null, lt: new Date() },
+      },
+      select: { id: true, name: true, adminId: true, admin: { select: { expoPushToken: true } } },
+    });
+    await prisma.villa.updateMany({
+      where: { id: { in: expired.map(v => v.id) } },
+      data: { subscriptionStatus: 'EXPIRED' },
+    });
+    // 각 admin에게 푸시 알림 발송
+  });
+  ```
+
+- **checkSubscription 미들웨어 패턴**:
+  ```typescript
+  export async function checkSubscription(req: Request, res: Response, next: NextFunction) {
+    const villaId = parseInt(req.params.villaId);
+    const villa = await prisma.villa.findUnique({ where: { id: villaId }, select: { subscriptionStatus: true } });
+    if (!['ACTIVE', 'FREE_TRIAL'].includes(villa?.subscriptionStatus ?? '')) {
+      return res.status(403).json({ error: 'SUBSCRIPTION_EXPIRED' });
+    }
+    next();
+  }
+  ```
+
+- **이미지 업로드 native fetch 패턴** (Axios 우회):
+  ```typescript
+  const token = await AsyncStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('file', { uri: imageUri, name: 'image.jpg', type: 'image/jpeg' } as any);
+  const uploadRes = await fetch(`${API_BASE_URL}/api/upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const uploadData = await uploadRes.json();
+  const fileUrl = uploadData.fileUrl;
+  ```

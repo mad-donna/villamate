@@ -193,22 +193,56 @@ export async function moveOut(req: Request, res: Response) {
 }
 
 export async function subscribe(req: Request, res: Response) {
-  if ((req as any).user?.role !== 'SUPER_ADMIN') {
+  const callerRole: string = (req as any).user?.role ?? '';
+  const callerId: string = (req as any).user?.userId ?? '';
+
+  // SUPER_ADMIN can activate any villa to ACTIVE status
+  // ADMIN can activate their own villa to FREE_TRIAL status
+  if (callerRole !== 'SUPER_ADMIN' && callerRole !== 'ADMIN') {
     return res.status(403).json({ error: 'Forbidden' });
   }
+
   const villaId = Number(req.params.villaId);
   if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
   try {
+    if (callerRole === 'ADMIN') {
+      // Verify the caller is actually the admin of this villa
+      const villa = await prisma.villa.findUnique({
+        where: { id: villaId },
+        select: { adminId: true },
+      });
+      if (!villa) return res.status(404).json({ error: 'Villa not found' });
+      if (villa.adminId !== callerId) {
+        return res.status(403).json({ error: 'Not the admin of this villa' });
+      }
+    }
+
+    // Prevent downgrading an already-ACTIVE (paid) subscription to FREE_TRIAL
+    if (callerRole === 'ADMIN') {
+      const current = await prisma.villa.findUnique({
+        where: { id: villaId },
+        select: { subscriptionStatus: true },
+      });
+      if (current?.subscriptionStatus === 'ACTIVE') {
+        return res.status(409).json({ error: 'ALREADY_ACTIVE', message: '이미 활성화된 구독이 있습니다.' });
+      }
+    }
+
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 30);
+
+    // SUPER_ADMIN grants full ACTIVE status; regular ADMIN gets FREE_TRIAL
+    const newStatus = callerRole === 'SUPER_ADMIN' ? 'ACTIVE' : 'FREE_TRIAL';
+
     const villa = await prisma.villa.update({
       where: { id: villaId },
       data: {
-        subscriptionStatus: 'ACTIVE',
+        subscriptionStatus: newStatus,
         subscriptionExpiry: expiry,
       },
     });
-    res.json(villa);
+    res.json({ success: true, villa });
   } catch (error) {
     console.error('Subscribe error:', error);
     res.status(500).json({ error: 'Failed to activate subscription' });
@@ -219,15 +253,20 @@ export async function registerBilling(req: Request, res: Response) {
   const villaId = parseInt(String(req.params.villaId), 10);
   if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
 
-  const { cardNumber, expireMonth, expireYear, password, adminId } = req.body;
-  if (!cardNumber || !expireMonth || !expireYear || !password || !adminId) {
-    return res.status(400).json({ error: 'cardNumber, expireMonth, expireYear, password, adminId are required' });
+  // adminId is derived from the authenticated JWT, not from the request body,
+  // to prevent caller spoofing. The body field is ignored even if provided.
+  const callerId: string = (req as any).user?.userId ?? '';
+  if (!callerId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { cardNumber, expireMonth, expireYear, password } = req.body;
+  if (!cardNumber || !expireMonth || !expireYear || !password) {
+    return res.status(400).json({ error: 'cardNumber, expireMonth, expireYear, password are required' });
   }
 
   try {
     const villa = await prisma.villa.findUnique({ where: { id: villaId } });
     if (!villa) return res.status(404).json({ error: 'Villa not found' });
-    if (villa.adminId !== String(adminId)) {
+    if (villa.adminId !== callerId) {
       return res.status(403).json({ error: 'Not the admin of this villa' });
     }
 
@@ -547,17 +586,25 @@ export async function confirmExternalBill(req: Request, res: Response) {
 
 export async function createTicket(req: Request, res: Response) {
   const villaId = parseInt(String(req.params.villaId), 10);
-  const { title, description, imageUrl, creatorId } = req.body;
-  if (!title || !description || !creatorId) {
+  // Accept both 'creatorId' (direct) and 'residentId' (legacy frontend field name)
+  const { title, description, category, imageUrl, creatorId, residentId } = req.body;
+  const resolvedCreatorId = creatorId || residentId;
+  if (!title || !description || !resolvedCreatorId) {
     return res.status(400).json({ error: '제목, 내용, 작성자는 필수입니다.' });
   }
+
+  const VALID_CATEGORIES = ['COMMON_FACILITY', 'PARKING', 'NOISE_COMPLAINT', 'ETC'];
+  const resolvedCategory =
+    category && VALID_CATEGORIES.includes(String(category)) ? String(category) : null;
+
   try {
     const ticket = await prisma.ticket.create({
       data: {
         title: String(title),
         description: String(description),
+        category: resolvedCategory,
         imageUrl: imageUrl ? String(imageUrl) : undefined,
-        creatorId: String(creatorId),
+        creatorId: String(resolvedCreatorId),
         villaId,
       },
     });
@@ -618,6 +665,50 @@ export async function updateTicketStatus(req: Request, res: Response) {
   } catch (error) {
     console.error('Update ticket status error:', error);
     res.status(500).json({ error: 'Failed to update ticket status' });
+  }
+}
+
+export async function getLedger(req: Request, res: Response) {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  try {
+    const transactions = await prisma.ledgerTransaction.findMany({
+      where: { villaId },
+      orderBy: { date: 'desc' },
+    });
+    res.json(transactions);
+  } catch (error) {
+    console.error('Ledger fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch ledger' });
+  }
+}
+
+export async function createLedgerTransaction(req: Request, res: Response) {
+  const villaId = parseInt(String(req.params.villaId), 10);
+  if (isNaN(villaId)) return res.status(400).json({ error: 'Invalid villaId' });
+
+  const { date, description, amount, type, hasReceipt, receiptUrl } = req.body;
+  if (!date || !description || amount === undefined || !type) {
+    return res.status(400).json({ error: 'date, description, amount, type are required' });
+  }
+
+  try {
+    const transaction = await prisma.ledgerTransaction.create({
+      data: {
+        villaId,
+        date: new Date(date),
+        description: String(description),
+        amount: Number(amount),
+        type: String(type), // 'INCOME' or 'EXPENSE'
+        hasReceipt: hasReceipt ?? false,
+        receiptUrl: receiptUrl ?? null,
+      },
+    });
+    res.status(201).json(transaction);
+  } catch (error) {
+    console.error('Ledger create error:', error);
+    res.status(500).json({ error: 'Failed to create ledger transaction' });
   }
 }
 

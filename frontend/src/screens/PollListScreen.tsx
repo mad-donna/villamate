@@ -28,12 +28,26 @@ const PollListScreen = ({ navigation, route }: any) => {
   const { villaId, userId, userRole } = route.params ?? {};
   const [polls, setPolls] = useState<Poll[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState(false);
 
   const fetchPolls = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/api/villas/${villaId}/polls`, { params: { userId } });
-      setPolls(res.data);
+      const [pollsRes, villaRes] = await Promise.all([
+        api.get(`/api/villas/${villaId}/polls`, { params: { userId } }),
+        api.get(`/api/villas/${villaId}/detail`),
+      ]);
+      setPolls(pollsRes.data);
+
+      // Determine subscription expiry state.
+      // Rely solely on subscriptionStatus — the expiry date is NOT checked here.
+      // The background cron job is responsible for transitioning status to 'EXPIRED'
+      // when the expiry date passes. This mirrors the server-side checkSubscription
+      // middleware design so the client and server never disagree.
+      const villa = villaRes.data;
+      const validStatuses = ['ACTIVE', 'FREE_TRIAL'];
+      const statusOk = villa?.subscriptionStatus && validStatuses.includes(villa.subscriptionStatus);
+      setIsSubscriptionExpired(!statusOk);
     } catch (e) {
       console.error('Fetch polls error:', e);
     } finally {
@@ -102,8 +116,18 @@ const PollListScreen = ({ navigation, route }: any) => {
           })
         )}
       </ScrollView>
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreatePoll', { villaId, userId })}>
-        <Ionicons name="add" size={28} color="#fff" />
+      <TouchableOpacity
+        style={[styles.fab, isSubscriptionExpired && styles.fabLocked]}
+        onPress={() => {
+          if (isSubscriptionExpired) {
+            navigation.navigate('AdminSubscription', { villaId });
+            return;
+          }
+          navigation.navigate('CreatePoll', { villaId, userId });
+        }}
+        activeOpacity={0.85}
+      >
+        <Ionicons name={isSubscriptionExpired ? 'lock-closed' : 'add'} size={28} color="#fff" />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -130,6 +154,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: '600' },
   voteCount: { flex: 1, fontSize: 13, color: '#8E8E93', textAlign: 'right', marginRight: 4 },
   fab: { position: 'absolute', bottom: 30, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', shadowColor: '#007AFF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
+  fabLocked: { backgroundColor: '#AEAEB2', shadowColor: '#AEAEB2' },
 });
 
 export default PollListScreen;

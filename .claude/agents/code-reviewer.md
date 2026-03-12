@@ -932,3 +932,104 @@ jest.mock('expo-server-sdk', () => {
     </View>
   )}
   ```
+
+---
+
+### 2026-03-12 — Paywall 버그 수정, 구독 만료 Cron, Ticket 시스템, 장부/이미지 실데이터 세션
+
+#### 이 세션에서 리뷰/검토한 주요 내용
+
+- **Paywall 무한루프 + BackHandler API 버그** 진단 및 수정
+- **구독 만료 자동화 Cron** 구현 (`startSubscriptionExpiryCron`)
+- **phone/phoneNumber 컬럼 중복** DB 버그 수정
+- **Ticket(민원/수리) 독립 시스템** 빌라 도메인 전용 카테고리로 재구현
+- **장부(LedgerScreen) 실데이터 연동** 더미 → DB
+- **건물 이력 이미지 업로드** 실제 파일 선택 + 업로드 통합
+
+#### 발견된 주요 버그 패턴
+
+**[CRITICAL] BackHandler.removeEventListener is not a function**
+- 파일: `frontend/src/screens/AdminSubscriptionScreen.tsx`
+- 원인: React Native 0.65+ 이후 `BackHandler.removeEventListener` API 제거됨
+- 해결: `const subscription = BackHandler.addEventListener('hardwareBackPress', handler); return () => subscription.remove();`
+- **교훈**: React Native BackHandler는 반드시 `addEventListener` 반환값(subscription)의 `.remove()` 메서드를 사용할 것
+
+**[CRITICAL] 403 interceptor 재진입으로 인한 무한 내비게이션 루프**
+- 파일: `frontend/src/utils/api.ts`
+- 원인: 403 발생 시 `AdminSubscription` 화면으로 이동했으나, 해당 화면의 API 호출도 403을 반환 → 다시 이동 반복
+- 해결:
+  1. 모듈 레벨 `let isHandlingSubscriptionExpiry = false` 플래그 추가
+  2. 이미 처리 중이면 조기 반환
+  3. 현재 경로가 `AdminSubscription`이면 조기 반환 (`currentRoute?.name === 'AdminSubscription'`)
+  4. `navigation.reset({ index: 0, routes: [{ name: 'AdminSubscription', params: ... }] })` — Main을 스택에 쌓지 않음
+- **교훈**: 인증 오류 처리 인터셉터는 반드시 재진입 방지 플래그가 있어야 함
+
+**[CRITICAL] FREE_TRIAL 사용자 대시보드 차단**
+- 파일: `frontend/src/screens/DashboardScreen.tsx`
+- 원인: 구독 상태 체크 조건이 `=== 'ACTIVE'`만 허용 → FREE_TRIAL 사용자는 403 루프
+- 해결: `const ALLOWED_STATUSES = ['ACTIVE', 'FREE_TRIAL']; const isAllowed = ALLOWED_STATUSES.includes(villa.subscriptionStatus ?? '');`
+- **교훈**: 구독 상태 허용 목록은 단일 값 비교가 아닌 배열 includes() 패턴을 사용할 것
+
+**[MAJOR] `resolvedVillaId` 없이 route.params 직접 의존 — undefined 버그**
+- 파일: `AdminSubscriptionScreen.tsx`
+- 원인: 403 인터셉터가 villaId 조회 전에 화면을 전환하면 `route.params?.villaId === undefined`
+- 해결: `resolvedVillaId` 상태 + AsyncStorage 3단계 폴백 (`route.params → user.villa.id → villaId 키 → API 직접 조회`)
+- **교훈**: 구독/결제 화면처럼 딥링크나 인터셉터로 진입 가능한 화면은 항상 파라미터 폴백 체인이 필요함
+
+**[GOOD] ACTIVE → FREE_TRIAL 다운그레이드 방지**
+- `subscribe` API에서 이미 ACTIVE 상태인 경우 FREE_TRIAL로 덮어쓰지 못하도록 409 반환
+- `if (current?.subscriptionStatus === 'ACTIVE') return res.status(409).json({ error: 'ALREADY_ACTIVE' })`
+- **교훈**: 구독 상태 상향은 허용하되 하향은 차단하는 단방향 상태 머신 원칙
+
+**[GOOD] 이미지 업로드 — native fetch vs Axios**
+- Axios로 multipart/form-data 전송 시 Content-Type boundary 자동 설정 실패 가능
+- 해결: 파일 업로드에만 native `fetch()`를 사용하고 `Authorization: Bearer` 헤더를 직접 포함
+- **교훈**: 이미지/파일 업로드는 Axios interceptor 경유 없이 native fetch 직접 사용이 안전
+
+#### 이 세션에서 추가된 코딩 패턴
+
+- **BackHandler 구독 패턴**:
+  ```typescript
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => { return true; });
+    return () => subscription.remove();
+  }, []);
+  ```
+
+- **인터셉터 재진입 방지 패턴** (`api.ts`):
+  ```typescript
+  let isHandlingSubscriptionExpiry = false;
+  // response interceptor에서:
+  if (error.response?.status === 403) {
+    if (isHandlingSubscriptionExpiry) return Promise.reject(error);
+    const currentRoute = navigationRef.current?.getCurrentRoute();
+    if (currentRoute?.name === 'AdminSubscription') return Promise.reject(error);
+    isHandlingSubscriptionExpiry = true;
+    // navigate → then reset flag in onPress callback
+  }
+  ```
+
+- **구독 만료 Cron 패턴** (`backend/src/cron.ts`):
+  ```typescript
+  cron.schedule('0 0 * * *', async () => {
+    const expired = await prisma.villa.findMany({
+      where: { subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] }, subscriptionExpiry: { not: null, lt: new Date() } }
+    });
+    await prisma.villa.updateMany({ where: { id: { in: expired.map(v => v.id) } }, data: { subscriptionStatus: 'EXPIRED' } });
+    // 각 관리자에게 푸시 알림
+  });
+  ```
+
+- **villaId 3단계 폴백 패턴**:
+  ```typescript
+  const resolveVillaId = async () => {
+    const userJson = await AsyncStorage.getItem('user');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user?.villa?.id) return user.villa.id;
+      const villaId = await AsyncStorage.getItem('villaId');
+      if (villaId) return parseInt(villaId);
+      // admin: API fallback
+    }
+  };
+  ```

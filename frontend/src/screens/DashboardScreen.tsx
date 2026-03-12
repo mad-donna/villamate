@@ -90,13 +90,12 @@ const DashboardScreen = ({ navigation }: any) => {
       const villa = villas[0] as Villa;
       setVillaData(villa);
 
-      // Check subscription status
-      const isExpired = villa.subscriptionExpiry
-        ? new Date(villa.subscriptionExpiry) < new Date()
-        : false;
-      if (!villa.subscriptionStatus || villa.subscriptionStatus !== 'ACTIVE' || isExpired) {
-        navigation.navigate('AdminSubscription', { villaId: villa.id });
+      // Check subscription status — mirror the backend's ALLOWED_STATUSES exactly
+      const ALLOWED_STATUSES = ['ACTIVE', 'FREE_TRIAL'];
+      const isAllowed = ALLOWED_STATUSES.includes(villa.subscriptionStatus ?? '');
+      if (!isAllowed) {
         setLoading(false);
+        navigation.navigate('AdminSubscription', { villaId: villa.id });
         return;
       }
 

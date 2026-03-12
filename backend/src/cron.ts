@@ -52,6 +52,61 @@ export function startAutoBillingCron() {
   });
 }
 
+/** Daily at midnight: expire villas whose subscriptionExpiry has passed */
+export function startSubscriptionExpiryCron() {
+  cron.schedule('0 0 * * *', async () => {
+    console.log('[CRON] Running subscription expiry check');
+
+    try {
+      const now = new Date();
+
+      // Find all non-expired villas whose expiry date has passed
+      const expiredVillas = await prisma.villa.findMany({
+        where: {
+          subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] },
+          subscriptionExpiry: { not: null, lt: now },
+        },
+        select: {
+          id: true,
+          name: true,
+          adminId: true,
+          admin: { select: { expoPushToken: true } },
+        },
+      });
+
+      if (expiredVillas.length === 0) {
+        console.log('[CRON] No expired subscriptions found');
+        return;
+      }
+
+      // Batch-update all expired villas to EXPIRED
+      await prisma.villa.updateMany({
+        where: { id: { in: expiredVillas.map((v) => v.id) } },
+        data: { subscriptionStatus: 'EXPIRED' },
+      });
+
+      console.log(`[CRON] Expired ${expiredVillas.length} villa(s)`);
+
+      // Notify each admin via push
+      for (const villa of expiredVillas) {
+        const token = villa.admin?.expoPushToken;
+        if (!token) continue;
+        try {
+          await sendPushToTokens(
+            [token],
+            '구독이 만료되었습니다',
+            `${villa.name}의 구독이 만료되었습니다. 서비스를 계속 이용하시려면 결제해주세요.`
+          );
+        } catch (err) {
+          console.error(`[CRON] Expiry push error for villa ${villa.id}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error('[CRON] Subscription expiry error:', error);
+    }
+  });
+}
+
 /** Daily at 10 AM: send dunning push notifications for overdue (PENDING) invoice payments */
 export function startDunningCron() {
   cron.schedule('0 10 * * *', async () => {

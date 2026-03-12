@@ -35,7 +35,6 @@ model User {
   createdTickets  Ticket[]
   expoPushToken   String?
   password        String?
-  phoneNumber     String?
   termsAgreed     Boolean          @default(false)
   notifications   Notification[]
 }
@@ -234,6 +233,7 @@ model Ticket {
   id          String   @id @default(uuid())
   title       String
   description String
+  category    String?
   imageUrl    String?
   status      String   @default("PENDING")
   creatorId   String

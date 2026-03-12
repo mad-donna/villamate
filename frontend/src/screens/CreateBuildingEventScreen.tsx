@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import api from '../utils/api';
-
+import { API_BASE_URL } from '../config';
 
 const CATEGORIES = ['하자보수', '정기점검', '유지계약', '청소', '기타'];
 
@@ -41,6 +41,7 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
   const [contractorName, setContractorName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [cost, setCost] = useState('');
   const [loading, setLoading] = useState(false);
@@ -61,6 +62,7 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
     }
   };
 
+  // Use native fetch (not axios) for multipart uploads — axios can mangle FormData on React Native
   const uploadImage = async (uri: string): Promise<string> => {
     const formData = new FormData();
     const filename = uri.split('/').pop() ?? 'photo.jpg';
@@ -68,10 +70,23 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
     const type = match ? `image/${match[1]}` : 'image/jpeg';
     formData.append('file', { uri, name: filename, type } as any);
 
-    const res = await api.post('/api/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    const token = await AsyncStorage.getItem('token');
+    const headers: Record<string, string> = { 'Content-Type': 'multipart/form-data' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE_URL}/api/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
     });
-    return res.data.fileUrl;
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).error || '이미지 업로드에 실패했습니다.');
+    }
+
+    const data = await res.json();
+    return data.fileUrl;
   };
 
   const handleSubmit = async () => {
@@ -97,7 +112,12 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
 
       let attachmentUrl: string | null = null;
       if (imageUri) {
-        attachmentUrl = await uploadImage(imageUri);
+        setUploading(true);
+        try {
+          attachmentUrl = await uploadImage(imageUri);
+        } finally {
+          setUploading(false);
+        }
       }
 
       await api.post(`/api/villas/${villaId}/building-events`, {
@@ -260,7 +280,17 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
             </Text>
           </TouchableOpacity>
           {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" />
+            <View style={styles.imagePreviewContainer}>
+              <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" />
+              <TouchableOpacity
+                style={styles.imageRemoveButton}
+                onPress={() => setImageUri(null)}
+                activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Text style={styles.imageRemoveButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
           ) : null}
         </View>
       </KeyboardAwareScrollView>
@@ -273,7 +303,12 @@ const CreateBuildingEventScreen = ({ navigation, route }: any) => {
             disabled={loading}
             activeOpacity={0.85}
           >
-            {loading ? (
+            {uploading ? (
+              <>
+                <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.submitButtonText}>업로드 중...</Text>
+              </>
+            ) : loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.submitButtonText}>이력 등록하기</Text>
@@ -347,11 +382,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F6FF',
   },
   imagePickerText: { fontSize: 15, color: '#007AFF', fontWeight: '600' },
+  imagePreviewContainer: {
+    marginTop: 12,
+    position: 'relative',
+  },
   imagePreview: {
     width: '100%',
     height: 180,
     borderRadius: 10,
-    marginTop: 12,
+  },
+  imageRemoveButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageRemoveButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 16,
   },
   submitButton: {
     backgroundColor: '#007AFF',

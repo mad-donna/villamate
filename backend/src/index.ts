@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 import { upload, uploadsDir } from './middlewares/upload';
-import { startAutoBillingCron, startDunningCron } from './cron';
+import { startAutoBillingCron, startDunningCron, startSubscriptionExpiryCron } from './cron';
 import { migrateRoomNumbers } from './migrations';
 import { uploadFile, health, getPayPage, notifyPayment } from './controllers/publicController';
 
@@ -59,6 +59,7 @@ app.use('/api/dashboard', dashboardRoutes);
 // ─── Cron Jobs ────────────────────────────────────────────────────────────────
 startAutoBillingCron();
 startDunningCron();
+startSubscriptionExpiryCron();
 
 export { app };
 

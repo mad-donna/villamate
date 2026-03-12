@@ -1450,3 +1450,169 @@ Expo 푸시 알림(1단계)에 이어, 앱 내 영구 알림함(2단계) 구현.
 3. **동대표 교체/권한 위임**: ADMIN 역할 이전 UI + 백엔드
 4. **PG 결제 서버 검증**: imp_uid → PortOne API 서버 검증
 5. **공용 장부 실데이터 연동**: LedgerScreen 더미 → 실제 LedgerTransaction DB 연동
+
+---
+
+## 21. MVP 구현 현황 (2026-03-12 기준)
+
+### 이 세션에서 추가/변경된 기능
+
+#### 구독 만료 자동화 크론 구현 (F-68 완료)
+
+`backend/src/cron.ts`에 `startSubscriptionExpiryCron()` 추가 — 매일 자정(00:00) 실행.
+
+- 만료일 경과한 빌라의 `subscriptionStatus`를 `ACTIVE` / `FREE_TRIAL` → `EXPIRED` 일괄 변경 (`prisma.villa.updateMany`)
+- `node-cron` 스케줄: `'0 0 * * *'` (서버 현지 시각 기준)
+- `backend/src/index.ts`에서 서버 시작 시 자동 등록
+
+#### checkSubscription 미들웨어 구현 (F-68 완료)
+
+`backend/src/middlewares/checkSubscription.ts` 신규 생성.
+
+```ts
+const ALLOWED_STATUSES = ['ACTIVE', 'FREE_TRIAL'];
+// villa.subscriptionStatus가 ALLOWED_STATUSES에 없으면 403 반환
+```
+
+- 청구서 발행, 공지사항 작성, 투표 생성 등 **쓰기 API**에만 적용 (읽기 API는 미적용)
+- 적용 라우트: `POST /invoices`, `POST /notices`, `POST /polls`, `POST /building-history`, `POST /tickets`
+
+#### 공용 장부 실데이터 연동 완료 (F-55 완료)
+
+`LedgerScreen`의 더미 배열 데이터를 실제 DB 연동으로 교체.
+
+| 항목 | 내용 |
+|------|------|
+| 신규 엔드포인트 | `GET /api/villas/:villaId/ledger` — LedgerTransaction 전체 조회 |
+| 신규 엔드포인트 | `POST /api/villas/:villaId/ledger` — 수입/지출 거래 등록 (checkSubscription 적용) |
+| 화면 연동 | `LedgerScreen`: `useFocusEffect` + Axios로 실시간 조회 |
+| 상태 패턴 | `resolvedVillaId` — `route.params.villaId` → `AsyncStorage` 폴백 체인 |
+
+#### Paywall 무한루프 버그 수정
+
+403 응답 처리 중 Axios interceptor 재진입으로 인한 무한 리다이렉트 루프 해결.
+
+```ts
+// frontend/src/utils/api.ts
+let isHandlingSubscriptionExpiry = false; // 모듈 레벨 플래그
+
+axiosInstance.interceptors.response.use(null, async (error) => {
+  if (error.response?.status === 403 && !isHandlingSubscriptionExpiry) {
+    isHandlingSubscriptionExpiry = true;
+    // ... 구독 만료 화면으로 이동
+    isHandlingSubscriptionExpiry = false;
+  }
+});
+```
+
+#### Android BackHandler 버그 수정
+
+React Native BackHandler API 모던 패턴 적용 — `addEventListener` 반환값(subscription)의 `.remove()` 호출로 누수 방지.
+
+```ts
+// 구버전 (버그)
+BackHandler.addEventListener('hardwareBackPress', handler);
+return () => BackHandler.removeEventListener('hardwareBackPress', handler);
+
+// 신버전 (수정)
+const subscription = BackHandler.addEventListener('hardwareBackPress', handler);
+return () => subscription.remove();
+```
+
+- `navigation.reset()` 패턴으로 로그인/구독 화면에서 뒤로가기 차단
+
+#### FREE_TRIAL 구독 상태 대시보드 접근 허용
+
+`checkSubscription` 미들웨어 최초 구현 시 FREE_TRIAL 상태 빌라의 대시보드가 차단되는 버그 발생 → `ALLOWED_STATUSES`에 `'FREE_TRIAL'` 포함하여 해결.
+
+#### ACTIVE → FREE_TRIAL 다운그레이드 방지
+
+구독 갱신 시 이미 ACTIVE 상태인 빌라가 FREE_TRIAL로 되돌아가는 버그 수정.
+
+```ts
+// 구독 갱신 API: 현재 ACTIVE이면 FREE_TRIAL로 강등 금지
+if (villa.subscriptionStatus === 'ACTIVE' && newStatus === 'FREE_TRIAL') {
+  // 무시
+}
+```
+
+#### 티켓(민원) 시스템 신규 구현
+
+입주민 민원 접수 및 관리자 처리 흐름 전체 구현.
+
+| 항목 | 내용 |
+|------|------|
+| 신규 화면 | `TicketListScreen` — 민원 목록 (관리자: 전체, 입주민: 본인 것만) |
+| 신규 화면 | `CreateTicketScreen` — 사진 첨부 포함 민원 접수 |
+| 카테고리 | `COMMON_FACILITY` / `PARKING` / `NOISE_COMPLAINT` / `ETC` |
+| 이미지 업로드 | `expo-image-picker` + native `fetch()` (multipart/form-data) |
+| Axios 우회 이유 | Axios interceptor가 multipart 바운더리를 덮어쓰는 문제 → `fetch()` 직접 사용 |
+
+#### 이미지 업로드 native fetch 패턴
+
+```ts
+// Axios 대신 native fetch 사용 (multipart 업로드)
+const formData = new FormData();
+formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+const token = await AsyncStorage.getItem('token');
+const response = await fetch(`${API_BASE_URL}/api/villas/${villaId}/tickets`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${token}` }, // Content-Type 헤더 미설정 (자동)
+  body: formData,
+});
+```
+
+### 현재 구현된 전체 화면 목록 (2026-03-12 기준)
+
+#### 인증/온보딩
+- `LoginScreen`, `EmailLoginScreen`, `SignupAgreementScreen`, `SignupProfileScreen`, `SelectRoleScreen`
+- `OnboardingScreen`, `ResidentJoinScreen`, `VillaSearchScreen`, `ProfileSetupScreen`
+
+#### 관리자 탭 (5개)
+- `DashboardScreen`, `ManagementScreen`, `CommunityTabScreen`, `LedgerTabScreen`, `ProfileScreen`
+
+#### 입주민 탭 (4개)
+- `ResidentDashboardScreen`, `ResidentCommunityTabScreen`, `OurVillaScreen`, `ProfileScreen`
+
+#### 스택 화면
+- `AdminInvoiceScreen`, `AdminInvoiceDetailScreen`, `CreateInvoiceScreen`
+- `ResidentInvoiceScreen`, `PaymentScreen`
+- `ResidentManagementScreen`, `LedgerScreen` (실데이터 연동 완료)
+- `PostDetailScreen`, `CreatePostScreen`, `MyPostsScreen`
+- `ParkingSearchScreen`, `VehicleManagementScreen`
+- `BuildingHistoryScreen`, `CreateBuildingEventScreen`, `ContractDetailScreen`
+- `ExternalBillingScreen`
+- `CreatePollScreen`, `PollListScreen`, `PollDetailScreen`
+- `ChangePasswordScreen`, `GuideScreen`, `GuideLibraryScreen`, `GuideDetailScreen`
+- `NotificationScreen`, `SystemNoticeScreen`, `CustomerCenterScreen`
+- `AdminSubscriptionScreen`
+- **`TicketListScreen`** (신규), **`CreateTicketScreen`** (신규)
+
+### 현재 기술 스택 (2026-03-12 업데이트)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | React Native (Expo Go) + TypeScript |
+| Backend | Express + TypeScript (모듈형 — routes/controllers/middlewares 분리) |
+| HTTP 클라이언트 | Axios + interceptor 기반 JWT 인증 (`frontend/src/utils/api.ts`) |
+| ORM | Prisma 7 |
+| Database | Supabase (PostgreSQL) |
+| 인증 | JWT (30일 만료), bcryptjs, Axios interceptor 전역 헤더 적용 |
+| 결제 | PortOne (KG Inicis) 테스트 PG + Mock Toss Payments |
+| 파일 업로드 | multer (로컬 디스크) + native `fetch()` multipart 패턴 |
+| 이미지 선택 | expo-image-picker |
+| 구독 관리 | node-cron 자동 만료 + checkSubscription 미들웨어 |
+| 푸시 알림 | expo-notifications + expo-server-sdk |
+| PDF | expo-print + expo-sharing |
+| 상태 관리 | React Context (AppModeContext) |
+| Admin 웹 | React + Vite + TypeScript + Recharts + Tiptap + DOMPurify |
+| HTML 렌더링 (모바일) | react-native-render-html |
+| 테스트 | Jest + supertest |
+
+### 다음 개발 우선순위 (2026-03-12 업데이트)
+
+1. **Toss 실결제 연동**: Mock PG → Toss Payments 빌링키 실제 월 자동청구
+2. **동대표 교체/권한 위임**: ADMIN 역할 이전 UI + 백엔드
+3. **PG 결제 서버 검증**: imp_uid → PortOne API 서버 검증
+4. **파일 스토리지 마이그레이션**: multer 로컬 디스크 → AWS S3 또는 Supabase Storage
+5. **티켓 상태 알림**: 민원 처리 상태 변경 시 입주민 푸시 알림 발송

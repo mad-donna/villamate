@@ -37,6 +37,8 @@ import CustomerCenterScreen from '../screens/CustomerCenterScreen';
 import ResidentInvoiceScreen from '../screens/ResidentInvoiceScreen';
 import ContractDetailScreen from '../screens/ContractDetailScreen';
 import AdminSubscriptionScreen from '../screens/AdminSubscriptionScreen';
+import TicketListScreen from '../screens/TicketListScreen';
+import CreateTicketScreen from '../screens/CreateTicketScreen';
 import MainTabNavigator from './MainTabNavigator';
 import ResidentTabNavigator from './ResidentTabNavigator';
 
@@ -243,6 +245,16 @@ const AppNavigator = () => {
         name="AdminSubscription"
         component={AdminSubscriptionScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="TicketList"
+        component={TicketListScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="CreateTicket"
+        component={CreateTicketScreen}
+        options={{ title: '유지보수 요청 접수' }}
       />
     </Stack.Navigator>
   );

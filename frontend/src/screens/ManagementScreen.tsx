@@ -29,6 +29,7 @@ const ManagementScreen = () => {
   const [villaId, setVillaId] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState(false);
 
   const fetchVillaId = useCallback(async () => {
     try {
@@ -48,7 +49,13 @@ const ManagementScreen = () => {
       const response = await api.get(`/api/villas/${userId}`);
       const villas = response.data;
       if (Array.isArray(villas) && villas.length > 0) {
-        setVillaId(villas[0].id);
+        const villa = villas[0];
+        setVillaId(villa.id);
+
+        // Check subscription status — status field is the single source of truth
+        const ALLOWED_STATUSES = ['ACTIVE', 'FREE_TRIAL'];
+        const statusOk = villa?.subscriptionStatus && ALLOWED_STATUSES.includes(villa.subscriptionStatus);
+        setIsSubscriptionExpired(!statusOk);
       }
     } catch (err) {
       console.error('ManagementScreen fetchVillaId error:', err);
@@ -63,6 +70,9 @@ const ManagementScreen = () => {
     }, [fetchVillaId])
   );
 
+  // IDs of menu items that require an active subscription to create/use
+  const SUBSCRIPTION_GATED_IDS = new Set(['invoice', 'poll', 'external-billing']);
+
   const menuItems: MenuItem[] = [
     {
       id: 'invoice',
@@ -70,7 +80,13 @@ const ManagementScreen = () => {
       sublabel: '이번 달 관리비 청구서를 발행합니다',
       icon: 'receipt-outline',
       color: '#FF9500',
-      onPress: () => navigation.navigate('CreateInvoice'),
+      onPress: () => {
+        if (isSubscriptionExpired) {
+          if (villaId) navigation.getParent()?.navigate('AdminSubscription', { villaId });
+          return;
+        }
+        navigation.navigate('CreateInvoice');
+      },
     },
     {
       id: 'residents',
@@ -94,7 +110,13 @@ const ManagementScreen = () => {
       sublabel: '투표 생성, 진행 현황 및 결과를 관리합니다',
       icon: 'checkbox-outline',
       color: '#FF2D55',
-      onPress: () => navigation.navigate('PollList', { villaId, userId, userRole: 'ADMIN' }),
+      onPress: () => {
+        if (isSubscriptionExpired) {
+          if (villaId) navigation.getParent()?.navigate('AdminSubscription', { villaId });
+          return;
+        }
+        navigation.navigate('PollList', { villaId, userId, userRole: 'ADMIN' });
+      },
     },
     {
       id: 'external-billing',
@@ -102,7 +124,22 @@ const ManagementScreen = () => {
       sublabel: '앱 미설치 대상자에게 웹 링크로 청구합니다',
       icon: 'link-outline',
       color: '#FF3B30',
-      onPress: () => navigation.navigate('ExternalBilling'),
+      onPress: () => {
+        if (isSubscriptionExpired) {
+          if (villaId) navigation.getParent()?.navigate('AdminSubscription', { villaId });
+          return;
+        }
+        navigation.navigate('ExternalBilling');
+      },
+    },
+    {
+      id: 'tickets',
+      label: '민원 및 수리 요청',
+      sublabel: '입주민이 접수한 민원 및 수리 요청을 처리합니다',
+      icon: 'hammer-outline',
+      color: '#FF9500',
+      onPress: () =>
+        navigation.navigate('TicketList', { villaId, userId, userRole: 'ADMIN' }),
     },
   ];
 
@@ -120,23 +157,39 @@ const ManagementScreen = () => {
           </View>
         ) : (
           <View style={styles.menuList}>
-            {menuItems.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.menuItem}
-                onPress={item.onPress}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.menuIconWrapper, { backgroundColor: item.color + '18' }]}>
-                  <Ionicons name={item.icon as any} size={26} color={item.color} />
-                </View>
-                <View style={styles.menuTextWrapper}>
-                  <Text style={styles.menuLabel}>{item.label}</Text>
-                  <Text style={styles.menuSublabel}>{item.sublabel}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
-              </TouchableOpacity>
-            ))}
+            {menuItems.map((item) => {
+              const isLocked = isSubscriptionExpired && SUBSCRIPTION_GATED_IDS.has(item.id);
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.menuItem, isLocked && styles.menuItemLocked]}
+                  onPress={item.onPress}
+                  activeOpacity={0.75}
+                >
+                  <View
+                    style={[
+                      styles.menuIconWrapper,
+                      { backgroundColor: isLocked ? '#AEAEB218' : item.color + '18' },
+                    ]}
+                  >
+                    <Ionicons
+                      name={(isLocked ? 'lock-closed-outline' : item.icon) as any}
+                      size={26}
+                      color={isLocked ? '#AEAEB2' : item.color}
+                    />
+                  </View>
+                  <View style={styles.menuTextWrapper}>
+                    <Text style={[styles.menuLabel, isLocked && styles.menuLabelLocked]}>
+                      {item.label}
+                    </Text>
+                    <Text style={styles.menuSublabel}>
+                      {isLocked ? '구독 만료 — 결제 후 이용 가능' : item.sublabel}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -185,6 +238,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 3,
+  },
+  menuItemLocked: {
+    backgroundColor: '#F2F2F7',
+    shadowOpacity: 0.02,
+    elevation: 1,
+  },
+  menuLabelLocked: {
+    color: '#AEAEB2',
   },
   menuIconWrapper: {
     width: 48,

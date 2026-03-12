@@ -4,6 +4,7 @@ import * as invoiceController from '../controllers/invoiceController';
 import * as postController from '../controllers/postController';
 import * as pollController from '../controllers/pollController';
 import { authenticateUser } from '../middlewares/authenticateUser';
+import { checkSubscription } from '../middlewares/checkSubscription';
 
 const router = Router();
 
@@ -21,7 +22,7 @@ router.post('/join', villaController.joinVillaByCode);
 router.get('/search', villaController.searchVillas);
 
 // /api/villas/:villaId/invoices
-router.post('/:villaId/invoices', invoiceController.createInvoice);
+router.post('/:villaId/invoices', authenticateUser, checkSubscription, invoiceController.createInvoice);
 router.get('/:villaId/invoices', invoiceController.getInvoices);
 
 // /api/villas/:villaId/residents
@@ -33,22 +34,22 @@ router.get('/:villaId/vehicles', villaController.getVillaVehicles);
 router.get('/:villaId/vehicles/search', villaController.searchVillaVehicles);
 
 // /api/villas/:villaId/building-events
-router.post('/:villaId/building-events', villaController.createBuildingEvent);
+router.post('/:villaId/building-events', authenticateUser, checkSubscription, villaController.createBuildingEvent);
 router.get('/:villaId/building-events', villaController.getBuildingEvents);
 
 // /api/villas/:villaId/posts — must be before /:adminId wildcard
 router.get('/:villaId/posts', postController.getVillaPosts);
-router.post('/:villaId/posts', postController.createPost);
+router.post('/:villaId/posts', authenticateUser, checkSubscription, postController.createPost);
 router.post('/:villaId/posts/:postId/send-push', postController.sendPostPush);
 router.patch('/:villaId/posts/:postId/status', postController.updatePostStatus);
 
 // /api/villas/:villaId/polls
-router.post('/:villaId/polls', pollController.createPoll);
+router.post('/:villaId/polls', authenticateUser, checkSubscription, pollController.createPoll);
 router.get('/:villaId/polls', pollController.getPolls);
 router.post('/:villaId/polls/:pollId/vote', pollController.castVote);
 
 // /api/villas/:villaId/external-bills
-router.post('/:villaId/external-bills', villaController.createExternalBill);
+router.post('/:villaId/external-bills', authenticateUser, checkSubscription, villaController.createExternalBill);
 router.get('/:villaId/external-bills', villaController.getExternalBills);
 router.patch('/:villaId/external-bills/:billId/confirm', villaController.confirmExternalBill);
 
@@ -58,8 +59,8 @@ router.get('/:villaId/tickets', villaController.getTickets);
 router.patch('/:villaId/tickets/:ticketId/status', villaController.updateTicketStatus);
 
 // /api/villas/:villaId/billing
-router.post('/:villaId/billing', villaController.registerBilling);
-router.get('/:villaId/billing', villaController.getBilling);
+router.post('/:villaId/billing', authenticateUser, villaController.registerBilling);
+router.get('/:villaId/billing', authenticateUser, villaController.getBilling);
 
 // /api/villas/:villaId/rooms
 router.put('/:villaId/rooms', villaController.updateRooms);
@@ -75,6 +76,10 @@ router.post('/:villaId/join', villaController.joinVillaById);
 
 // /api/villas/:villaId/detail — must be before /:adminId wildcard
 router.get('/:villaId/detail', villaController.getVillaDetail);
+
+// /api/villas/:villaId/ledger — must be before /:adminId wildcard
+router.get('/:villaId/ledger', villaController.getLedger);
+router.post('/:villaId/ledger', authenticateUser, villaController.createLedgerTransaction);
 
 // Dashboard — must be before /:adminId wildcard (placed at top of this section for clarity)
 // Note: dashboard is at /api/dashboard, not /api/villas — handled in app separately

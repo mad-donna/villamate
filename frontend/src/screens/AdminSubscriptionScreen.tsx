@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,6 +12,7 @@ import {
   Platform,
   ScrollView,
   TouchableWithoutFeedback,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -27,8 +28,66 @@ interface BillingInfo {
 }
 
 const AdminSubscriptionScreen = ({ route, navigation }: any) => {
-  const { villaId } = route.params as { villaId: number };
+  const { villaId: paramVillaId } = (route.params ?? {}) as { villaId?: number };
   const insets = useSafeAreaInsets();
+
+  // ─── Resolve villaId — route.params may be undefined when the global 403
+  //     interceptor redirects here before it could look up the villaId. We fall
+  //     back to AsyncStorage so that all API calls always have a valid id. ────────
+
+  const [resolvedVillaId, setResolvedVillaId] = useState<number | undefined>(
+    paramVillaId ? Number(paramVillaId) : undefined
+  );
+
+  useEffect(() => {
+    // If we already have an id from params there is nothing to resolve.
+    if (resolvedVillaId) return;
+
+    const resolve = async () => {
+      try {
+        // 1. Try user object stored by login / join flows
+        const userStr = await AsyncStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          const fromUser: number | undefined = user?.villa?.id ?? user?.villaId;
+          if (fromUser) {
+            setResolvedVillaId(Number(fromUser));
+            return;
+          }
+        }
+
+        // 2. Try a direct 'villaId' key (written by some admin flows)
+        const raw = await AsyncStorage.getItem('villaId');
+        if (raw) {
+          const parsed = parseInt(raw, 10);
+          if (!isNaN(parsed)) {
+            setResolvedVillaId(parsed);
+            return;
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+
+      // 3. Still no villaId — show an actionable alert so the user is not stuck
+      Alert.alert(
+        '빌라 정보 없음',
+        '빌라 정보를 불러올 수 없습니다. 다시 로그인 해주세요.',
+        [
+          {
+            text: '다시 로그인',
+            onPress: async () => {
+              await AsyncStorage.multiRemove(['token', 'userId', 'user', 'villaId']);
+              navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    };
+
+    resolve();
+  }, [resolvedVillaId, navigation]);
 
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -44,18 +103,52 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
   // ─── Fetch billing info on focus ────────────────────────────────────────────
 
   const fetchBillingInfo = useCallback(async () => {
+    if (!resolvedVillaId) return; // id not available yet — will retry once resolved
     try {
-      const res = await api.get(`/api/villas/${villaId}/billing`);
+      const res = await api.get(`/api/villas/${resolvedVillaId}/billing`);
       setBillingInfo(res.data);
     } catch (e) {
       // Non-fatal — UI will just show the register button
     }
-  }, [villaId]);
+  }, [resolvedVillaId]);
 
   useFocusEffect(
     useCallback(() => {
       fetchBillingInfo();
     }, [fetchBillingInfo])
+  );
+
+  // Re-fetch whenever resolvedVillaId becomes available for the first time
+  useEffect(() => {
+    if (resolvedVillaId) {
+      fetchBillingInfo();
+    }
+  }, [resolvedVillaId, fetchBillingInfo]);
+
+  // ─── Navigate to admin home ──────────────────────────────────────────────────
+  // Resets the navigation stack so that the hardware back button (and the "홈으로
+  // 돌아가기" UI button) do NOT return to any screen that would immediately fire
+  // another subscription-gated API call, which would re-trigger the 403 interceptor
+  // and cause an infinite redirect loop.  We rely on the isHandlingSubscriptionExpiry
+  // flag in api.ts as a secondary guard while DashboardScreen remounts.
+
+  const goToAdminHome = useCallback(() => {
+    navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+  }, [navigation]);
+
+  // ─── Override Android hardware back button ───────────────────────────────────
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        goToAdminHome();
+        return true; // prevent default back behaviour
+      };
+      // BackHandler.addEventListener returns a subscription object in React Native
+      // 0.65+.  Always use subscription.remove() — removeEventListener was removed.
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [goToAdminHome])
   );
 
   // ─── Card number auto-format (spaces every 4 digits) ────────────────────────
@@ -82,12 +175,24 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
   // ─── Free trial handler ──────────────────────────────────────────────────────
 
   const handleFreeTrial = async () => {
+    if (!resolvedVillaId) {
+      Alert.alert(
+        '오류',
+        '빌라 정보를 불러올 수 없습니다. 홈으로 돌아가서 다시 시도해주세요.',
+        [{ text: '홈으로', onPress: goToAdminHome }]
+      );
+      return;
+    }
     setLoading(true);
     try {
-      await api.patch(`/api/villas/${villaId}/subscribe`);
+      await api.patch(`/api/villas/${resolvedVillaId}/subscribe`);
       setShowSuccess(true);
-    } catch (e) {
-      Alert.alert('오류', '구독 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        '구독 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      Alert.alert('오류', msg);
     } finally {
       setLoading(false);
     }
@@ -95,7 +200,8 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
 
   const handleSuccessDismiss = () => {
     setShowSuccess(false);
-    navigation.goBack();
+    // Use goToAdminHome so the reset logic is consistent everywhere
+    goToAdminHome();
   };
 
   // ─── Card registration handler ───────────────────────────────────────────────
@@ -140,7 +246,7 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
 
     setCardLoading(true);
     try {
-      const res = await api.post(`/api/villas/${villaId}/billing`, {
+      const res = await api.post(`/api/villas/${resolvedVillaId}/billing`, {
         cardNumber: rawCard,
         expireMonth,
         expireYear,
@@ -159,7 +265,7 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
         '빌링키가 발급되었습니다. 매월 19,900원이 자동 결제됩니다.'
       );
     } catch (e: any) {
-      Alert.alert('오류', e.message || '카드 등록 중 오류가 발생했습니다.');
+      Alert.alert('오류', e?.response?.data?.message || e?.response?.data?.error || '카드 등록 중 오류가 발생했습니다.');
     } finally {
       setCardLoading(false);
     }
@@ -177,6 +283,12 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Back to home button */}
+        <TouchableOpacity style={styles.homeButton} onPress={goToAdminHome} activeOpacity={0.7}>
+          <Ionicons name="home-outline" size={18} color="#5856D6" />
+          <Text style={styles.homeButtonText}>홈으로 돌아가기</Text>
+        </TouchableOpacity>
+
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoWrap}>
@@ -396,6 +508,24 @@ const AdminSubscriptionScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F2F3F7' },
   scrollContent: { paddingBottom: 32 },
+
+  homeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 16,
+    marginLeft: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#EEEEFF',
+    borderRadius: 20,
+    gap: 6,
+  },
+  homeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5856D6',
+  },
 
   header: {
     alignItems: 'center',

@@ -44,6 +44,7 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
   const [villaId, setVillaId] = useState<number | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubscriptionExpired, setIsSubscriptionExpired] = useState(false);
 
   // Auto-billing state
   const [autoBillingDay, setAutoBillingDay] = useState('');
@@ -82,9 +83,22 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
       }
       if (!id) return;
 
-      const response = await api.get(`/api/villas/${id}/invoices`);
-      const data = response.data;
+      // Fetch invoices and villa subscription status in parallel
+      const [invoiceRes, villaRes] = await Promise.all([
+        api.get(`/api/villas/${id}/invoices`),
+        api.get(`/api/villas/${id}/detail`),
+      ]);
+
+      const data = invoiceRes.data;
       setInvoices(Array.isArray(data) ? data : []);
+
+      // Determine subscription expiry state
+      const villa = villaRes.data;
+      const validStatuses = ['ACTIVE', 'FREE_TRIAL'];
+      const statusOk = villa?.subscriptionStatus && validStatuses.includes(villa.subscriptionStatus);
+      const expiredByDate =
+        villa?.subscriptionExpiry && new Date(villa.subscriptionExpiry) < new Date();
+      setIsSubscriptionExpired(!statusOk || !!expiredByDate);
     } catch (err) {
       console.error('fetchInvoices error:', err);
     } finally {
@@ -211,11 +225,22 @@ const AdminInvoiceScreen = ({ navigation }: any) => {
 
         {/* New Invoice Button — navigates to dedicated CreateInvoice screen */}
         <TouchableOpacity
-          style={styles.createButton}
-          onPress={() => navigation.getParent()?.navigate('CreateInvoice')}
+          style={[styles.createButton, isSubscriptionExpired && styles.createButtonLocked]}
+          onPress={() => {
+            if (isSubscriptionExpired) {
+              if (villaId) navigation.getParent()?.navigate('AdminSubscription', { villaId });
+              return;
+            }
+            navigation.getParent()?.navigate('CreateInvoice');
+          }}
           activeOpacity={0.85}
         >
-          <Text style={styles.createButtonText}>+ 새 청구서 만들기</Text>
+          {isSubscriptionExpired && (
+            <Text style={styles.createButtonText}>🔒 </Text>
+          )}
+          <Text style={styles.createButtonText}>
+            {isSubscriptionExpired ? '구독 만료 — 결제 후 이용 가능' : '+ 새 청구서 만들기'}
+          </Text>
         </TouchableOpacity>
 
         {/* Auto-billing Section */}
@@ -299,6 +324,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     height: 52,
     borderRadius: 14,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -307,6 +333,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
+  },
+  createButtonLocked: {
+    backgroundColor: '#AEAEB2',
+    shadowColor: '#AEAEB2',
   },
   createButtonText: {
     color: '#FFF',

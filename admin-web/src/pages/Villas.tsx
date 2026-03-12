@@ -9,6 +9,8 @@ interface Villa {
   address: string;
   totalUnits: number;
   status: string;
+  subscriptionStatus: string;
+  subscriptionExpiry: string | null;
   admin: { id: string; name: string; email: string | null };
   _count: { residents: number };
   createdAt: string;
@@ -36,10 +38,48 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const SUBSCRIPTION_LABELS: Record<string, string> = {
+  ACTIVE: '구독 활성',
+  FREE_TRIAL: '무료 체험',
+  EXPIRED: '만료됨',
+  NONE: '미구독',
+};
+
+function SubscriptionBadge({ status }: { status: string }) {
+  if (status === 'ACTIVE') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        {SUBSCRIPTION_LABELS[status]}
+      </span>
+    );
+  }
+  if (status === 'FREE_TRIAL') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        {SUBSCRIPTION_LABELS[status]}
+      </span>
+    );
+  }
+  if (status === 'EXPIRED') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+        {SUBSCRIPTION_LABELS[status]}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+      {SUBSCRIPTION_LABELS[status] ?? status}
+    </span>
+  );
+}
+
 export default function Villas() {
   const navigate = useNavigate();
   const [villas, setVillas] = useState<Villa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [subscriptionUpdating, setSubscriptionUpdating] = useState<number | null>(null);
+  const [successId, setSuccessId] = useState<number | null>(null);
 
   const fetchVillas = () => {
     const token = localStorage.getItem('admin_token');
@@ -71,6 +111,27 @@ export default function Villas() {
     }
   };
 
+  const updateSubscription = async (villaId: number, status: string) => {
+    const token = localStorage.getItem('admin_token');
+    setSubscriptionUpdating(villaId);
+    setSuccessId(null);
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/api/admin/villas/${villaId}/subscription`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSuccessId(villaId);
+      fetchVillas();
+      setTimeout(() => setSuccessId(null), 2000);
+    } catch (err) {
+      console.error('Subscription update failed:', err);
+      alert('구독 상태 변경에 실패했습니다.');
+    } finally {
+      setSubscriptionUpdating(null);
+    }
+  };
+
   return (
     <div className="p-8">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">빌라 관리</h2>
@@ -87,6 +148,8 @@ export default function Villas() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">입주자</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">관리자</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">구독</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">구독 변경</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">등록일</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
               </tr>
@@ -108,6 +171,37 @@ export default function Villas() {
                   <td className="px-4 py-3 text-gray-500">{villa.admin.name}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={villa.status} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1">
+                      <SubscriptionBadge status={villa.subscriptionStatus} />
+                      {villa.subscriptionExpiry && (
+                        <span className="text-xs text-gray-400">
+                          {new Date(villa.subscriptionExpiry).toLocaleDateString('ko-KR')} 만료
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={villa.subscriptionStatus}
+                        disabled={subscriptionUpdating === villa.id}
+                        onChange={(e) => updateSubscription(villa.id, e.target.value)}
+                        className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="NONE">미구독</option>
+                        <option value="FREE_TRIAL">무료 체험</option>
+                        <option value="ACTIVE">구독 활성</option>
+                        <option value="EXPIRED">만료됨</option>
+                      </select>
+                      {subscriptionUpdating === villa.id && (
+                        <span className="text-xs text-gray-400">저장 중...</span>
+                      )}
+                      {successId === villa.id && (
+                        <span className="text-xs text-green-600 font-medium">저장됨</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-500">
                     {new Date(villa.createdAt).toLocaleDateString('ko-KR')}

@@ -1,6 +1,6 @@
 # 빌라메이트 (VillaMate) — 요구사항 정의서 (RDD)
 
-> 최종 업데이트: 2026-03-11
+> 최종 업데이트: 2026-03-12
 > 기준: `PRODUCT_CONTEXT.md`, `IA.md`, `PHASE1_SCOPE.md` 통합 정리
 > 범례: ✅ 완료 · 🔄 진행중 · ⬜ 미구현 · 🚫 보류
 
@@ -123,7 +123,7 @@
 | # | 요구사항 | 상태 | 비고 |
 |---|---------|------|------|
 | F-54 | 공용 지출 장부 조회 (입주민 투명성) | ✅ | `LedgerScreen` |
-| F-55 | 장부 실데이터 연동 (`LedgerTransaction` DB) | ⬜ | 현재 더미 데이터 |
+| F-55 | 장부 실데이터 연동 (`LedgerTransaction` DB) | ✅ | `getLedger`, `createLedgerTransaction` API 연동 완료 |
 | F-56 | 영수증 첨부 (hasReceipt / receiptUrl) | ✅ | |
 | F-57 | 에너지 사용량 시각화 (전기/수도 월별 그래프) | ⬜ | Q2 로드맵 |
 
@@ -151,7 +151,7 @@
 | F-65 | 1개월 무료 체험 → 유료 전환 (19,900원/월) | ✅ | `AdminSubscriptionScreen` |
 | F-66 | 쿠폰 코드로 무료 기간 활성화 | ✅ | `Coupon` 모델, 원자적 isUsed |
 | F-67 | Toss Payments 빌링키 자동결제 (구독료 전용) | ⬜ | 핵심 수익 모델 |
-| F-68 | 구독 만료(EXPIRED) 시 핵심 기능 제한 미들웨어 | ⬜ | |
+| F-68 | 구독 만료(EXPIRED) 시 핵심 기능 제한 미들웨어 | ✅ | `checkSubscription` 미들웨어 구현, 주요 생성 API 적용 |
 
 ### 2-13. 백오피스 관리자 웹
 
@@ -230,8 +230,8 @@
 |----------|------|--------------|
 | ~~1~~ | ~~JWT 클라이언트 완성 — 모바일 API 인증 헤더 일괄 적용~~ ✅ | ~~NF-04, F-08~~ |
 | 2 | 구독료 자동결제 — Toss Payments 빌링키 월 자동청구 | F-67 |
-| 3 | 구독 만료(EXPIRED) API 제한 미들웨어 | F-68 |
-| 4 | 공용 장부 실데이터 연동 (`LedgerTransaction` DB) | F-55 |
+| ~~3~~ | ~~구독 만료(EXPIRED) API 제한 미들웨어~~ ✅ | ~~F-68~~ |
+| ~~4~~ | ~~공용 장부 실데이터 연동 (`LedgerTransaction` DB)~~ ✅ | ~~F-55~~ |
 | 5 | 동대표 교체 / 권한 위임 | F-15 |
 
 ### 🟡 다음 분기 (2026 Q2)
@@ -305,6 +305,7 @@
 - `BuildingHistoryScreen`, `CreateBuildingEventScreen`, `ContractDetailScreen`
 - `ExternalBillingScreen`
 - `CreatePollScreen`, `PollListScreen`, `PollDetailScreen`
+- `TicketListScreen`, `CreateTicketScreen` (빌라 도메인 민원/수리 요청, COMMON_FACILITY/PARKING/NOISE_COMPLAINT/ETC 카테고리)
 - `ChangePasswordScreen`
 - `GuideScreen`, `GuideLibraryScreen`, `GuideDetailScreen`
 - `NotificationScreen`, `SystemNoticeScreen`, `CustomerCenterScreen`
@@ -321,3 +322,4 @@
 |------|------|
 | 2026-03-11 | 최초 작성 — PRODUCT_CONTEXT.md, IA.md, PHASE1_SCOPE.md 통합 정리 |
 | 2026-03-11 | 백엔드 모듈화 완료 (NF-12 ✅), 전역 JWT 인증 완성 (F-08, NF-04 ✅), 전자투표 Upsert, 독촉 쿨타임 |
+| 2026-03-12 | 장부 실데이터 연동 (F-55 ✅), 구독 만료 미들웨어 (F-68 ✅), 구독 만료 Cron 추가, Ticket 빌라 도메인 재설계, 건물 이력 이미지 업로드 실 연동, Paywall 무한루프 수정 |

@@ -1520,3 +1520,139 @@ frontend/src/utils/  ← NEW 디렉토리
 - 업로드 파일 로컬 저장 → S3 마이그레이션 미완
 - 구독 만료 API 접근 제한 미들웨어 미구현
 - PG 결제 서버 검증 미구현
+
+---
+
+### 2026-03-12 — Paywall 버그 수정, 구독 만료 Cron, Ticket 시스템, 장부/이미지 실데이터 세션
+
+#### 아키텍처 주요 변경 사항
+
+**구독 만료 자동화 Cron 추가** (`backend/src/cron.ts`)
+
+```
+startSubscriptionExpiryCron() — cron.schedule('0 0 * * *')
+  └── prisma.villa.findMany({
+        where: {
+          subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] },
+          subscriptionExpiry: { not: null, lt: now },
+        }
+      })
+  └── prisma.villa.updateMany({ data: { subscriptionStatus: 'EXPIRED' } })
+  └── 각 admin에게 푸시 알림 (sendPushToTokens)
+```
+
+**checkSubscription 미들웨어 신규** (`backend/src/middlewares/checkSubscription.ts`)
+
+```
+checkSubscription(req, res, next):
+  ├── villaId = parseInt(req.params.villaId)
+  ├── prisma.villa.findUnique({ select: { subscriptionStatus } })
+  ├── ['ACTIVE', 'FREE_TRIAL'].includes(status) → next()
+  └── else → 403 SUBSCRIPTION_EXPIRED
+
+적용 라우트 (villaRoutes.ts):
+  POST /:villaId/invoices         [authenticateUser, checkSubscription]
+  POST /:villaId/building-events  [authenticateUser, checkSubscription]
+  POST /:villaId/posts            [authenticateUser, checkSubscription]
+  POST /:villaId/polls            [authenticateUser, checkSubscription]
+  POST /:villaId/external-bills   [authenticateUser, checkSubscription]
+```
+
+**Ticket 독립 시스템 (villa 도메인 전용)**
+
+```
+Ticket 모델 (기존 schema.prisma):
+  ├── id          String @id @default(uuid())
+  ├── title       String
+  ├── description String?
+  ├── category    String?   (COMMON_FACILITY | PARKING | NOISE_COMPLAINT | ETC)
+  ├── status      String    (PENDING | IN_PROGRESS | RESOLVED)
+  ├── villaId     Int → Villa
+  ├── residentId  String → User
+  └── createdAt   DateTime
+
+API 라우트 (villaRoutes.ts):
+  POST /:villaId/tickets
+  GET  /:villaId/tickets
+  PATCH /:villaId/tickets/:ticketId/status
+
+화면 구조:
+  TicketListScreen
+    ├── Admin: 전체 목록 조회, 탭 → 상태 변경 (ActionSheet/Alert)
+    └── Resident: residentId 필터링으로 본인 민원만 조회
+
+  CreateTicketScreen
+    └── 카테고리 칩 → 제목 → 설명 → POST /api/villas/:villaId/tickets
+```
+
+**Ledger 실데이터 연동 아키텍처**
+
+```
+신규 엔드포인트 (villaController.ts):
+  GET  /api/villas/:villaId/ledger
+    └── prisma.ledgerTransaction.findMany({ where: { villaId }, orderBy: { date: 'desc' } })
+    └── 반환: transactions 배열
+
+  POST /api/villas/:villaId/ledger
+    └── { date, type('INCOME'|'EXPENSE'), title, amount, memo? }
+    └── prisma.ledgerTransaction.create(...)
+
+LedgerScreen 아키텍처 변경:
+  이전: 하드코딩된 TRANSACTIONS 더미 배열
+  이후: useFocusEffect + api.get('/api/villas/${villaId}/ledger')
+  잔액 계산: transactions.reduce(balance + INCOME - EXPENSE)
+```
+
+**403 인터셉터 재진입 방지 아키텍처** (`frontend/src/utils/api.ts`)
+
+```
+모듈 레벨:
+  let isHandlingSubscriptionExpiry = false
+
+response interceptor (403):
+  ├── isHandlingSubscriptionExpiry === true → 조기 반환 (reject)
+  ├── currentRoute.name === 'AdminSubscription' → 조기 반환 (reject)
+  ├── isHandlingSubscriptionExpiry = true
+  ├── navigation.dispatch(reset { AdminSubscription, params: { villaId, ... } })
+  └── onPress 콜백 내에서 isHandlingSubscriptionExpiry = false 리셋
+```
+
+#### 데이터 모델 변경 사항
+
+**User 모델 변경**
+```
+User:
+  ├── phone       String? @unique  ← 유지
+  └── phoneNumber String?          ← 제거 (prisma db push --accept-data-loss)
+```
+
+#### 신규 엔드포인트 (2026-03-12 추가)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `GET` | `/api/villas/:villaId/ledger` | 장부 거래 내역 조회 |
+| `POST` | `/api/villas/:villaId/ledger` | 장부 거래 내역 추가 |
+
+#### 신규 화면 및 네비게이션 업데이트
+
+```
+AppNavigator (Stack) — 2026-03-12 추가분:
+├── TicketList (Stack)    ← 민원 목록 (Admin: 전체 / Resident: 본인)
+└── CreateTicket (Stack)  ← 민원 접수 (모든 역할)
+
+ManagementScreen — 메뉴 추가:
+└── "민원 및 수리 요청" → hammer-outline 아이콘 → TicketList 이동
+
+ResidentDashboardScreen — 위젯 추가:
+└── "민원 및 수리 요청" 카드 → TicketList 이동
+```
+
+#### 알려진 기술 부채 (2026-03-12 업데이트)
+
+- ~~구독 만료 API 접근 제한 미들웨어 미구현~~ → **[RESOLVED]** checkSubscription 완성 (F-68)
+- ~~공용 장부 더미 데이터~~ → **[RESOLVED]** LedgerTransaction DB 실 연동 (F-55)
+- ~~구독 만료 자동 처리 없음~~ → **[RESOLVED]** startSubscriptionExpiryCron 추가
+- checkSubscription 미적용 라우트 잔존 (tickets, ledger 생성 등)
+- 독촉 크론 `=== 3/7` 조건 → 서버 다운 시 발송 누락 가능
+- 업로드 파일 로컬 저장 → S3 마이그레이션 미완
+- PG 결제 서버 검증 미구현

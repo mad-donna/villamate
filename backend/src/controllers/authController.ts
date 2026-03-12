@@ -73,7 +73,7 @@ export async function emailLogin(req: Request, res: Response) {
 }
 
 export async function register(req: Request, res: Response) {
-  const { email, password, name, phoneNumber, termsAgreed } = req.body;
+  const { email, password, name, phone, termsAgreed } = req.body;
 
   if (!email || !password || !name) {
     return res.status(400).json({ error: 'email, password, and name are required' });
@@ -94,7 +94,7 @@ export async function register(req: Request, res: Response) {
         email,
         password: hashed,
         name,
-        phoneNumber: phoneNumber || null,
+        phone: phone || null,
         termsAgreed: Boolean(termsAgreed),
         provider: 'LOCAL',
         role: 'ADMIN',
