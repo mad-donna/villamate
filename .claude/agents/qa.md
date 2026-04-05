@@ -222,3 +222,41 @@ Grep with pattern="<search term>" path="C:\Users\dmleh\.claude\projects\D--villa
 | 금액 0 InvoicePayment 독촉 | Low | 금액 0인 청구도 독촉 대상에 포함됨 |
 | 알림 API `take: 50` 하드코딩 | Low | 페이지네이션 미구현 |
 | 초대 코드 Rate Limit | Low | 6자리 코드 브루트포스 방어 없음 |
+
+---
+
+## 2026-04-05 업데이트
+
+### 신규 구현 QA 체크리스트
+
+#### F-29 PortOne 결제 검증 위험 지점
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `verify/route.ts` | PortOne API 502 시 결제 완료됐지만 DB 미반영 가능 | ⚠️ 미해결 — 결제 후 수동 확인 필요 |
+| `verify/route.ts` | `merchant_uid` 검증: `includes(paymentId)` — 악의적 uid 조작 가능성 낮으나 `startsWith` 더 엄격 | Low |
+| 클라이언트 결제 플로우 | `payingId` 중복 클릭 방지 구현됨 | ✅ |
+| `InvoicePayment.impUid` | `prisma db push`로 추가됨 — migration 파일 없음 | ⚠️ rollback 불가 |
+
+#### F-30 PDF 저장 위험 지점
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `InvoicePDFButton` | `window.open` 팝업 차단 브라우저에서 실패 | ⚠️ 팝업 차단 안내 필요 |
+| Web Share API | iOS Safari 14+ 지원, 이전 버전 fallback 클립보드 복사 | ✅ 분기 처리됨 |
+
+#### F-31 외부 청구 위험 지점
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `/api/pay/[billId]/confirm` | 공개 엔드포인트 — Rate Limit 없음, 동일 billId 반복 요청 가능 | ⚠️ |
+| `ExternalBillingStatus.COMPLETED` 체크 | 이미 완료 시 400 반환 — 이중 결제 방지 ✅ | ✅ |
+| PortOne 금액 검증 | `dbAmount !== pgAmount` 정수 비교 — Decimal 변환 필요 확인 | 확인 필요 |
+
+#### Vercel 배포 운영 리스크
+
+| 항목 | 위험 |
+|------|------|
+| Cold Start | Serverless Function 콜드 스타트 — Prisma 연결 초기화 지연 가능 |
+| DB Connection | Supabase Connection Pooler 사용 필수 (Transaction Pooler, 포트 6543) |
+| Cron 실패 알림 | Vercel Cron 실패 시 알림 없음 — 모니터링 미구현 |

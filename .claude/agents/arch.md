@@ -1772,3 +1772,80 @@ const kstDay = kstNow.getUTCDate(); // KST 기준 일(day)
 | 알림 API 페이지네이션 | `take: 50` 하드코딩 | Low |
 | 초대 코드 Rate Limit | 브루트포스 방어 없음 | Low |
 | CSRF 방어 검증 | Next.js 기본 보호 범위 확인 필요 | Phase 1 |
+
+---
+
+## 2026-04-05 업데이트
+
+### 아키텍처 변경점
+
+#### 1. PG 결제 레이어 추가 (PortOne)
+
+결제 검증은 반드시 **서버 사이드**에서 수행. 클라이언트 콜백의 `imp_uid`만 신뢰하지 않음.
+
+```
+클라이언트 IMP.request_pay() 완료
+  → imp_uid 수신
+  → POST /api/.../payments/[paymentId]/verify
+    → PortOne REST API 토큰 발급 (POST /users/getToken)
+    → PortOne 결제 정보 조회 (GET /payments/:imp_uid)
+    → 금액 일치 검증 + status === 'paid' 확인
+    → DB InvoicePayment.status = PAID 갱신
+```
+
+**PortOne 환경변수 3개 필수:**
+- `PORTONE_IMP_KEY` / `PORTONE_IMP_SECRET` — 서버 전용
+- `NEXT_PUBLIC_PORTONE_IMP_CODE` — 클라이언트 IMP.init()용
+
+#### 2. 공개(비인증) 결제 라우트 추가
+
+`/pay/[billId]` — JWT 없이 접근 가능한 외부 청구 결제 페이지
+
+```typescript
+// middleware.ts PUBLIC_API 목록
+const PUBLIC_API = ['/api/auth/', '/api/cron/', '/api/pay/'];
+```
+
+`/api/pay/[billId]` (GET) 및 `/api/pay/[billId]/confirm` (POST)는 인증 미들웨어 우회. ExternalBilling을 billId로 직접 조회.
+
+#### 3. 전역 타입 선언 파일 도입
+
+`apps/web/types/globals.d.ts` — PortOne SDK(`window.IMP`) 및 카카오 우편번호(`window.daum`) 타입을 한 곳에서 관리. 여러 파일에서 `declare global`을 중복 선언하면 TypeScript 충돌 발생.
+
+```typescript
+// types/globals.d.ts 구조
+declare global {
+  interface PortOneResponse { ... }
+  interface Window {
+    IMP: { init, request_pay }
+    daum: { Postcode }
+  }
+}
+export {};
+```
+
+#### 4. Vercel 배포 구성 확정
+
+- `vercel.json` 위치: `apps/web/vercel.json` (rootDirectory와 동일한 위치)
+- Vercel 대시보드 Root Directory: `apps/web`
+- Build Command: `prisma generate && next build`
+- Output Directory: `.next`
+- Cron 3개 등록: invoice-reminder(01:00), expire-subscriptions(00:00), publish-invoices(15:00 UTC)
+
+#### 5. DB 마이그레이션 전략 — `prisma db push` 채택
+
+migration 파일 없이 `prisma db push`로 스키마를 DB에 직접 동기화. 이전 코드베이스에서 마이그레이션 이력 없이 테이블이 생성된 이력으로 인해 `prisma migrate dev` 사용 불가 (Drift 오류).
+
+**스키마 변경 시 로컬 절차:**
+```bash
+npx prisma db push   # DB 반영
+# Vercel은 postinstall: "prisma generate" 로 클라이언트만 재생성
+```
+
+### 알려진 기술 부채 (2026-04-05 추가)
+
+| 항목 | 설명 | 우선순위 |
+|------|------|---------|
+| 마이그레이션 파일 부재 | `prisma db push` 사용으로 rollback 이력 없음 | Medium |
+| `/api/upload` TODO | Supabase Storage 업로드 미구현 — 파일 첨부 기능 전반 영향 | High |
+| PortOne 환경변수 미설정 시 결제 불가 | 키 없어도 빌드는 됨, 런타임에만 502 반환 | High (운영 전) |

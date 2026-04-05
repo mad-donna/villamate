@@ -1219,3 +1219,114 @@ const already3d = await prisma.notification.findFirst({
 const already7d = await prisma.notification.findFirst({
   where: { userId, title: { contains: '최종' }, createdAt: { gte: todayStart } }
 });
+
+---
+
+## 2026-04-05 업데이트
+
+### PortOne PG 결제 구현 패턴 (F-29)
+
+**서버 검증 API** (`/api/.../payments/[paymentId]/verify`):
+```typescript
+// 1. PortOne 액세스 토큰 발급
+const res = await fetch('https://api.iamport.kr/users/getToken', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ imp_key, imp_secret }),
+});
+const token = res.data?.response?.access_token;
+
+// 2. 결제 정보 조회
+const payment = await fetch(`https://api.iamport.kr/payments/${imp_uid}`, {
+  headers: { Authorization: `Bearer ${token}` },
+});
+
+// 3. 검증: paid 여부 + 금액 일치 + merchant_uid에 paymentId 포함
+if (portOnePayment.status !== 'paid') return err('...');
+if (Number(payment.amount) !== dbAmount) return err('금액 불일치');
+if (!portOnePayment.merchant_uid.includes(paymentId)) return err('...');
+```
+
+**클라이언트 SDK 로드** (`next/script` 사용):
+```tsx
+<Script
+  src="https://cdn.iamport.kr/v1/iamport.js"
+  strategy="lazyOnload"
+  onLoad={() => setSdkReady(true)}
+/>
+// 사용 시: window.IMP.init(impCode); window.IMP.request_pay({...}, callback);
+```
+
+**merchant_uid 패턴:**
+- 인앱 결제: `order_{paymentId}_{Date.now()}`
+- 외부 청구: `ext_{billId}_{Date.now()}`
+
+### 청구서 PDF 저장 패턴 (F-30, 외부 라이브러리 없음)
+
+```typescript
+// InvoicePDFButton.tsx — 팝업 프린트 방식
+const popup = window.open('', '_blank', 'width=800,height=1000');
+popup.document.write(/* HTML */);
+popup.document.close();
+popup.print();
+
+// Web Share API 지원 시 공유
+if (navigator.share) {
+  await navigator.share({ title: '관리비 청구서', text: '...' });
+} else {
+  navigator.clipboard.writeText('...');
+}
+```
+
+**InvoicePrintView 컴포넌트:** `components/InvoicePrintView.tsx` — `@media print` CSS로 프린트 시 탭바 등 숨김.
+
+### 공개 외부 청구 결제 패턴 (F-31)
+
+`/pay/[billId]` 페이지는 JWT 없이 접근 — `middleware.ts`의 `PUBLIC_API`에 `/api/pay/` 이미 포함됨.
+
+PortOne 콜백 처리:
+```typescript
+window.IMP.request_pay({ ... }, async (rsp) => {
+  if (!rsp.success) { setPayError(rsp.error_msg); return; }
+  const res = await fetch(`/api/pay/${billId}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ imp_uid: rsp.imp_uid }),
+  });
+  if (res.ok) setCompleted(true);
+});
+```
+
+### Vercel 배포 구성 (2026-04-05)
+
+`apps/web/package.json` 스크립트:
+```json
+"build": "prisma generate && next build",
+"postinstall": "prisma generate"
+```
+
+`apps/web/vercel.json` 필수 필드:
+```json
+{
+  "buildCommand": "prisma generate && next build",
+  "outputDirectory": ".next",
+  "crons": [...]
+}
+```
+
+**주의**: `rootDirectory`는 `vercel.json`이 아닌 Vercel 대시보드에서 설정. `vercel.json`은 rootDirectory와 같은 위치에 있어야 함 (`apps/web/vercel.json`).
+
+### TypeScript 전역 타입 선언 관리
+
+여러 페이지에서 `declare global { interface Window { ... } }`를 중복 선언하면 빌드 에러 발생. 모든 전역 Window 확장은 `apps/web/types/globals.d.ts` 한 곳에서 관리.
+
+```typescript
+// ❌ 각 페이지 파일에 직접 선언 — 타입 충돌
+declare global { interface Window { IMP: ... } }
+
+// ✅ types/globals.d.ts 에서만 선언
+declare global {
+  interface PortOneResponse { ... }
+  interface Window { IMP: ...; daum: ... }
+}
+export {};
+```

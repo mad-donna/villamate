@@ -1024,3 +1024,42 @@ F-26(자동 청구서 Cron), NF-06(CSRF), NF-07(TypeScript strict), NF-08(모바
 | 금액 0 청구서 독촉 제외 로직 | Low |
 | 알림 API 페이지네이션 (take:50) | Low |
 | 초대 코드 Rate Limit | Low |
+
+---
+
+## 2026-04-05 업데이트
+
+### Sprint 2 진입 — 결제 3종 완료
+
+**완료된 기능:**
+
+| # | 기능 | 비고 |
+|---|------|------|
+| F-29 | PortOne PG 인앱 결제 + imp_uid 서버 검증 | 수동 납부 병행 유지 |
+| F-30 | 청구서 PDF 저장·공유 | 브라우저 Print API, 외부 라이브러리 없음 |
+| F-31 | 앱 미설치 외부 청구 웹 결제 페이지 | `/pay/:billId` 공개 라우트 |
+
+### 제품 결정 — Vercel 배포 완료
+
+- Railway(이전 NestJS 인프라) 완전 종료, Vercel 단일 배포로 전환 완료
+- `.gitignore` 추가로 `.env`, `node_modules` GitHub 노출 방지
+- Vercel Cron 3개 자동 등록 (invoice-reminder, expire-subscriptions, publish-invoices)
+
+### Sprint 백로그 재편
+
+기능별 나열에서 **스프린트 우선순위 기반**으로 SPRINT.md 재구성:
+- Sprint 1: 핵심 입주민 루프 (민원·커뮤니티·투표·주차) — 베타 데모 필수
+- Sprint 2: 결제·장부·운영 안정화 — 수익 연결
+- Sprint 3: 백오피스·구독·비기능
+- Phase 3: 장기 (소셜 로그인, 알림톡, 자동결제)
+
+### 현재 기술 부채 (2026-04-05 추가)
+
+| 항목 | 우선순위 |
+|------|---------|
+| Supabase Storage 파일 업로드 미구현 (`/api/upload` TODO) | High — 영수증/사진 첨부 기능 전반 블로커 |
+| PortOne 운영 키 미설정 시 결제 불가 | High (운영 전) |
+| `prisma db push` 사용으로 rollback 이력 없음 | Medium |
+| invoice-reminder N+1 쿼리 | Medium |
+| 알림 API 페이지네이션 (take:50) | Low |
+| 초대 코드 Rate Limit | Low |

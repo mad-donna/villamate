@@ -286,3 +286,28 @@ Your MEMORY.md is currently empty. When you save new memories, they will appear 
 **모바일 레이아웃 정렬 (NF-08)**
 - admin/resident 레이아웃: `max-w-lg mx-auto` 적용 (375~512px 최적화)
 - BottomNav 위치: `fixed bottom-0 left-1/2 -translate-x-1/2 max-w-lg w-full` 패턴으로 중앙 고정
+
+---
+
+## 2026-04-05 업데이트
+
+### 신규 구현된 UI 컴포넌트
+
+#### InvoicePrintView (`components/InvoicePrintView.tsx`)
+- 목적: 청구서 PDF 저장용 A4 프린트 레이아웃
+- 구성: 빌라명 + 청구월 헤더, 납부 금액(크게), 항목 테이블(VARIABLE), 납부 계좌, 상태 뱃지, VillaMate 브랜딩 푸터
+- `@media print` CSS로 탭바 등 앱 UI 숨김
+
+#### InvoicePDFButton (`components/InvoicePDFButton.tsx`)
+- "청구서 저장" 버튼 — 팝업 프린트 방식
+- Web Share API 지원 시 공유 옵션 제공 (모바일 친화)
+- 미지원 시 클립보드 복사 fallback
+
+#### 외부 청구 결제 페이지 (`/pay/[billId]`)
+- 앱 미설치 사용자용 — VillaMate 브랜딩 헤더(VM 로고 심플)
+- 금액 카드 중앙 강조, 상세 정보(내용/기한/상태) 분리 카드
+- 하단 고정 "납부하기" 버튼 — 로딩 스피너 포함
+- 납부 완료 시 초록 체크 애니메이션 화면으로 전환
+
+### UX 패턴 — 결제 완료 피드백
+결제 성공 시 별도 페이지 이동 없이 인라인으로 완료 화면 전환 (`setCompleted(true)` 상태 전환). 모바일에서 페이지 이동 없이 맥락 유지.

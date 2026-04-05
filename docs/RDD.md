@@ -188,9 +188,9 @@ app/
 | F-26 | 매월 지정일 고정 관리비 자동 발행 (Cron) | 1 | ✅ | autoPublishDay 필드 기반, KST 00:00 실행 |
 | F-27 | 세대별 납부 현황 조회 (동대표) | 1 | ✅ | paidCount/totalCount 포함 |
 | F-28 | 입주민 청구서 목록 및 수동 납부 처리 | 1 | ✅ | GET /invoices/my + PATCH payments |
-| F-29 | PortOne PG 인앱 결제 + 서버 imp_uid 검증 | 2 | ⬜ | 수동 납부와 병행 |
-| F-30 | 청구서 PDF 저장 및 공유 | 2 | ⬜ | 브라우저 Print API |
-| F-31 | 앱 미설치 사용자 외부 청구 (웹 결제 페이지) | 2 | ⬜ | `/pay/:billId` 공개 라우트 |
+| F-29 | PortOne PG 인앱 결제 + 서버 imp_uid 검증 | 2 | ✅ | 수동 납부와 병행 |
+| F-30 | 청구서 PDF 저장 및 공유 | 2 | ✅ | 브라우저 Print API |
+| F-31 | 앱 미설치 사용자 외부 청구 (웹 결제 페이지) | 2 | ✅ | `/pay/:billId` 공개 라우트 |
 | F-32 | 외부 청구 알림톡 자동 발송 | 3 | ⬜ | 카카오 알림톡 API |
 
 ### 4-5. 미납 독촉 알림
@@ -439,6 +439,7 @@ app/
 |------|------|
 | 2026-04-03 | v2.0 최초 작성 — NestJS + Next.js 전면 리빌드 기준. 이전 RDD는 `RDD(backup).md` 보존. Phase 1/2/3 로드맵, 라우트 구조, 디자인 시스템 반영. |
 | 2026-04-04 | Phase 1 전체 완료 (F-26, NF-06~09). Phase 2 시작 — F-17, F-21, F-23, F-NEW 완료. Route group 충돌 해결, 빌라 등록 역할 승격 패턴 추가. |
+| 2026-04-05 | Sprint 2 진입 — F-29(PortOne PG 결제), F-30(청구서 PDF), F-31(외부 청구 공개 결제) 완료. InvoicePayment에 impUid/pgProvider 필드 추가. Vercel 배포 완료. |
 
 ---
 

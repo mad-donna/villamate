@@ -1706,3 +1706,51 @@ F-26(자동 청구서 Cron), NF-06(CSRF), NF-07(TypeScript strict), NF-08(모바
 | 알림 API 페이지네이션 (take:50) | Low |
 | 초대 코드 Rate Limit | Low |
 4. **F-51~53 민원 시스템** — 커뮤니티 연계
+
+---
+
+## 2026-04-05 업데이트
+
+### 1. 아키텍처 변경점
+
+**PG 결제 레이어 추가**
+- PortOne(KG이니시스) 인앱 결제 서버 검증 플로우 추가
+- 클라이언트 → `IMP.request_pay()` → imp_uid 수신 → 서버 `/verify` 엔드포인트에서 PortOne REST API로 재검증 → DB 상태 갱신
+- 공개 결제 라우트 `/pay/[billId]` 추가 — JWT 없이 접근 가능 (middleware PUBLIC_API에 등록)
+
+**전역 타입 선언 파일 추가**
+- `apps/web/types/globals.d.ts` — `window.IMP`(PortOne), `window.daum`(카카오 우편번호) 타입을 한 곳에서 관리
+
+**Vercel 배포 완료**
+- Railway 완전 종료
+- `apps/web/vercel.json` 배치 (rootDirectory와 동일 위치)
+- Cron 3개 자동 등록, `prisma generate && next build` 빌드 커맨드 확정
+
+### 2. API 변경
+
+| 엔드포인트 | 메서드 | 인증 | 설명 |
+|-----------|--------|------|------|
+| `/api/villas/[villaId]/invoices/[invoiceId]/payments/[paymentId]/verify` | POST | JWT | PortOne imp_uid 서버 검증 + InvoicePayment 상태 갱신 |
+| `/api/pay/[billId]` | GET | 없음(공개) | 외부 청구서 단건 조회 |
+| `/api/pay/[billId]/confirm` | POST | 없음(공개) | 외부 청구 PortOne 검증 후 COMPLETED 처리 |
+| `/api/villas/[villaId]/external-billing` | GET/POST | JWT(ADMIN) | 외부 청구 목록 조회 및 생성 |
+
+### 3. 데이터 모델 변경
+
+**`InvoicePayment` 필드 추가** (`prisma db push`로 반영):
+```prisma
+impUid     String?  // PortOne 결제 고유 ID
+pgProvider String?  // 결제 PG사 (예: html5_inicis)
+```
+
+### 4. 기술 부채 현황
+
+| 항목 | 심각도 | 내용 |
+|------|--------|------|
+| `/api/upload` 미구현 | High | Supabase Storage 업로드 TODO — 영수증/사진 첨부 기능 전반 블로커 |
+| PortOne 환경변수 | High | PORTONE_IMP_KEY/SECRET/IMP_CODE 미설정 시 런타임 502 |
+| migration 파일 부재 | Medium | `prisma db push` 사용으로 rollback 이력 없음 |
+| 외부 청구 confirm Rate Limit | Medium | 공개 엔드포인트에 요청 빈도 제한 없음 |
+| invoice-reminder N+1 쿼리 | Medium | 대규모 빌라에서 성능 저하 가능 |
+| 알림 API 페이지네이션 | Low | `take: 50` 하드코딩 |
+| 초대 코드 Rate Limit | Low | 브루트포스 방어 없음 |
