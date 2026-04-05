@@ -1,6 +1,4 @@
 {
-  "framework": "nextjs",
-  "rootDirectory": "apps/web",
   "crons": [
     {
       "path": "/api/cron/invoice-reminder",
