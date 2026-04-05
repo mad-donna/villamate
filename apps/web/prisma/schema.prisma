@@ -1,0 +1,348 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  RESIDENT
+  SUPER_ADMIN
+}
+
+enum SubscriptionStatus {
+  FREE_TRIAL
+  ACTIVE
+  EXPIRED
+}
+
+enum ResidentType {
+  HEAD
+  MEMBER
+}
+
+enum ResidentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum InvoiceType {
+  FIXED
+  VARIABLE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum ExternalBillingStatus {
+  PENDING
+  PENDING_CONFIRMATION
+  COMPLETED
+}
+
+enum PostCategory {
+  GENERAL
+  NOTICE
+  ISSUE
+}
+
+enum TicketCategory {
+  COMMON_FACILITY
+  PARKING
+  NOISE_COMPLAINT
+  ETC
+}
+
+enum TicketStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum LedgerType {
+  INCOME
+  EXPENSE
+}
+
+enum BuildingEventCategory {
+  REPAIR
+  INSPECTION
+  CONTRACT
+  CLEANING
+  ETC
+}
+
+enum NotificationType {
+  INVOICE
+  PAYMENT_REMINDER
+  POLL
+  COMMUNITY
+  SYSTEM
+  TICKET
+}
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  password        String
+  name            String
+  phone           String?
+  role            Role             @default(RESIDENT)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  villasManaged   Villa[]          @relation("VillaAdmin")
+  residentRecords ResidentRecord[]
+  posts           Post[]
+  comments        Comment[]
+  votes           Vote[]
+  notifications   Notification[]
+  vehicles        Vehicle[]
+  tickets         Ticket[]
+  polls           Poll[]
+  buildingEvents  BuildingEvent[]
+}
+
+model Villa {
+  id                 String              @id @default(uuid())
+  name               String
+  address            String
+  totalUnits         Int
+  inviteCode         String              @unique
+  roomNumbers        String[]
+  accountBank        String?
+  accountNumber      String?
+  subscriptionStatus SubscriptionStatus  @default(FREE_TRIAL)
+  subscriptionExpiry DateTime?
+  autoPublishDay     Int?
+  adminId            String
+  admin              User                @relation("VillaAdmin", fields: [adminId], references: [id])
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  residents          ResidentRecord[]
+  invoices           Invoice[]
+  externalBillings   ExternalBilling[]
+  posts              Post[]
+  polls              Poll[]
+  ledgerTransactions LedgerTransaction[]
+  buildingEvents     BuildingEvent[]
+  vehicles           Vehicle[]
+  tickets            Ticket[]
+  notifications      Notification[]      @relation("VillaNotifications")
+}
+
+model ResidentRecord {
+  id           String           @id @default(uuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id])
+  villaId      String
+  villa        Villa            @relation(fields: [villaId], references: [id])
+  roomNumber   String
+  residentType ResidentType     @default(HEAD)
+  status       ResidentStatus   @default(PENDING)
+  joinedAt     DateTime         @default(now())
+  payments     InvoicePayment[]
+
+  @@unique([villaId, roomNumber, userId])
+}
+
+model Invoice {
+  id           String           @id @default(uuid())
+  villaId      String
+  villa        Villa            @relation(fields: [villaId], references: [id])
+  type         InvoiceType
+  billingMonth String
+  memo         String?
+  totalAmount  Decimal          @db.Decimal(12, 2)
+  items        InvoiceItem[]
+  payments     InvoicePayment[]
+  createdAt    DateTime         @default(now())
+}
+
+model InvoiceItem {
+  id        String  @id @default(uuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  name      String
+  amount    Decimal @db.Decimal(12, 2)
+}
+
+model InvoicePayment {
+  id               String          @id @default(uuid())
+  invoiceId        String
+  invoice          Invoice         @relation(fields: [invoiceId], references: [id])
+  residentRecordId String?
+  residentRecord   ResidentRecord? @relation(fields: [residentRecordId], references: [id], onDelete: SetNull)
+  roomNumber       String // 전출 후에도 호수 이력 보존
+  amount           Decimal         @db.Decimal(12, 2)
+  status           PaymentStatus   @default(PENDING)
+  paidAt           DateTime?
+  impUid           String? // PortOne 결제 고유 ID
+  pgProvider       String? // 결제 PG사 (예: html5_inicis)
+
+  @@unique([invoiceId, roomNumber])
+}
+
+model ExternalBilling {
+  id          String                @id @default(uuid())
+  villaId     String
+  villa       Villa                 @relation(fields: [villaId], references: [id])
+  targetName  String
+  phoneNumber String
+  amount      Decimal               @db.Decimal(12, 2)
+  description String
+  dueDate     DateTime
+  status      ExternalBillingStatus @default(PENDING)
+  createdAt   DateTime              @default(now())
+}
+
+model Post {
+  id        String       @id @default(uuid())
+  villaId   String
+  villa     Villa        @relation(fields: [villaId], references: [id])
+  authorId  String
+  author    User         @relation(fields: [authorId], references: [id])
+  title     String
+  content   String
+  category  PostCategory @default(GENERAL)
+  isNotice  Boolean      @default(false)
+  imageUrl  String?
+  comments  Comment[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Poll {
+  id          String       @id @default(uuid())
+  villaId     String
+  villa       Villa        @relation(fields: [villaId], references: [id])
+  creatorId   String
+  creator     User         @relation(fields: [creatorId], references: [id])
+  title       String
+  description String?
+  isAnonymous Boolean      @default(false)
+  endDate     DateTime
+  options     PollOption[]
+  votes       Vote[]
+  createdAt   DateTime     @default(now())
+}
+
+model PollOption {
+  id     String @id @default(uuid())
+  pollId String
+  poll   Poll   @relation(fields: [pollId], references: [id])
+  text   String
+  votes  Vote[]
+}
+
+model Vote {
+  id         String     @id @default(uuid())
+  pollId     String
+  poll       Poll       @relation(fields: [pollId], references: [id])
+  optionId   String
+  option     PollOption @relation(fields: [optionId], references: [id])
+  voterId    String
+  voter      User       @relation(fields: [voterId], references: [id])
+  roomNumber String
+  createdAt  DateTime   @default(now())
+
+  @@unique([pollId, roomNumber])
+}
+
+model LedgerTransaction {
+  id              String     @id @default(uuid())
+  villaId         String
+  villa           Villa      @relation(fields: [villaId], references: [id])
+  type            LedgerType
+  amount          Decimal    @db.Decimal(12, 2)
+  description     String
+  transactionDate DateTime
+  receiptUrl      String?
+  createdBy       String
+  createdAt       DateTime   @default(now())
+}
+
+model BuildingEvent {
+  id             String                @id @default(uuid())
+  villaId        String
+  villa          Villa                 @relation(fields: [villaId], references: [id])
+  creatorId      String
+  creator        User                  @relation(fields: [creatorId], references: [id])
+  title          String
+  description    String?
+  category       BuildingEventCategory @default(ETC)
+  eventDate      DateTime
+  contractorName String?
+  contactNumber  String?
+  attachmentUrl  String?
+  createdAt      DateTime              @default(now())
+}
+
+model Vehicle {
+  id                String   @id @default(uuid())
+  villaId           String
+  villa             Villa    @relation(fields: [villaId], references: [id])
+  ownerId           String
+  owner             User     @relation(fields: [ownerId], references: [id])
+  plateNumber       String
+  modelName         String?
+  isVisitor         Boolean  @default(false)
+  expectedDeparture String?
+  createdAt         DateTime @default(now())
+
+  @@unique([plateNumber, villaId])
+}
+
+model Ticket {
+  id          String         @id @default(uuid())
+  villaId     String
+  villa       Villa          @relation(fields: [villaId], references: [id])
+  reporterId  String
+  reporter    User           @relation(fields: [reporterId], references: [id])
+  title       String
+  description String
+  category    TicketCategory
+  status      TicketStatus   @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  villaId   String?
+  villa     Villa?           @relation("VillaNotifications", fields: [villaId], references: [id])
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+model Coupon {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  isUsed        Boolean   @default(false)
+  usedByVillaId String?   @unique
+  extensionDays Int       @default(30)
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+}

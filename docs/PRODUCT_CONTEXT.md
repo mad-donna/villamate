@@ -1616,3 +1616,93 @@ const response = await fetch(`${API_BASE_URL}/api/villas/${villaId}/tickets`, {
 3. **PG 결제 서버 검증**: imp_uid → PortOne API 서버 검증
 4. **파일 스토리지 마이그레이션**: multer 로컬 디스크 → AWS S3 또는 Supabase Storage
 5. **티켓 상태 알림**: 민원 처리 상태 변경 시 입주민 푸시 알림 발송
+---
+
+## 리빌드 진행 현황 (2026-04-04)
+
+### 배경: 전면 리빌드 결정
+
+기존 React Native + Express 코드베이스를 전면 삭제(`ca8ecc0` 커밋)하고 아래 이유로 재설계:
+- UI/UX가 계획 없이 기능을 덧붙이다 보니 일관성 붕괴
+- React Native → **모바일 웹** 전환 (앱스토어 심사 없음, Vercel 즉시 배포)
+- Express monolith → **NestJS** 계획이었으나 Railway 유료 문제로 → **Next.js 풀스택** 단일 배포로 최종 결정
+
+### 확정된 기술 스택 (리빌드)
+
+| 구분 | 결정 | 이유 |
+|------|------|------|
+| 전체 앱 | Next.js 15 (App Router) + TypeScript | 풀스택, Vercel 무료 배포 |
+| 백엔드 | Next.js Route Handlers | NestJS 제거 — 별도 서버 비용 없음 |
+| 인증 | `jose` JWT + bcryptjs | Edge Runtime 호환 |
+| 인증 미들웨어 | `middleware.ts` + `PUBLIC_API` 배열 | NestJS JwtGuard 대체 |
+| 구독 가드 | `lib/subscription.ts` | NestJS SubscriptionGuard 대체 |
+| ORM | Prisma 7 | 유지 |
+| DB | Supabase PostgreSQL + Storage | 유지 |
+| CSS | Tailwind CSS v4 (`@theme` 블록) | |
+| 아이콘 | Heroicons v2 | |
+| 스케줄러 | Vercel Cron Jobs | NestJS `@nestjs/schedule` 대체 |
+| 배포 | Vercel 단일 | 무료 플랜 |
+
+### Phase 1 구현 완료 현황 (2026-04-04)
+
+#### 아키텍처 · 인프라
+- Next.js 15 풀스택 스캐폴딩, Prisma + Supabase 연결
+- `middleware.ts` JWT 전역 인증 (x-user-* 헤더 주입)
+- Vercel Cron: invoice-reminder, expire-subscriptions
+- `lib/auth.ts` / `lib/api.ts` / `lib/notify.ts` / `lib/subscription.ts`
+
+#### 구현된 기능
+- **인증**: 회원가입 3단계, 로그인, 역할 선택, JWT 세션, 비밀번호 변경
+- **빌라**: 등록, 6자리 초대 코드, 호수 지정·수정
+- **입주민**: 가입, 목록, 전출 (이력 보존), HEAD/MEMBER 자동 판별
+- **청구서**: FIXED/VARIABLE 발행, 납부 현황, 수동 납부 처리, 수동 독촉 (1일 쿨타임)
+- **알림**: 독촉 Cron (3/7일), 알림함 DB, 읽음 처리, 미읽음 카운트
+- **커뮤니티**: 게시글 CRUD, 공지 (최대 3개), 댓글
+- **구독**: 상태 조회, 쿠폰 활성화 ($transaction), SubscriptionGuard 헬퍼
+- **대시보드**: 역할별 집계 통계
+
+#### 데이터 모델 주요 변경
+- `InvoicePayment.residentRecordId` → nullable + `onDelete: SetNull`
+- `InvoicePayment.roomNumber` 추가 (전출 후 이력 보존)
+- 유니크: `@@unique([invoiceId, roomNumber])` (기존: `[invoiceId, residentRecordId]`)
+
+#### Phase 1 잔여
+- F-26: 매월 지정일 자동 청구서 발행 Cron
+- NF-07: TypeScript strict, NF-08/09: 모바일 반응형 검증
+
+### 다음 개발 방향 (Phase 2)
+
+1. **F-29 PG 인앱 결제** (PortOne) — 수익 실현
+2. **F-54~60 전자투표** — 입주민 재방문 유인
+3. **F-62~64 재무 장부** — 동대표 이탈 방지
+
+---
+
+## 2026-04-04 업데이트
+
+### Phase 1 완전 완료
+F-26(자동 청구서 Cron), NF-06(CSRF), NF-07(TypeScript strict), NF-08(모바일 반응형), NF-09(터치 타깃) 완료로 Phase 1 전체 종료.
+
+### Phase 2 진입 — 인증·입주민 루프
+- **F-NEW**: 카카오 우편번호 API 빌라 등록 주소 자동완성 (건물명 자동 입력 포함)
+- **F-17**: 빌라 검색 → 입주 신청 (PENDING) → 관리자 승인/거절 흐름 완성. `ResidentRecord.status` 필드 추가
+- **F-21**: 입주민 필터 칩 (전체/세대주/세입자)
+- **F-23**: 듀얼 모드 — ADMIN이 입주민 화면으로 전환 가능 (`viewMode` localStorage)
+
+### 아키텍처 변경
+- **Next.js Route group 충돌 해결**: `(admin)`과 `(resident)` 모두 `/home`, `/community`, `/profile` 경로를 갖던 문제 → resident 경로를 `/resident/*`로 이전
+- **빌라 등록 역할 승격**: 누구나 빌라를 등록할 수 있되, 성공 시 자동으로 ADMIN 역할로 승격 + 새 JWT 발급
+
+### 환경 설정 완료
+- Supabase 연결 (Session pooler: `aws-1-ap-northeast-2.pooler.supabase.com`)
+- `prisma db push` 완료 (로컬 개발 환경 기준)
+- `.env` / `.env.local` 분리 운용 (Prisma CLI는 `.env` 읽음)
+
+### 현재 기술 부채
+| 항목 | 우선순위 |
+|------|---------|
+| invoice-reminder N+1 쿼리 | Medium |
+| 금액 0 청구서 독촉 제외 로직 | Low |
+| 알림 API 페이지네이션 (take:50) | Low |
+| 초대 코드 Rate Limit | Low |
+4. **F-51~53 민원 시스템** — 커뮤니티 연계

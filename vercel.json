@@ -1,0 +1,18 @@
+{
+  "framework": "nextjs",
+  "rootDirectory": "apps/web",
+  "crons": [
+    {
+      "path": "/api/cron/invoice-reminder",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/expire-subscriptions",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/publish-invoices",
+      "schedule": "0 15 * * *"
+    }
+  ]
+}
