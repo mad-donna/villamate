@@ -3,18 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 
-declare global {
-  interface Window {
-    IMP: {
-      init: (impCode: string) => void;
-      request_pay: (
-        params: Record<string, unknown>,
-        callback: (rsp: { success: boolean; imp_uid: string; error_msg?: string }) => void,
-      ) => void;
-    };
-  }
-}
-
 interface BillingData {
   id: string;
   targetName: string;

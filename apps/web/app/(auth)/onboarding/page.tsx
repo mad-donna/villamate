@@ -14,21 +14,6 @@ const BANKS = [
   '부산은행', '대구은행', '경남은행', '광주은행', '전북은행', '새마을금고', '신협', '우체국',
 ];
 
-declare global {
-  interface Window {
-    daum: {
-      Postcode: new (options: {
-        oncomplete: (data: {
-          roadAddress: string;
-          jibunAddress: string;
-          buildingName: string;
-          zonecode: string;
-        }) => void;
-      }) => { open: () => void };
-    };
-  }
-}
-
 export default function OnboardingPage() {
   const router = useRouter();
 

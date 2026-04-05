@@ -6,34 +6,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import InvoicePDFButton from '@/components/InvoicePDFButton';
 
-// TypeScript: window.IMP 전역 객체 선언 (PortOne SDK 주입)
-declare global {
-  interface Window {
-    IMP: {
-      init: (code: string) => void;
-      request_pay: (
-        params: {
-          pg: string;
-          pay_method: string;
-          merchant_uid: string;
-          name: string;
-          amount: number;
-          buyer_name: string;
-          buyer_tel: string;
-        },
-        callback: (response: PortOneResponse) => void,
-      ) => void;
-    };
-  }
-}
-
-interface PortOneResponse {
-  success: boolean;
-  imp_uid: string | null;
-  error_msg?: string;
-  error_code?: string;
-}
-
 interface InvoicePayment {
   id: string;
   status: 'PAID' | 'PENDING' | 'OVERDUE';
