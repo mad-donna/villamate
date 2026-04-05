@@ -1,11 +1,11 @@
-interface PortOneResponse {
-  success: boolean;
-  imp_uid: string;
-  merchant_uid: string;
-  error_msg?: string;
-}
-
 declare global {
+  interface PortOneResponse {
+    success: boolean;
+    imp_uid: string | null;
+    merchant_uid: string;
+    error_msg?: string;
+  }
+
   interface Window {
     IMP: {
       init: (impCode: string) => void;
