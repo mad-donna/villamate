@@ -31,8 +31,8 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
   RESOLVED: '완료',
 };
 
-const STATUS_VARIANTS: Record<TicketStatus, 'default' | 'success' | 'warning' | 'error'> = {
-  PENDING: 'default',
+const STATUS_VARIANTS: Record<TicketStatus, 'neutral' | 'success' | 'warning'> = {
+  PENDING: 'neutral',
   IN_PROGRESS: 'warning',
   RESOLVED: 'success',
 };
