@@ -1,8 +1,18 @@
 # VillaMate — Sprint Backlog
 
-> 기준: `RDD.md` v2.0 (2026-04-05 업데이트) · 전면 리빌드 (Next.js 15 풀스택)
+> 기준: `RDD.md` v2.0 (2026-04-07 업데이트) · 전면 리빌드 (Next.js 15 풀스택)
 > 범례: ⬜ 미시작 · 🔄 진행중
 > ✅ 완료 항목은 `RDD.md` 각 기능 테이블 "상태" 컬럼에서 확인
+
+---
+
+## ✅ Sprint 1 완료 항목 (2026-04-07) — RDD.md로 이동
+
+| # | 기능 | 완료일 |
+|---|------|--------|
+| F-51 | 민원 접수 (COMMON_FACILITY / PARKING / NOISE_COMPLAINT / ETC) | 2026-04-07 |
+| F-52 | 민원 상태 관리 (PENDING → IN_PROGRESS → RESOLVED, 관리자 전용) | 2026-04-07 |
+| F-53 | 민원 상태 변경 시 접수 입주민 알림 | 2026-04-07 |
 
 ---
 
@@ -12,9 +22,6 @@
 
 | # | 기능 | 요구사항 | 비고 |
 |---|------|---------|------|
-| F-51 | 민원 접수 | 민원 접수 (COMMON_FACILITY / PARKING / NOISE_COMPLAINT / ETC) | |
-| F-52 | 민원 상태 관리 | 상태 전환 (PENDING → IN_PROGRESS → RESOLVED) | 관리자 전용 |
-| F-53 | 민원 알림 | 상태 변경 시 접수 입주민에게 알림 | |
 | F-46 | 커뮤니티 댓글 | 댓글 작성·조회 | |
 | F-47 | 내 게시글 | 내가 쓴 글 목록 조회 | |
 | F-48 | 게시글 이미지 | 게시글 이미지 첨부 | `<input type="file">` + Supabase Storage |

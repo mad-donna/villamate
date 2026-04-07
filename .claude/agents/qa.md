@@ -260,3 +260,31 @@ Grep with pattern="<search term>" path="C:\Users\dmleh\.claude\projects\D--villa
 | Cold Start | Serverless Function 콜드 스타트 — Prisma 연결 초기화 지연 가능 |
 | DB Connection | Supabase Connection Pooler 사용 필수 (Transaction Pooler, 포트 6543) |
 | Cron 실패 알림 | Vercel Cron 실패 시 알림 없음 — 모니터링 미구현 |
+
+---
+
+## 2026-04-07 업데이트
+
+### F-51/52/53 민원 시스템 QA 체크리스트
+
+#### 보안 위험 지점
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `PATCH /tickets/[ticketId]` | ADMIN role 검증 구현됨 | ✅ |
+| `GET /tickets` | RESIDENT는 `reporterId: user.sub` 필터 적용 — 타인 민원 조회 불가 | ✅ |
+| `POST /tickets` | villaId는 params에서, reporterId는 JWT에서 — 클라이언트 조작 불가 | ✅ |
+
+#### 데이터 정합성
+
+| 항목 | 상태 |
+|------|------|
+| 상태 전환 단방향 강제 (VALID_TRANSITIONS 맵) | ✅ PENDING→IN_PROGRESS→RESOLVED만 허용 |
+| 알림 생성 실패 시 PATCH 응답 | ⚠️ `notifyTicketStatusChange` 동기 실행 — DB 장애 시 500 반환 |
+| villaId 소속 검증 | ✅ `findUnique({ where: { id: ticketId, villaId } })` |
+
+#### 빌드 오류 이력
+
+| 오류 | 원인 | 수정 |
+|------|------|------|
+| `Type '"default"' is not assignable to type 'BadgeVariant'` | `BadgeVariant`에 `'default'` 없음 | `'neutral'`로 수정 |

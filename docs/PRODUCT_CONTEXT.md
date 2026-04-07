@@ -1753,4 +1753,47 @@ pgProvider String?  // 결제 PG사 (예: html5_inicis)
 | 외부 청구 confirm Rate Limit | Medium | 공개 엔드포인트에 요청 빈도 제한 없음 |
 | invoice-reminder N+1 쿼리 | Medium | 대규모 빌라에서 성능 저하 가능 |
 | 알림 API 페이지네이션 | Low | `take: 50` 하드코딩 |
+
+---
+
+## 2026-04-07 업데이트
+
+### 1. 아키텍처 변경점
+
+**민원(Ticket) 도메인 신설**
+- 커뮤니티(Post)와 별도 도메인으로 분리 (`/api/villas/[villaId]/tickets`)
+- 상태 머신(PENDING→IN_PROGRESS→RESOLVED) 서버 단방향 강제 (`VALID_TRANSITIONS` 맵)
+- 역할 기반 접근 제어: GET은 role에 따라 전체/본인 필터, PATCH는 ADMIN 전용
+
+**알림 유틸 확장 (`lib/notify.ts`)**
+- `notifyTicketStatusChange()` 추가 — 민원 상태 변경 시 접수 입주민에게 `NotificationType.TICKET` 알림 생성
+
+**루트 URL 랜딩 페이지 추가 (`app/page.tsx`)**
+- 기존 404 → 인증 분기 랜딩 페이지
+- 비로그인: 미니멀 랜딩 (Hero + 문제정의 + 핵심기능 + CTA 2개)
+- 로그인: role 기반 자동 redirect (ADMIN→/home, RESIDENT→/resident/home, SUPER_ADMIN→/backoffice/dashboard)
+
+### 2. API 변경
+
+| 엔드포인트 | 메서드 | 인증 | 설명 |
+|-----------|--------|------|------|
+| `/api/villas/[villaId]/tickets` | GET | JWT | ADMIN: 전체 조회 / RESIDENT: 본인 접수 건만 |
+| `/api/villas/[villaId]/tickets` | POST | JWT | 민원 접수 (category, title, description) |
+| `/api/villas/[villaId]/tickets/[ticketId]` | PATCH | JWT(ADMIN) | 상태 전환 (PENDING→IN_PROGRESS→RESOLVED) + 알림 생성 |
+
+### 3. 데이터 모델 변경
+
+스키마 변경 없음 — `Ticket`, `NotificationType.TICKET` 모두 기존 schema.prisma에 정의되어 있었음.
+
+### 4. 기술 부채 현황
+
+| 항목 | 심각도 | 내용 |
+|------|--------|------|
+| `/api/upload` 미구현 | High | Supabase Storage 업로드 TODO — 게시글 이미지(F-48), 영수증(F-64), 건물이력 사진(F-68) 전반 블로커 |
+| PortOne 환경변수 | High | PORTONE_IMP_KEY/SECRET/IMP_CODE 미설정 시 런타임 502 |
+| Ticket 알림 동기 실행 | Low | `notifyTicketStatusChange` PATCH 응답 전 동기 실행 — 알림 DB 장애 시 500 전파 |
+| migration 파일 부재 | Medium | `prisma db push` 사용으로 rollback 이력 없음 |
+| 외부 청구 confirm Rate Limit | Medium | 공개 엔드포인트에 요청 빈도 제한 없음 |
+| invoice-reminder N+1 쿼리 | Medium | 대규모 빌라에서 성능 저하 가능 |
+| 알림 API 페이지네이션 | Low | `take: 50` 하드코딩 |
 | 초대 코드 Rate Limit | Low | 브루트포스 방어 없음 |

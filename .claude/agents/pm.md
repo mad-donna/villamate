@@ -1062,4 +1062,36 @@ F-26(자동 청구서 Cron), NF-06(CSRF), NF-07(TypeScript strict), NF-08(모바
 | `prisma db push` 사용으로 rollback 이력 없음 | Medium |
 | invoice-reminder N+1 쿼리 | Medium |
 | 알림 API 페이지네이션 (take:50) | Low |
+
+---
+
+## 2026-04-07 업데이트
+
+### Sprint 1 — 민원 3종 완료 + 랜딩 페이지 추가
+
+**완료된 기능:**
+
+| # | 기능 | 비고 |
+|---|------|------|
+| F-51 | 민원 접수 (COMMON_FACILITY / PARKING / NOISE_COMPLAINT / ETC) | 입주민 전용 폼 + 목록 |
+| F-52 | 민원 상태 관리 (PENDING→IN_PROGRESS→RESOLVED) | 관리자 전용, 상태 필터 칩 |
+| F-53 | 민원 상태 변경 시 입주민 알림 | NotificationType.TICKET |
+| - | 루트 URL 랜딩 페이지 | villamate.vercel.app/ 404 해결 |
+
+### 제품 결정 — 루트 URL 전략
+
+- **비로그인** → 미니멀 랜딩 (Hero + 문제정의 + 핵심기능 + CTA)
+- **로그인 상태** → role 기반 자동 redirect
+- CTA: "동대표로 시작하기" (Primary) / "초대코드로 입주민 가입" (Secondary)
+- 베타 단계에서 풀 마케팅 랜딩 불필요 — 완성도 낮은 랜딩은 오히려 역효과
+
+### Sprint 1 남은 항목
+
+| # | 기능 |
+|---|------|
+| F-46 | 커뮤니티 댓글 |
+| F-47 | 내 게시글 |
+| F-48 | 게시글 이미지 첨부 (Supabase Storage 블로커) |
+| F-54~58 | 전자투표 5종 |
+| F-70~71 | 차량 등록·번호판 검색 |
 | 초대 코드 Rate Limit | Low |

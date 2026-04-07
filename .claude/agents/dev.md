@@ -1329,4 +1329,42 @@ declare global {
   interface Window { IMP: ...; daum: ... }
 }
 export {};
+
+---
+
+## 2026-04-07 업데이트
+
+### 민원 시스템 구현 패턴 (F-51/52/53)
+
+#### API 구현
+
+```typescript
+// GET /api/villas/[villaId]/tickets — role 분기
+const where = user.role === 'ADMIN'
+  ? { villaId }
+  : { villaId, reporterId: user.sub };
+
+// PATCH /api/villas/[villaId]/tickets/[ticketId] — 상태 전환 강제
+const VALID_TRANSITIONS: Record<string, TicketStatus> = {
+  PENDING: TicketStatus.IN_PROGRESS,
+  IN_PROGRESS: TicketStatus.RESOLVED,
+};
+const allowedNext = VALID_TRANSITIONS[ticket.status];
+if (!allowedNext || allowedNext !== status) return err('Invalid transition');
+```
+
+#### 알림 유틸 (`lib/notify.ts`)
+
+`notifyTicketStatusChange(ticketId, reporterId, villaId, ticketTitle, newStatus)` — 상태 변경 후 `NotificationType.TICKET`으로 Notification 생성.
+
+#### 빌드 오류 패턴 — Badge variant
+
+`BadgeVariant`에 `'default'` 없음 → `'neutral'` 사용. 신규 Badge 사용 시 `Badge.tsx`의 타입 유니온 확인 필수:
+```
+'완납' | '미납' | '납기임박' | '진행중' | '종료' | 'success' | 'error' | 'warning' | 'info' | 'neutral'
+```
+
+#### 루트 랜딩 페이지 (`app/page.tsx`)
+
+`getToken()` / `getUser()` from `@/lib/client-auth`로 localStorage 인증 상태 체크 후 role 기반 redirect. `'use client'` 컴포넌트 필수 (localStorage 접근).
 ```

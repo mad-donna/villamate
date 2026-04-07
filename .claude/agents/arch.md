@@ -1848,4 +1848,53 @@ npx prisma db push   # DB 반영
 |------|------|---------|
 | 마이그레이션 파일 부재 | `prisma db push` 사용으로 rollback 이력 없음 | Medium |
 | `/api/upload` TODO | Supabase Storage 업로드 미구현 — 파일 첨부 기능 전반 영향 | High |
+
+---
+
+## 2026-04-07 업데이트
+
+### 아키텍처 변경점
+
+#### 1. 민원(Ticket) 도메인 신설
+
+커뮤니티(Post)와 별도 도메인으로 Ticket 엔티티 분리. 상태 머신(PENDING→IN_PROGRESS→RESOLVED)을 서버에서 단방향으로 강제.
+
+```
+입주민 POST /api/villas/[villaId]/tickets
+  → Ticket(status=PENDING) 생성
+
+관리자 PATCH /api/villas/[villaId]/tickets/[ticketId]
+  → 상태 전환 검증 (VALID_TRANSITIONS 맵)
+  → DB 업데이트
+  → notifyTicketStatusChange() 호출 → Notification 생성
+```
+
+**라우트 권한 분리:**
+- GET `/tickets` — ADMIN: 빌라 전체 조회 / RESIDENT: 본인 것만
+- PATCH `/tickets/[id]` — ADMIN 전용 (403 for non-admin)
+
+#### 2. notify.ts 알림 유틸 확장
+
+기존 `createNotification` / `createNotificationForVilla`에 `notifyTicketStatusChange` 추가.
+`NotificationType.TICKET` 타입 활용 (스키마에 이미 정의되어 있었음).
+
+#### 3. 루트 URL 랜딩 페이지 추가
+
+`apps/web/app/page.tsx` 신설. 인증 분기 패턴:
+
+```typescript
+// localStorage 기반 (클라이언트 컴포넌트)
+token 없음 → 랜딩 페이지 렌더
+token 있음 → role 기반 redirect
+  SUPER_ADMIN → /backoffice/dashboard
+  RESIDENT    → /resident/home
+  ADMIN       → /home
+```
+
+### 알려진 기술 부채 (2026-04-07 추가)
+
+| 항목 | 설명 | 우선순위 |
+|------|------|---------|
+| Ticket 알림 비동기 처리 없음 | `notifyTicketStatusChange`가 PATCH 응답 전 동기 실행 — 알림 DB 저장 실패 시 응답 지연 가능 | Low |
+| 루트 랜딩 깜빡임 | `checking` state 초기값 true로 빈 화면 후 렌더 — 느린 기기에서 레이아웃 shift 발생 가능 | Low |
 | PortOne 환경변수 미설정 시 결제 불가 | 키 없어도 빌드는 됨, 런타임에만 502 반환 | High (운영 전) |

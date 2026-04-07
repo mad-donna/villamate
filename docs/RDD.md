@@ -230,9 +230,9 @@ app/
 
 | # | 요구사항 | Phase | 상태 | 비고 |
 |---|---------|-------|------|------|
-| F-51 | 민원 접수 (COMMON_FACILITY / PARKING / NOISE_COMPLAINT / ETC) | 2 | ⬜ | 커뮤니티와 별도 도메인 |
-| F-52 | 민원 상태 관리 (PENDING → IN_PROGRESS → RESOLVED) | 2 | ⬜ | 관리자 전용 |
-| F-53 | 상태 변경 시 입주민 알림 | 2 | ⬜ | |
+| F-51 | 민원 접수 (COMMON_FACILITY / PARKING / NOISE_COMPLAINT / ETC) | 2 | ✅ | 커뮤니티와 별도 도메인 |
+| F-52 | 민원 상태 관리 (PENDING → IN_PROGRESS → RESOLVED) | 2 | ✅ | 관리자 전용 |
+| F-53 | 상태 변경 시 입주민 알림 | 2 | ✅ | |
 
 ### 4-9. 전자투표
 
@@ -440,6 +440,7 @@ app/
 | 2026-04-03 | v2.0 최초 작성 — NestJS + Next.js 전면 리빌드 기준. 이전 RDD는 `RDD(backup).md` 보존. Phase 1/2/3 로드맵, 라우트 구조, 디자인 시스템 반영. |
 | 2026-04-04 | Phase 1 전체 완료 (F-26, NF-06~09). Phase 2 시작 — F-17, F-21, F-23, F-NEW 완료. Route group 충돌 해결, 빌라 등록 역할 승격 패턴 추가. |
 | 2026-04-05 | Sprint 2 진입 — F-29(PortOne PG 결제), F-30(청구서 PDF), F-31(외부 청구 공개 결제) 완료. InvoicePayment에 impUid/pgProvider 필드 추가. Vercel 배포 완료. |
+| 2026-04-07 | Sprint 1 진입 — F-51(민원 접수), F-52(민원 상태 관리), F-53(민원 알림) 완료. 루트 URL 랜딩 페이지 추가. Badge variant 빌드 오류 수정. |
 
 ---
 

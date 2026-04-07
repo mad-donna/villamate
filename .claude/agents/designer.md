@@ -311,3 +311,31 @@ Your MEMORY.md is currently empty. When you save new memories, they will appear 
 
 ### UX 패턴 — 결제 완료 피드백
 결제 성공 시 별도 페이지 이동 없이 인라인으로 완료 화면 전환 (`setCompleted(true)` 상태 전환). 모바일에서 페이지 이동 없이 맥락 유지.
+
+---
+
+## 2026-04-07 업데이트
+
+### 민원 시스템 UI 패턴
+
+#### 입주민 민원 목록 (`/villa/tickets`)
+- 카테고리 chip (배경 `neutral-100`, 텍스트 `neutral-500`): 공용시설/주차/소음/기타
+- 상태 Badge: PENDING=`neutral`, IN_PROGRESS=`warning`, RESOLVED=`success`
+- 카드 하단: 날짜 `text-xs text-neutral-400`
+
+#### 관리자 민원 관리 (`/manage/tickets`)
+- 상태 필터 Chip 4개 (전체/접수됨/처리중/완료)
+- 상태 Badge: PENDING=`warning`(노랑), IN_PROGRESS=`info`(파랑), RESOLVED=`success`(초록)
+- 액션 버튼: PENDING → `secondary` "처리 시작", IN_PROGRESS → `primary` "완료 처리", RESOLVED → 없음
+- Toast 피드백: 화면 하단 `bg-neutral-800` 2초 표시
+
+#### 관리 허브 페이지 (`/manage`) 리뉴얼
+- 기존 빈 페이지 → 카드 메뉴 목록 패턴 (`bg-white rounded-2xl`)
+- 각 카드: 아이콘(primary-50 배경) + 제목/설명 + 오른쪽 chevron
+- 항목: 입주민관리 / 청구서관리 / **민원관리** / 건물이력 / 전자투표 / 외부청구
+
+#### 랜딩 페이지 (`/`) 디자인
+- Hero: 텍스트 로고 "빌라메이트" (`text-primary-600`), h1 `text-3xl font-bold`, 서브카피 `text-neutral-500`
+- CTA 버튼 2개 세로 배치 (primary large + secondary large, 각 `w-full`)
+- 문제 정의 카드: 이모지 + 텍스트, `rounded-2xl shadow-sm`
+- 핵심 기능 카드: 큰 이모지 + 제목/설명, 가로 배치
