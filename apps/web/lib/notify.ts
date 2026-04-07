@@ -39,3 +39,27 @@ export async function createNotificationForVilla(
     data: userIds.map((userId) => ({ userId, villaId, type, title, body })),
   });
 }
+
+export async function notifyTicketStatusChange(
+  ticketId: string,
+  reporterId: string,
+  villaId: string,
+  ticketTitle: string,
+  newStatus: 'IN_PROGRESS' | 'RESOLVED',
+): Promise<void> {
+  const title = newStatus === 'IN_PROGRESS' ? '민원 처리 시작' : '민원 처리 완료';
+  const body =
+    newStatus === 'IN_PROGRESS'
+      ? `"${ticketTitle}" 민원이 처리 중입니다.`
+      : `"${ticketTitle}" 민원이 완료되었습니다.`;
+
+  await prisma.notification.create({
+    data: {
+      userId: reporterId,
+      villaId,
+      type: NotificationType.TICKET,
+      title,
+      body,
+    },
+  });
+}
