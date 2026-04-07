@@ -80,7 +80,8 @@ export async function POST(req: NextRequest) {
     }
 
     return ok({ ...villa, token: newToken }, 201);
-  } catch {
+  } catch (e) {
+    console.error('[POST /api/villas] error:', e);
     return err('서버 오류가 발생했습니다.', 500);
   }
 }

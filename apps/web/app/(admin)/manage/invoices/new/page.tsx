@@ -329,7 +329,7 @@ export default function NewInvoicePage() {
       )}
 
       {/* 하단 고정 발행 버튼 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-100 px-4 py-4 safe-area-bottom">
+      <div className="fixed bottom-14 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white border-t border-neutral-100 px-4 py-4">
         <Button
           className="w-full"
           size="lg"

@@ -45,9 +45,9 @@ export default function ResidentsPage() {
   // localStorage에서 user 정보 로드 및 목록 fetch
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { villaId?: string; inviteCode?: string };
-    setVillaId(user.villaId ?? '');
-    setInviteCode(user.inviteCode ?? '');
+    const user = JSON.parse(raw) as { villa?: { id?: string; inviteCode?: string } };
+    setVillaId(user.villa?.id ?? '');
+    setInviteCode(user.villa?.inviteCode ?? '');
   }, []);
 
   // 호수 목록 로드 (villaId 세팅 이후)

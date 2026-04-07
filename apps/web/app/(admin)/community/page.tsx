@@ -36,8 +36,8 @@ export default function AdminCommunityPage() {
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { villaId?: string };
-    setVillaId(user.villaId ?? '');
+    const user = JSON.parse(raw) as { villa?: { id?: string } };
+    setVillaId(user.villa?.id ?? '');
   }, []);
 
   const fetchPosts = useCallback(async () => {

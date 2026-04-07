@@ -36,8 +36,8 @@ export default function ResidentCommunityPage() {
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { villaId?: string };
-    setVillaId(user.villaId ?? '');
+    const user = JSON.parse(raw) as { residentVilla?: { id?: string }; villa?: { id?: string } };
+    setVillaId(user.residentVilla?.id ?? user.villa?.id ?? '');
   }, []);
 
   const fetchPosts = useCallback(async () => {

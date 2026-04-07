@@ -48,11 +48,11 @@ function getUserInfo(): {
     const raw = localStorage.getItem('user');
     const user = raw ? JSON.parse(raw) : {};
     return {
-      villaId: user.villaId,
+      villaId: user.residentVilla?.id ?? user.villa?.id,
       token: localStorage.getItem('token') ?? undefined,
       name: user.name,
       phone: user.phone,
-      roomNumber: user.roomNumber,
+      roomNumber: user.residentVilla?.roomNumber ?? user.roomNumber,
     };
   } catch {
     return {};

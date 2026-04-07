@@ -110,6 +110,7 @@ export default function AdminHomePage() {
   const router = useRouter();
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -137,11 +138,25 @@ export default function AdminHomePage() {
           setData(json as AdminDashboardData);
         }
       })
-      .catch(() => setNeedsSetup(true))
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [router]);
 
   if (loading) return <DashboardSkeleton />;
+  if (fetchError) return (
+    <main className="px-4 pt-12 flex flex-col items-center text-center gap-4">
+      <span className="text-5xl">⚠️</span>
+      <h1 className="text-xl font-bold text-neutral-900">데이터를 불러오지 못했습니다</h1>
+      <p className="text-sm text-neutral-500">잠시 후 다시 시도해주세요.</p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="mt-2 bg-primary-600 text-white text-sm font-semibold px-6 py-3 min-h-[44px] rounded-2xl active:scale-95 transition-transform"
+      >
+        다시 시도
+      </button>
+    </main>
+  );
   if (needsSetup) return <NeedsSetup router={router} />;
   if (!data) return null;
 

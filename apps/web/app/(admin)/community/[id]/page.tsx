@@ -53,8 +53,8 @@ export default function AdminPostDetailPage({
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { villaId?: string; id?: string; role?: string };
-    setVillaId(user.villaId ?? '');
+    const user = JSON.parse(raw) as { villa?: { id?: string }; id?: string; role?: string };
+    setVillaId(user.villa?.id ?? '');
     setUserId(user.id ?? '');
     setUserRole(user.role ?? '');
   }, []);

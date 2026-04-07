@@ -52,8 +52,8 @@ export default function ResidentPostDetailPage({
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { villaId?: string; id?: string };
-    setVillaId(user.villaId ?? '');
+    const user = JSON.parse(raw) as { residentVilla?: { id?: string }; villa?: { id?: string }; id?: string };
+    setVillaId(user.residentVilla?.id ?? user.villa?.id ?? '');
     setUserId(user.id ?? '');
   }, []);
 

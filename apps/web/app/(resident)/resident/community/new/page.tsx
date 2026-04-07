@@ -30,8 +30,8 @@ export default function ResidentNewPostPage() {
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { villaId?: string };
-    setVillaId(user.villaId ?? '');
+    const user = JSON.parse(raw) as { residentVilla?: { id?: string }; villa?: { id?: string } };
+    setVillaId(user.residentVilla?.id ?? user.villa?.id ?? '');
   }, []);
 
   function handleContentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -149,7 +149,7 @@ export default function ResidentNewPostPage() {
       </div>
 
       {/* 하단 고정 버튼 */}
-      <div className="fixed bottom-0 left-0 right-0 px-4 pb-8 pt-4 bg-neutral-50 border-t border-neutral-100">
+      <div className="fixed bottom-14 left-1/2 -translate-x-1/2 w-full max-w-lg px-4 pb-4 pt-3 bg-neutral-50 border-t border-neutral-100">
         <Button
           className="w-full"
           size="lg"
