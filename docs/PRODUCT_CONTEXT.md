@@ -1797,3 +1797,59 @@ pgProvider String?  // 결제 PG사 (예: html5_inicis)
 | invoice-reminder N+1 쿼리 | Medium | 대규모 빌라에서 성능 저하 가능 |
 | 알림 API 페이지네이션 | Low | `take: 50` 하드코딩 |
 | 초대 코드 Rate Limit | Low | 브루트포스 방어 없음 |
+
+---
+
+## 16. 운영 버그 수정 현황 (2026-04-07 기준)
+
+### 이 세션에서 수정된 버그
+
+#### Supabase PgBouncer prepared statement 오류
+- **증상**: 빌라 등록, 홈 대시보드 등에서 간헐적 서버 500 오류
+- **로그**: `PostgresError { code: "26000", message: "prepared statement does not exist" }`
+- **원인**: Vercel Serverless 환경에서 Prisma가 Supabase PgBouncer(트랜잭션 모드)에 prepared statement 전송 → 미지원
+- **조치**: `DATABASE_URL` 환경변수에 `?pgbouncer=true` 파라미터 추가 필요 (Vercel 대시보드)
+- **영향 범위**: 모든 Prisma 쿼리 (간헐적 오류이므로 발견이 늦었음)
+
+#### localStorage user 구조 불일치 (10개 파일 동시 수정)
+- **증상**: 세대 호수 관리, 커뮤니티, 민원, 청구서 페이지에서 데이터 미표시
+- **원인**: 저장된 유저 구조가 `user.villa.id`인데 코드에서 존재하지 않는 `user.villaId` 참조
+- **수정**: admin 페이지 → `user.villa?.id`, resident 페이지 → `user.residentVilla?.id ?? user.villa?.id`
+- **영향 파일**: residents, tickets, invoices, community 관련 10개 페이지
+
+#### 홈 화면 간헐적 "빌라가 등록되지 않았습니다"
+- **증상**: 홈 화면 재방문 시 빌라가 등록돼 있음에도 빌라 미등록 화면 표시
+- **원인**: 대시보드 API fetch 실패 시 `.catch(() => setNeedsSetup(true))`로 오처리
+- **수정**: `fetchError` 상태 분리 → "데이터를 불러오지 못했습니다" + 재시도 버튼
+
+#### 하단 고정 버튼이 BottomNav와 겹침
+- **증상**: 글쓰기/청구서 발행/민원 접수 화면에서 "등록하기" 버튼이 탭바와 겹치고 전체 화면 폭 차지
+- **원인**: `fixed bottom-0 left-0 right-0` — BottomNav 오프셋 없음
+- **수정**: `fixed bottom-14 left-1/2 -translate-x-1/2 w-full max-w-lg` (4개 파일)
+
+### 현재 기술 스택 (2026-04-07 기준)
+
+| 구분 | 실제 구현 |
+|------|-----------|
+| Frontend | Next.js 15 (App Router) + TypeScript |
+| Backend | Next.js 15 Route Handlers (API Routes) |
+| ORM | Prisma 6.x |
+| Database | Supabase (PostgreSQL) — PgBouncer 풀러 사용 |
+| 인증 | JWT (`jose`) + localStorage |
+| 배포 | Vercel (자동 배포, main 브랜치 push) |
+| 결제 | PortOne (KG Inicis) |
+| 알림 | 앱 내 알림함 (DB 기반) |
+
+### 4. 기술 부채 현황 (2026-04-07 업데이트)
+
+| 항목 | 심각도 | 내용 |
+|------|--------|------|
+| `DATABASE_URL ?pgbouncer=true` 미적용 | **Critical** | Vercel 환경변수 수동 수정 필요 — 미적용 시 간헐적 운영 장애 |
+| `/api/upload` 미구현 | High | Supabase Storage 업로드 — 이미지 첨부 기능(F-48, F-64, F-68) 전반 블로커 |
+| PortOne 환경변수 | High | 운영 전 PORTONE_IMP_KEY/SECRET 설정 필수 |
+| API catch 블록 에러 로깅 | Medium | 대부분의 API 라우트에서 에러를 삼키고 500만 반환 — 원인 추적 불가 |
+| migration 파일 부재 | Medium | `prisma db push` 사용으로 rollback 이력 없음 |
+| 외부 청구 Rate Limit | Medium | 공개 엔드포인트에 요청 빈도 제한 없음 |
+| invoice-reminder N+1 쿼리 | Medium | 대규모 빌라에서 성능 저하 가능 |
+| 알림 API 페이지네이션 | Low | `take: 50` 하드코딩 |
+| 초대 코드 Rate Limit | Low | 브루트포스 방어 없음 |

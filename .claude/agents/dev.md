@@ -1368,3 +1368,58 @@ if (!allowedNext || allowedNext !== status) return err('Invalid transition');
 
 `getToken()` / `getUser()` from `@/lib/client-auth`로 localStorage 인증 상태 체크 후 role 기반 redirect. `'use client'` 컴포넌트 필수 (localStorage 접근).
 ```
+
+---
+
+## 2026-04-07 버그 수정 패턴
+
+### localStorage user 구조 — 올바른 villaId 접근
+
+```typescript
+// ❌ 잘못된 패턴 — user.villaId 필드 존재하지 않음 (10개 파일에서 동시 발생)
+const user = JSON.parse(raw) as { villaId?: string };
+setVillaId(user.villaId ?? '');
+
+// ✅ Admin 페이지 — user.villa?.id
+const user = JSON.parse(raw) as { villa?: { id?: string } };
+setVillaId(user.villa?.id ?? '');
+
+// ✅ Resident 페이지 — 듀얼 모드 대응 (residentVilla 우선)
+const user = JSON.parse(raw) as { residentVilla?: { id?: string }; villa?: { id?: string } };
+setVillaId(user.residentVilla?.id ?? user.villa?.id ?? '');
+```
+
+**이유**: 회원가입 후 저장되는 StoredUser는 `villa.id`에 빌라 ID를 저장. ADMIN이 입주민으로 별도 빌라 가입 시 `residentVilla.id`에 저장. `villaId` 최상위 필드는 JWT payload에만 존재하고 localStorage에는 없음.
+
+### 하단 고정 버튼 — BottomNav 겹침 방지 패턴
+
+```tsx
+// ❌ 잘못된 패턴 — BottomNav(h-14)와 겹치고 전체 뷰포트 폭 차지
+<div className="fixed bottom-0 left-0 right-0 px-4 pb-8 pt-4 bg-white ...">
+  <Button className="w-full">등록하기</Button>
+</div>
+
+// ✅ 올바른 패턴 — BottomNav 위에 위치, max-w-lg 레이아웃 따름
+<div className="fixed bottom-14 left-1/2 -translate-x-1/2 w-full max-w-lg px-4 pb-4 pt-3 bg-white ...">
+  <Button className="w-full">등록하기</Button>
+</div>
+```
+
+**규칙**: 
+- `bottom-14` = BottomNav 높이(h-14=56px) 오프셋
+- `left-1/2 -translate-x-1/2 max-w-lg` = 레이아웃 max-w-lg와 동일 폭 유지
+- 페이지 콘텐츠는 `pb-32` 이상으로 버튼에 가려지지 않도록
+
+### 대시보드 API 에러 vs needsSetup 분리 패턴
+
+```typescript
+// ❌ 잘못된 패턴 — 네트워크 오류도 "빌라 미등록"으로 처리
+.catch(() => setNeedsSetup(true))
+
+// ✅ 올바른 패턴 — 에러 원인 분리
+.then((json) => {
+  if ('needsSetup' in json && json.needsSetup) setNeedsSetup(true);
+  else setData(json);
+})
+.catch(() => setFetchError(true))  // 에러는 별도 상태로
+```

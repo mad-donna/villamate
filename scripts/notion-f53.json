@@ -1,0 +1,11 @@
+{
+  "기능명": "F-53 민원 알림",
+  "reqId": "F-53",
+  "sprint": "Sprint 1",
+  "상태": "완료",
+  "구현일": "2026-04-07",
+  "요약": "민원 상태 변경(PENDING→IN_PROGRESS, IN_PROGRESS→RESOLVED) 시 접수 입주민에게 NotificationType.TICKET 알림 생성. notifyTicketStatusChange() 유틸 추가",
+  "수정된파일": "apps/web/lib/notify.ts",
+  "스펙편차": "없음",
+  "비고": "NotificationList 컴포넌트에 TICKET 타입(🏷️) 이미 정의되어 있어 별도 수정 불필요"
+}

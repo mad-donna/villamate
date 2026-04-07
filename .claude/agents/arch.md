@@ -1898,3 +1898,56 @@ token 있음 → role 기반 redirect
 | Ticket 알림 비동기 처리 없음 | `notifyTicketStatusChange`가 PATCH 응답 전 동기 실행 — 알림 DB 저장 실패 시 응답 지연 가능 | Low |
 | 루트 랜딩 깜빡임 | `checking` state 초기값 true로 빈 화면 후 렌더 — 느린 기기에서 레이아웃 shift 발생 가능 | Low |
 | PortOne 환경변수 미설정 시 결제 불가 | 키 없어도 빌드는 됨, 런타임에만 502 반환 | High (운영 전) |
+
+---
+
+## 2026-04-07 버그 수정 세션
+
+### 1. Supabase PgBouncer prepared statement 오류 (운영 이슈)
+
+- **증상**: `prisma.post.findFirst()` 등 실행 시 `PostgresError { code: "26000", message: "prepared statement does not exist" }` 발생
+- **원인**: `DATABASE_URL`이 Supabase 풀러(`pooler.supabase.com:5432`)를 가리키는데, Prisma가 기본적으로 prepared statement 사용 → PgBouncer 트랜잭션 모드에서 미지원
+- **해결**: Vercel 환경변수 `DATABASE_URL` 끝에 `?pgbouncer=true` 추가
+- **참고**: `directUrl`은 스키마 마이그레이션(`prisma db push`)에만 사용되므로 영향 없음
+- **패턴**: 이 오류는 간헐적으로 발생하므로 처음엔 랜덤 500처럼 보임 — 로그에서 code: "26000" 확인 필수
+
+### 2. localStorage StoredUser 구조 확정
+
+저장된 유저 오브젝트의 올바른 구조:
+
+```typescript
+StoredUser {
+  id, name, email, role
+  villa?: {
+    id, name, address, inviteCode, subscriptionStatus
+  }  // ADMIN의 관리 빌라, RESIDENT의 소속 빌라
+  residentVilla?: {
+    id, name, address, inviteCode, subscriptionStatus, roomNumber
+  }  // ADMIN이 입주민으로도 가입한 경우 (듀얼 모드)
+  viewMode?: 'admin' | 'resident'
+}
+```
+
+**올바른 접근 패턴:**
+- Admin 페이지: `user.villa?.id`
+- Resident 페이지: `user.residentVilla?.id ?? user.villa?.id`
+- **안티패턴**: `user.villaId` — 존재하지 않는 최상위 필드 (10개 파일에서 동시 발생한 버그)
+
+### 3. 대시보드 fetch 에러 처리 분리
+
+`(admin)/home/page.tsx`: `.catch(() => setNeedsSetup(true))`가 서버 500 에러도 "빌라 미등록" 화면으로 처리하던 문제.
+- `fetchError` 상태 별도 분리 → "데이터를 불러오지 못했습니다" + 재시도 버튼
+- `needsSetup`은 API가 명시적으로 `{ needsSetup: true }` 반환 시에만 표시
+
+### 4. 하단 고정 버튼 BottomNav 겹침
+
+`BottomNav`: `h-14 fixed bottom-0 z-50`. 폼 제출 버튼도 `fixed bottom-0`으로 겹쳤던 문제.
+- **수정**: `fixed bottom-14 left-1/2 -translate-x-1/2 w-full max-w-lg`
+- **영향 파일**: community/new, resident/community/new, villa/tickets/new, manage/invoices/new
+
+### 알려진 기술 부채 (2026-04-07 추가)
+
+| 항목 | 설명 | 우선순위 |
+|------|------|---------|
+| PgBouncer 설정 미적용 | DATABASE_URL에 `?pgbouncer=true` 미설정 시 간헐적 prepared statement 오류 | Critical (운영) |
+| API catch 블록 에러 삼킴 | 다수의 API 라우트가 `catch { }` 또는 `catch (e) {}` — 원인 파악 불가 | Medium |

@@ -339,3 +339,37 @@ Your MEMORY.md is currently empty. When you save new memories, they will appear 
 - CTA 버튼 2개 세로 배치 (primary large + secondary large, 각 `w-full`)
 - 문제 정의 카드: 이모지 + 텍스트, `rounded-2xl shadow-sm`
 - 핵심 기능 카드: 큰 이모지 + 제목/설명, 가로 배치
+
+---
+
+## 2026-04-07 UI 버그 수정 — 하단 버튼 규격 확립
+
+### 하단 고정 CTA 버튼 규격 (확정)
+
+BottomNav(`h-14`, `fixed bottom-0`, `z-50`)가 있는 레이아웃에서 폼 제출 버튼 규격:
+
+```
+fixed bottom-14                           ← BottomNav(56px) 높이만큼 오프셋
+left-1/2 -translate-x-1/2               ← 수평 중앙 정렬
+w-full max-w-lg                          ← 레이아웃과 동일 max-w-lg 폭
+px-4 pb-4 pt-3                           ← 내부 여백
+bg-white (또는 bg-neutral-50)            ← 콘텐츠 가림 방지
+border-t border-neutral-100              ← 콘텐츠와 구분선
+```
+
+**적용 화면**: 글쓰기(`community/new`), 민원 접수(`tickets/new`), 청구서 발행(`invoices/new`)
+
+**페이지 콘텐츠 하단 여백**: `pb-32` 이상 — 스크롤 최하단 콘텐츠가 버튼에 가리지 않도록.
+
+### 에러 상태 화면 패턴 (신규 확립)
+
+데이터 fetch 실패 시 "빌라 미등록" 화면과 구분되는 에러 상태 UI:
+
+```
+⚠️ (이모지)
+데이터를 불러오지 못했습니다  (text-xl font-bold)
+잠시 후 다시 시도해주세요.     (text-sm text-neutral-500)
+[다시 시도] 버튼               (bg-primary-600, rounded-2xl, min-h-[44px])
+```
+
+→ `needsSetup` 화면(빌라 등록 유도)과 명확히 구분. 서버 오류 시 잘못된 안내 방지.

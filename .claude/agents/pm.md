@@ -1095,3 +1095,32 @@ F-26(자동 청구서 Cron), NF-06(CSRF), NF-07(TypeScript strict), NF-08(모바
 | F-54~58 | 전자투표 5종 |
 | F-70~71 | 차량 등록·번호판 검색 |
 | 초대 코드 Rate Limit | Low |
+
+---
+
+## 2026-04-07 버그 수정 세션
+
+### 운영 버그 수정 완료 (배포 완료)
+
+| 버그 | 원인 | 상태 |
+|------|------|------|
+| 빌라 등록 간헐적 실패 ("서버 오류") | Supabase PgBouncer prepared statement 미지원 — `DATABASE_URL`에 `?pgbouncer=true` 환경변수 추가 필요 | ⚠️ 코드 수정 완료, Vercel 환경변수 별도 적용 필요 |
+| 홈 화면 간헐적 "빌라가 등록되지 않았습니다" | fetch 실패 시 needsSetup으로 잘못 처리 | ✅ 수정 배포 완료 |
+| 세대 호수 / 커뮤니티 / 민원 데이터 미표시 | localStorage `user.villaId` (없는 필드) 참조 — 10개 파일 | ✅ 수정 배포 완료 |
+| 등록하기 버튼 하단 탭과 겹침 | `fixed bottom-0` → BottomNav 위 `fixed bottom-14` | ✅ 수정 배포 완료 |
+
+### 기술 부채 업데이트
+
+| 항목 | 우선순위 | 상태 |
+|------|---------|------|
+| `DATABASE_URL`에 `?pgbouncer=true` 적용 | **Critical** | Vercel 대시보드에서 환경변수 직접 수정 필요 |
+| API 라우트 catch 블록 `console.error` 일괄 추가 | Medium | `/api/villas/route.ts`만 완료, 나머지 라우트 미적용 |
+| Supabase Storage 파일 업로드 (`/api/upload`) | High | F-48, F-64, F-68 전반 블로커 |
+| PortOne 운영 키 미설정 | High | 운영 전 필수 |
+| `prisma db push` rollback 이력 없음 | Medium | migration 도입 검토 필요 |
+
+### Sprint 1 현재 상태 (2026-04-07)
+
+**완료**: F-51, F-52, F-53, 랜딩 페이지, 운영 버그 4건 수정
+
+**남은 Sprint 1 항목**: F-46(커뮤니티 댓글), F-47(내 게시글), F-48(이미지 첨부), F-54~58(전자투표), F-70~71(차량 관리)

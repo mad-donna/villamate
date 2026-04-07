@@ -1,0 +1,11 @@
+{
+  "기능명": "운영 버그 수정 배치 (2026-04-07)",
+  "reqId": "BUGFIX",
+  "sprint": "Sprint 1",
+  "상태": "완료",
+  "구현일": "2026-04-07",
+  "요약": "4건 버그 수정: ① Supabase PgBouncer prepared statement 오류 진단 및 ?pgbouncer=true 적용 안내 ② localStorage user.villaId→user.villa.id 10개 파일 수정 ③ 홈 화면 fetchError/needsSetup 분리 ④ 하단 버튼 fixed bottom-14 수정 (4파일)",
+  "수정된파일": "(admin)/home/page.tsx, (admin)/community/page.tsx, (admin)/community/new/page.tsx, (admin)/community/[id]/page.tsx, (admin)/manage/residents/page.tsx, (admin)/manage/tickets/page.tsx, (admin)/manage/invoices/new/page.tsx, (resident)/villa/tickets/page.tsx, (resident)/villa/tickets/new/page.tsx, (resident)/villa/invoices/page.tsx, (resident)/resident/community/page.tsx, (resident)/resident/community/new/page.tsx, (resident)/resident/community/[id]/page.tsx, api/villas/route.ts",
+  "스펙편차": "없음",
+  "비고": "DATABASE_URL?pgbouncer=true는 Vercel 환경변수에서 별도 적용 필요"
+}

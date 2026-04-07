@@ -1,0 +1,11 @@
+{
+  "기능명": "F-51 민원 접수",
+  "reqId": "F-51",
+  "sprint": "Sprint 1",
+  "상태": "완료",
+  "구현일": "2026-04-07",
+  "요약": "입주민 민원 접수 기능. 카테고리(COMMON_FACILITY/PARKING/NOISE_COMPLAINT/ETC), 제목, 상세 내용 입력. POST /api/villas/[villaId]/tickets. 입주민 민원 목록 및 상태 표시 화면 포함",
+  "수정된파일": "apps/web/app/api/villas/[villaId]/tickets/route.ts (신규), apps/web/app/(resident)/villa/tickets/page.tsx (신규), apps/web/app/(resident)/villa/tickets/new/page.tsx (신규)",
+  "스펙편차": "없음",
+  "비고": "커뮤니티(Post)와 별도 도메인으로 분리. RESIDENT는 본인 접수 건만 조회 가능"
+}

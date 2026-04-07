@@ -13,6 +13,16 @@
 | F-51 | 민원 접수 (COMMON_FACILITY / PARKING / NOISE_COMPLAINT / ETC) | 2026-04-07 |
 | F-52 | 민원 상태 관리 (PENDING → IN_PROGRESS → RESOLVED, 관리자 전용) | 2026-04-07 |
 | F-53 | 민원 상태 변경 시 접수 입주민 알림 | 2026-04-07 |
+| - | 루트 URL 랜딩 페이지 (villamate.vercel.app/ 404 해결) | 2026-04-07 |
+
+## ✅ 운영 버그 수정 (2026-04-07)
+
+| 버그 | 수정 내용 | 완료일 |
+|------|-----------|--------|
+| Supabase PgBouncer prepared statement 오류 | `DATABASE_URL`에 `?pgbouncer=true` 추가 안내 + API catch 에러 로깅 추가 | 2026-04-07 |
+| localStorage `user.villaId` 필드 불일치 | 10개 파일에서 `user.villa?.id` / `user.residentVilla?.id`로 수정 | 2026-04-07 |
+| 홈 화면 서버 오류 시 "빌라 미등록" 화면 표시 | `fetchError` 상태 분리, 재시도 버튼 추가 | 2026-04-07 |
+| 하단 버튼 BottomNav 겹침 + 전체 폭 | `fixed bottom-14 max-w-lg` 패턴으로 수정 (4개 파일) | 2026-04-07 |
 
 ---
 

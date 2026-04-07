@@ -288,3 +288,43 @@ Grep with pattern="<search term>" path="C:\Users\dmleh\.claude\projects\D--villa
 | 오류 | 원인 | 수정 |
 |------|------|------|
 | `Type '"default"' is not assignable to type 'BadgeVariant'` | `BadgeVariant`에 `'default'` 없음 | `'neutral'`로 수정 |
+
+---
+
+## 2026-04-07 버그 수정 QA 기록
+
+### 운영 이슈 — PgBouncer prepared statement 오류
+
+| 항목 | 내용 |
+|------|------|
+| 증상 | 대시보드, 빌라 등록 등 Prisma 쿼리 시 간헐적 500 오류 |
+| 로그 | `PostgresError { code: "26000", message: "prepared statement does not exist" }` |
+| 원인 | Supabase PgBouncer 트랜잭션 모드 + Prisma prepared statement 기본값 충돌 |
+| 해결 | Vercel 환경변수 `DATABASE_URL`에 `?pgbouncer=true` 추가 후 재배포 |
+| 재현 | Vercel Serverless Function의 cold start + 연결 풀 교체 시 발생 |
+| 체크 | `prisma db push`는 `directUrl`(직접 연결) 사용 → 영향 없음 |
+
+### localStorage 필드 경로 버그 패턴 (안티패턴 등록)
+
+10개 페이지에서 `user.villaId`(존재하지 않는 필드)를 읽어 villaId가 항상 빈 문자열 → API 미호출 → 데이터 미표시.
+
+| 증상 | 원인 | 수정 |
+|------|------|------|
+| 세대 호수 관리에 "등록된 호수가 없습니다" | `user.villaId` → undefined | `user.villa?.id` |
+| 커뮤니티 게시글 미표시 | 동일 | 동일 |
+| 민원 목록 미표시 | 동일 | `user.residentVilla?.id ?? user.villa?.id` |
+
+**앞으로 체크 포인트**: localStorage에서 villaId 읽는 코드 신규 작성 시 `user.villa?.id` (admin) 또는 `user.residentVilla?.id ?? user.villa?.id` (resident) 사용 확인.
+
+### fetch 에러 처리 — 잘못된 상태 표시
+
+| 증상 | 원인 | 수정 |
+|------|------|------|
+| 홈 화면에서 "빌라가 등록되지 않았습니다" (실제로는 서버 오류) | `.catch(() => setNeedsSetup(true))` | `fetchError` 별도 상태 분리 |
+
+### 미해결 기술 부채 (2026-04-07 추가)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| API catch 블록 에러 로깅 미흡 | Medium | `/api/villas/route.ts`에 `console.error` 추가 완료, 나머지 라우트 일괄 적용 필요 |
+| Vercel 함수 에러 알림 | Medium | 운영 중 500 에러 무음 처리 — Vercel Webhook/Slack 알림 미설정 |

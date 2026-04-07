@@ -1,0 +1,11 @@
+{
+  "기능명": "F-52 민원 상태 관리",
+  "reqId": "F-52",
+  "sprint": "Sprint 1",
+  "상태": "완료",
+  "구현일": "2026-04-07",
+  "요약": "관리자 전용 민원 상태 전환 (PENDING→IN_PROGRESS→RESOLVED). VALID_TRANSITIONS 맵으로 단방향 강제. 관리자 민원 목록 페이지(상태 필터 칩, 처리 버튼) 및 관리 허브 페이지 리뉴얼",
+  "수정된파일": "apps/web/app/api/villas/[villaId]/tickets/[ticketId]/route.ts, apps/web/app/(admin)/manage/tickets/page.tsx, apps/web/app/(admin)/manage/page.tsx",
+  "스펙편차": "없음",
+  "비고": "관리 허브 /manage 페이지를 카드 메뉴 목록으로 리뉴얼 (기존 빈 페이지)"
+}
