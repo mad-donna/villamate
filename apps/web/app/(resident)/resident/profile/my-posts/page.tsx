@@ -1,0 +1,140 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/Badge';
+
+interface Post {
+  id: string;
+  title: string;
+  content: string;
+  category: 'GENERAL' | 'NOTICE' | 'ISSUE';
+  isNotice: boolean;
+  imageUrl: string | null;
+  createdAt: string;
+  commentCount: number;
+}
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export default function MyPostsPage() {
+  const router = useRouter();
+  const [villaId, setVillaId] = useState('');
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const raw = localStorage.getItem('user') ?? '{}';
+    const user = JSON.parse(raw) as { residentVilla?: { id?: string }; villa?: { id?: string } };
+    setVillaId(user.residentVilla?.id ?? user.villa?.id ?? '');
+  }, []);
+
+  const fetchPosts = useCallback(async () => {
+    if (!villaId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/villas/${villaId}/posts/my`);
+      if (!res.ok) throw new Error('fetch failed');
+      const data = await res.json() as { posts: Post[] };
+      setPosts(data.posts);
+    } catch {
+      setError('게시글을 불러오는 데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [villaId]);
+
+  useEffect(() => {
+    if (villaId) fetchPosts();
+  }, [villaId, fetchPosts]);
+
+  return (
+    <main className="min-h-screen bg-neutral-50 pb-24">
+      {/* 헤더 */}
+      <div className="flex items-center gap-3 px-4 pt-6 pb-4">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="p-2 -ml-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-neutral-600 hover:bg-neutral-100 transition-colors"
+          aria-label="뒤로가기"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1 className="text-xl font-bold text-neutral-900">내 게시글</h1>
+      </div>
+
+      {loading ? (
+        <div className="px-4 space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl shadow-sm p-4 animate-pulse">
+              <div className="h-4 w-3/4 bg-neutral-200 rounded mb-2" />
+              <div className="h-3 w-full bg-neutral-100 rounded mb-1" />
+              <div className="h-3 w-2/3 bg-neutral-100 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+          <p className="text-neutral-500">{error}</p>
+          <button
+            type="button"
+            className="mt-3 text-sm text-primary-600 font-medium"
+            onClick={fetchPosts}
+          >
+            다시 시도
+          </button>
+        </div>
+      ) : posts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+          <svg
+            className="w-12 h-12 text-neutral-300 mb-4"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+            />
+          </svg>
+          <p className="text-neutral-500 font-medium">아직 작성한 게시글이 없습니다.</p>
+          <p className="text-sm text-neutral-400 mt-1">커뮤니티에서 첫 글을 남겨보세요.</p>
+        </div>
+      ) : (
+        <div className="px-4 space-y-3">
+          {posts.map((post) => (
+            <button
+              key={post.id}
+              type="button"
+              onClick={() => router.push(`/resident/community/${post.id}`)}
+              className="w-full bg-white rounded-2xl shadow-sm p-4 text-left hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-center gap-2 mb-1">
+                {post.isNotice && <Badge variant="warning">공지</Badge>}
+                {post.category === 'ISSUE' && !post.isNotice && (
+                  <Badge variant="warning">민원</Badge>
+                )}
+                <p className="text-sm font-semibold text-neutral-900 truncate">{post.title}</p>
+              </div>
+              <p className="line-clamp-2 text-sm text-neutral-500 mb-2">{post.content}</p>
+              <div className="flex items-center justify-between text-xs text-neutral-400">
+                <span>{formatDate(post.createdAt)}</span>
+                <span>💬 {post.commentCount}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}

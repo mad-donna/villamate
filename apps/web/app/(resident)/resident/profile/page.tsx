@@ -229,6 +229,10 @@ export default function ResidentProfilePage() {
           onClick: () => setPasswordSheetOpen(true),
         },
         {
+          label: '내 게시글',
+          href: '/profile/my-posts',
+        },
+        {
           label: '알림',
           href: '/profile/notifications',
         },

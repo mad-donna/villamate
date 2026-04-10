@@ -49,6 +49,9 @@ export default function ResidentPostDetailPage({
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [commentText, setCommentText] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [commentError, setCommentError] = useState('');
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
@@ -78,6 +81,27 @@ export default function ResidentPostDetailPage({
 
     fetchPost();
   }, [villaId, postId]);
+
+  async function handleCommentSubmit() {
+    if (!commentText.trim() || commentSubmitting) return;
+    setCommentSubmitting(true);
+    setCommentError('');
+    try {
+      const res = await fetch(`/api/villas/${villaId}/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: commentText.trim() }),
+      });
+      const data = await res.json() as { comment?: Comment; error?: string };
+      if (!res.ok) throw new Error(data.error ?? '댓글 등록에 실패했습니다.');
+      if (data.comment) setComments((prev) => [...prev, data.comment!]);
+      setCommentText('');
+    } catch (e) {
+      setCommentError(e instanceof Error ? e.message : '댓글 등록에 실패했습니다.');
+    } finally {
+      setCommentSubmitting(false);
+    }
+  }
 
   // 입주민은 본인 게시글만 삭제 가능
   const canDelete = post && post.author.id === userId;
@@ -173,17 +197,17 @@ export default function ResidentPostDetailPage({
             )}
           </div>
 
-          {/* 댓글 섹션 (Phase 2) */}
+          {/* 댓글 섹션 */}
           <div className="bg-white rounded-2xl shadow-sm p-4">
             <p className="text-sm font-semibold text-neutral-700 mb-3">
               댓글 {comments.length}
             </p>
             {comments.length === 0 ? (
               <p className="text-sm text-neutral-400 text-center py-4">
-                댓글 기능은 준비 중입니다.
+                아직 댓글이 없습니다.
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 mb-4">
                 {comments.map((c) => (
                   <div key={c.id} className="border-b border-neutral-100 pb-3 last:border-0 last:pb-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -195,6 +219,28 @@ export default function ResidentPostDetailPage({
                 ))}
               </div>
             )}
+            <div className="mt-3 border-t border-neutral-100 pt-3">
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="댓글을 입력하세요"
+                rows={2}
+                className="w-full text-sm border border-neutral-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-primary-400 transition-colors"
+              />
+              {commentError && (
+                <p className="text-xs text-error-500 mt-1">{commentError}</p>
+              )}
+              <div className="flex justify-end mt-2">
+                <button
+                  type="button"
+                  onClick={handleCommentSubmit}
+                  disabled={commentSubmitting}
+                  className="text-sm font-semibold text-primary-600 disabled:opacity-50 min-h-[36px] px-3"
+                >
+                  {commentSubmitting ? '등록 중...' : '등록'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

@@ -84,9 +84,10 @@ export async function POST(
       content?: string;
       category?: 'GENERAL' | 'NOTICE' | 'ISSUE';
       isNotice?: boolean;
+      imageUrl?: string;
     };
 
-    const { title, content, category = 'GENERAL', isNotice = false } = body;
+    const { title, content, category = 'GENERAL', isNotice = false, imageUrl } = body;
 
     if (!title?.trim()) return err('제목을 입력해주세요.', 400);
     if (!content?.trim()) return err('내용을 입력해주세요.', 400);
@@ -114,6 +115,7 @@ export async function POST(
         content: content.trim(),
         category,
         isNotice,
+        imageUrl: imageUrl ?? null,
       },
       include: {
         author: { select: { id: true, name: true } },

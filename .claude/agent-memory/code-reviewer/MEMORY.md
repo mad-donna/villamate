@@ -1,5 +1,19 @@
 # Code Reviewer Memory — Villamate
 
+## Phase 1 Web Rewrite (Next.js 15 App Router, Apr 2026)
+- New stack: `apps/web/` under `D:/villamate/apps/web/`. Prisma + PostgreSQL, JWT Bearer auth via middleware.ts.
+- Auth: `lib/auth.ts` uses `jose` JWTs. JWT_SECRET falls back to `dev-secret-change-me` in non-prod — guarded by runtime throw in production (added Apr 2026).
+- Middleware injects `x-user-id`, `x-user-role`, `x-user-email`, `x-user-villa-id` headers for downstream routes.
+- Cron routes live in `app/api/cron/` and are excluded from JWT middleware via `PUBLIC_API` array. Each route does its own `CRON_SECRET` check.
+- Vercel cron: `vercel.json` at repo root (`D:/villamate/vercel.json`) with `rootDirectory: apps/web`. publish-invoices runs UTC 15:00 (= KST 00:00); expire-subscriptions UTC 00:00; invoice-reminder UTC 01:00.
+- InvoicePayment unique constraint: `[invoiceId, roomNumber]`. roomNumber denormalized to preserve history after resident moves out.
+- CSRF defense: `middleware.ts` checks Origin/Referer for mutating methods; allows pass-through when Authorization header present (mobile/API clients). This is intentional but means stolen JWT bypasses CSRF.
+
+## Recurring Anti-patterns (Phase 1 codebase)
+- CRON_SECRET checked as `auth !== \`Bearer \${process.env.CRON_SECRET}\`` — if env var is undefined this becomes `Bearer undefined` and never matches, but is now guarded by explicit undefined check.
+- Notification dedup for invoice-reminder relied on `createdAt` range rather than title-based lookup — caused 3-day reminders to suppress 7-day reminders. Fixed Apr 2026 to use `title: { contains: '최종' }`.
+- Transaction success assumed before catch — publish-invoices originally incremented `published` counter after `$transaction` with no try/catch; notifications fired even on DB failure. Fixed Apr 2026.
+
 ## Project Overview
 - React Native (Expo) frontend + Node/Express + Prisma backend
 - DB: PostgreSQL via Supabase (DATABASE_URL / DIRECT_URL env vars)

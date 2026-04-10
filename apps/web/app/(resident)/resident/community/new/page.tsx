@@ -25,14 +25,30 @@ export default function ResidentNewPostPage() {
   const [contentError, setContentError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
     const user = JSON.parse(raw) as { residentVilla?: { id?: string }; villa?: { id?: string } };
     setVillaId(user.residentVilla?.id ?? user.villa?.id ?? '');
   }, []);
+
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
+  function handleRemoveImage() {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
 
   function handleContentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setContent(e.target.value);
@@ -68,6 +84,15 @@ export default function ResidentNewPostPage() {
     setSubmitting(true);
     setSubmitError('');
     try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        const fd = new FormData();
+        fd.append('file', imageFile);
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
+        const uploadData = await uploadRes.json() as { url?: string; error?: string };
+        if (!uploadRes.ok) throw new Error(uploadData.error ?? '이미지 업로드에 실패했습니다.');
+        imageUrl = uploadData.url;
+      }
       const res = await fetch(`/api/villas/${villaId}/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,7 +100,8 @@ export default function ResidentNewPostPage() {
           title: title.trim(),
           content: content.trim(),
           category,
-          isNotice: false, // 입주민은 공지 불가
+          isNotice: false,
+          imageUrl,
         }),
       });
       const data = await res.json() as { error?: string };
@@ -142,6 +168,40 @@ export default function ResidentNewPostPage() {
           error={contentError}
           style={{ minHeight: '100px' }}
         />
+
+        {/* 이미지 첨부 */}
+        <div>
+          <p className="text-sm font-medium text-neutral-700 mb-2">이미지 첨부 (선택)</p>
+          {imagePreview ? (
+            <div className="relative">
+              <img src={imagePreview} alt="미리보기" className="w-full rounded-xl object-cover max-h-60" />
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm"
+                aria-label="이미지 제거"
+              >✕</button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full border-2 border-dashed border-neutral-200 rounded-xl py-6 flex flex-col items-center gap-2 text-neutral-400 hover:border-primary-300 hover:text-primary-500 transition-colors"
+            >
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
+              </svg>
+              <span className="text-sm">사진 추가</span>
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageChange}
+          />
+        </div>
 
         {submitError && (
           <p className="text-sm text-error-500 text-center">{submitError}</p>
