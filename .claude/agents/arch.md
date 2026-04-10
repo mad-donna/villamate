@@ -1951,3 +1951,56 @@ StoredUser {
 |------|------|---------|
 | PgBouncer 설정 미적용 | DATABASE_URL에 `?pgbouncer=true` 미설정 시 간헐적 prepared statement 오류 | Critical (운영) |
 | API catch 블록 에러 삼킴 | 다수의 API 라우트가 `catch { }` 또는 `catch (e) {}` — 원인 파악 불가 | Medium |
+
+---
+
+## 2026-04-10 아키텍처 변경 기록
+
+### 1. Supabase Storage 이미지 업로드 활성화
+
+- `/api/upload/route.ts` stub → 완전 구현
+- **버킷**: `posts` (Public 설정 필요)
+- **파일명 패턴**: `posts/{timestamp}-{UUID}.{ext}`
+- **서버 사이드**: `@supabase/supabase-js` createClient + SUPABASE_SERVICE_ROLE_KEY 사용
+- **파일 타입**: jpeg/png/webp/gif 화이트리스트, 5MB 제한
+- F-48(게시글 이미지), 향후 F-64(영수증), F-68(건물이력 사진) 공용 엔드포인트
+
+### 2. 투표 시스템 API 완전 구현
+
+기존 stub이었던 3개 라우트 모두 완성:
+
+| 라우트 | 변경 |
+|--------|------|
+| `GET/POST /api/villas/[villaId]/polls` | stub → 완전 구현 |
+| `GET /api/villas/[villaId]/polls/[pollId]` | stub → 완전 구현 |
+| `POST /api/villas/[villaId]/polls/[pollId]/vote` | stub → 완전 구현 |
+
+**1세대 1표 강제 구조**:
+- DB: `Vote.@@unique([pollId, roomNumber])` — 이미 스키마에 존재
+- API: Prisma P2002(unique constraint) 캐치 → 409 Conflict 반환
+
+**권한 계층**:
+- 투표 생성: `villa.adminId === user.sub` (동대표 전용)
+- 투표 참여: `residentType === 'HEAD'` + `status === 'APPROVED'` (승인된 세대주)
+- 결과 조회: 모든 빌라 구성원 (기명 호수 목록은 admin 또는 마감 후만)
+
+### 3. 리소스 필터링 API 패턴 추가
+
+```
+GET /api/villas/[villaId]/posts/my
+```
+
+`/my` suffix 패턴 — 현재 인증 사용자의 리소스만 반환. posts 도메인 최초 적용. 향후 tickets/my 등 확장 가능.
+
+### 4. 입주민 빌라 허브 페이지 구현
+
+`/villa/page.tsx` stub → 메뉴 허브 페이지로 완성. 전자투표/청구서/민원/장부/건물이력 5개 메뉴 진입점. 관리자의 `/manage` 페이지와 동일한 카드 메뉴 패턴 적용.
+
+### 5. 기술 부채 해소
+
+| 항목 | 이전 | 현재 |
+|------|------|------|
+| `/api/upload` | TODO stub | ✅ Supabase Storage 완전 구현 |
+| 투표 API 3개 | TODO stub | ✅ 완전 구현 |
+| 투표 UI (admin/resident) | 제목만 있는 빈 페이지 | ✅ 완전 구현 |
+| `.claude/settings.local.json` git 추적 | Git 추적 중 (push 차단) | ✅ `git rm --cached`로 영구 제거 |

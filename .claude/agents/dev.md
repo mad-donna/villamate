@@ -1423,3 +1423,83 @@ setVillaId(user.residentVilla?.id ?? user.villa?.id ?? '');
 })
 .catch(() => setFetchError(true))  // 에러는 별도 상태로
 ```
+
+---
+
+## 2026-04-10 구현 기록
+
+### 오늘 완료된 기능
+
+| 기능 | 파일 | 패턴 |
+|------|------|------|
+| F-46 댓글 UI | `(admin)/community/[id]/page.tsx`, `(resident)/resident/community/[id]/page.tsx` | 댓글 등록 후 re-fetch 없이 setComments 직접 업데이트 |
+| F-47 내 게시글 API | `api/villas/[villaId]/posts/my/route.ts` | `/my` suffix 필터링 패턴 |
+| F-47 내 게시글 UI | `(resident)/resident/profile/my-posts/page.tsx` | profile 섹션 하위 신규 페이지 |
+| F-48 이미지 업로드 API | `api/upload/route.ts` | Supabase Storage, FormData, service role key |
+| F-48 이미지 첨부 UI | `community/new/page.tsx` (admin + resident) | 점선 박스 → 이미지 미리보기 + ✕ 버튼 |
+| F-54 투표 생성 API+UI | `api/villas/[villaId]/polls/route.ts` (POST), `manage/polls/new/page.tsx` | 선택지 동적 추가/삭제, datetime-local input |
+| F-55 투표 참여 API+UI | `api/villas/[villaId]/polls/[pollId]/vote/route.ts`, `villa/polls/[id]/page.tsx` | HEAD 세대주 확인, 투표 후 즉시 결과 전환 |
+| F-56 1세대1표 | API에서 P2002 처리 | `@@unique([pollId, roomNumber])` 이미 스키마 존재 |
+| F-57 결과 시각화 | admin `manage/polls/[id]/page.tsx`, resident `villa/polls/[id]/page.tsx` | 퍼센트 바, 기명 시 호수 목록 표시 |
+
+### 신규 확립된 패턴
+
+#### 투표 후 즉시 결과 전환 (re-fetch 없음)
+
+```typescript
+// 투표 성공 시 setMyVotedOptionId + setPoll 로컬 업데이트
+setMyVotedOptionId(selectedOptionId);
+setPoll((prev) => {
+  const newTotal = prev.totalVotes + 1;
+  return {
+    ...prev,
+    totalVotes: newTotal,
+    options: prev.options.map((o) => {
+      const newCount = o.id === selectedOptionId ? o.voteCount + 1 : o.voteCount;
+      return { ...o, voteCount: newCount, percent: Math.round((newCount / newTotal) * 100) };
+    }),
+  };
+});
+```
+
+#### Supabase Storage 업로드 패턴
+
+```typescript
+// API route에서 service role key로 클라이언트 생성
+const supabase = createClient(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+// FormData에서 File 객체 추출
+const file = formData.get('file') as File | null;
+const arrayBuffer = await file.arrayBuffer();
+await supabase.storage.from('posts').upload(fileName, arrayBuffer, { contentType: file.type });
+const { data } = supabase.storage.from('posts').getPublicUrl(fileName);
+```
+
+#### 이미지 첨부 UI 패턴 (글쓰기 폼)
+
+```tsx
+// 이미지 없을 때: 점선 박스 버튼 (fileInputRef.current?.click() 트리거)
+// 이미지 있을 때: 미리보기 + 절대 위치 ✕ 버튼
+// <input type="file"> hidden으로 숨김
+```
+
+#### Prisma unique constraint 에러 처리
+
+```typescript
+try {
+  await prisma.vote.create({ ... });
+} catch (e: unknown) {
+  if (e !== null && typeof e === 'object' && 'code' in e && e.code === 'P2002') {
+    return err('이미 투표한 세대입니다.', 409);
+  }
+  throw e; // 재throw로 외부 catch 전달
+}
+```
+
+### 알려진 기술 부채 (2026-04-10 기준)
+
+| 항목 | 심각도 | 비고 |
+|------|--------|------|
+| Supabase `posts` 버킷 미생성 | High | 배포 환경에서 수동 생성 + Public 설정 필요 |
+| F-58 투표 참여율 바 | Low | 전체 세대수 대비 % 미구현 (voteCount 숫자만 표시) |
+| `villa/page.tsx` 일부 서브페이지 stub | Medium | ledger, building, invoices 페이지는 내용 있으나 일부 미완성 |

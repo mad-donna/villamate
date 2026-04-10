@@ -328,3 +328,77 @@ Grep with pattern="<search term>" path="C:\Users\dmleh\.claude\projects\D--villa
 |------|--------|------|
 | API catch 블록 에러 로깅 미흡 | Medium | `/api/villas/route.ts`에 `console.error` 추가 완료, 나머지 라우트 일괄 적용 필요 |
 | Vercel 함수 에러 알림 | Medium | 운영 중 500 에러 무음 처리 — Vercel Webhook/Slack 알림 미설정 |
+
+---
+
+## 2026-04-10 업데이트
+
+### F-46/47/48 커뮤니티 확장 QA 체크리스트
+
+#### F-46 댓글 작성
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `POST /posts/[postId]/comments` | villaId 소속 확인 + postId 존재 확인 이중 검증 | ✅ |
+| 댓글 입력 폼 | 빈 댓글 제출 시 무시 (클라이언트 trim 체크) | ✅ |
+| 댓글 등록 후 | re-fetch 없이 응답 comment 객체를 setComments에 직접 추가 | ✅ |
+| `commentSubmitting` 가드 | 중복 제출 방지 (disabled 처리) | ✅ |
+
+#### F-47 내 게시글
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `GET /posts/my` | authorId === user.sub 필터 — 타인 게시글 노출 불가 | ✅ |
+| 빌라 소속 확인 | admin OR resident 둘 다 허용 | ✅ |
+
+#### F-48 이미지 첨부
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `/api/upload` | 파일 타입 화이트리스트 (jpeg/png/webp/gif만 허용) | ✅ |
+| `/api/upload` | 5MB 파일 크기 제한 | ✅ |
+| `/api/upload` | 인증 필수 (JWT getUser 확인) | ✅ |
+| 파일명 | `Date.now()-UUID.ext` 패턴 — 충돌 불가 | ✅ |
+| imageUrl 저장 | posts POST API에서 `imageUrl ?? null` 처리 | ✅ |
+| ⚠️ Supabase `posts` 버킷 | Public 설정 필요 — 미설정 시 이미지 URL 404 | 배포 시 수동 확인 필요 |
+
+### F-54/55/56 전자투표 QA 체크리스트
+
+#### 투표 생성 (F-54)
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `POST /polls` | villa.adminId === user.sub 검증 — 관리자 전용 | ✅ |
+| 종료일 검증 | `endDate <= new Date()` 시 400 반환 | ✅ |
+| 선택지 최소 2개 | validOptions.length < 2 시 400 반환 | ✅ |
+
+#### 투표 참여 (F-55)
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `POST /vote` | ResidentType.HEAD 확인 — 세대주만 투표 가능 | ✅ |
+| `POST /vote` | status === 'APPROVED' 확인 — 미승인 입주민 차단 | ✅ |
+| 마감 투표 | `endDate < now()` 시 400 반환 | ✅ |
+| 유효한 선택지 | optionId가 해당 poll의 option인지 검증 | ✅ |
+
+#### 1세대 1표 (F-56)
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| DB 제약 | `@@unique([pollId, roomNumber])` — DB 레벨 강제 | ✅ |
+| Prisma P2002 처리 | unique 위반 → "이미 투표한 세대입니다." 409 반환 | ✅ |
+| 중복 클릭 | `voting` state로 클라이언트 중복 제출 방지 | ✅ |
+
+#### 기명 투표 데이터 노출 정책
+
+- 관리자: 항상 호수 목록 열람 가능
+- 입주민: 투표 마감 후에만 열람 가능
+- 익명 투표: 항상 호수 목록 비공개
+
+#### 알려진 미구현 항목 (오늘 기준)
+
+| 항목 | 비고 |
+|------|------|
+| F-58 투표 참여율 프로그레스 바 | 현재 voteCount 숫자만 표시, 전체 세대 대비 % 바 없음 |
+| F-59 투표 수정 | 마감 전 수정 미구현 |
+| F-60 미참여자 독촉 알림 | 미구현 |

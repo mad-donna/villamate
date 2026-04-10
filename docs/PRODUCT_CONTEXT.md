@@ -1853,3 +1853,61 @@ pgProvider String?  // 결제 PG사 (예: html5_inicis)
 | invoice-reminder N+1 쿼리 | Medium | 대규모 빌라에서 성능 저하 가능 |
 | 알림 API 페이지네이션 | Low | `take: 50` 하드코딩 |
 | 초대 코드 Rate Limit | Low | 브루트포스 방어 없음 |
+
+---
+
+## 2026-04-10 업데이트
+
+### 1. 아키텍처 변경점
+
+**커뮤니티 댓글 시스템 완성 (F-46)**
+- 기존 "댓글 기능은 준비 중입니다." 플레이스홀더 → 실제 댓글 작성/조회 UI 구현
+- 동대표 커뮤니티(`(admin)/community/[id]`)와 입주민 커뮤니티(`(resident)/resident/community/[id]`) 양쪽에 동일 패턴 적용
+- 댓글 등록 후 서버 재요청 없이 로컬 state에 즉시 append (optimistic-style UX)
+
+**게시글 이미지 첨부 인프라 완성 (F-48)**
+- `/api/upload` 라우트 실구현 — Supabase Storage service role key 사용, `posts/` 버킷에 업로드
+- 파일 유효성 검사: allowedTypes whitelist(`image/jpeg`, `image/png`, `image/webp`, `image/gif`), 5MB 최대
+- 파일명: `posts/${Date.now()}-${crypto.randomUUID()}.{ext}` 충돌 방지
+- 반환: `{ url: publicUrl }` — 게시글 생성 시 `imageUrl`로 전달
+
+**전자투표 도메인 풀 구현 (F-54~57)**
+- 3개 API 라우트 모두 stub → 실동작으로 전환:
+  - `GET/POST /api/villas/[villaId]/polls` — 목록 조회 + ADMIN 생성
+  - `GET /api/villas/[villaId]/polls/[pollId]` — 상세 + myVotedOptionId + isHead + isAdmin
+  - `POST /api/villas/[villaId]/polls/[pollId]/vote` — 투표 처리
+- 1세대 1표 이중 검증: DB `@@unique([pollId, roomNumber])` + Prisma P2002 catch 패턴
+- 투표 결과 즉시 반영: 서버 재요청 없이 `totalVotes`, per-option `voteCount/percent` 로컬 업데이트
+
+**내 게시글 조회 API 신설 (F-47)**
+- `GET /api/villas/[villaId]/posts/my` — `authorId: user.sub` 필터, 본인 글 목록 반환
+- 입주민 프로필 섹션에 "내 게시글" 메뉴 링크 추가
+
+### 2. API 변경
+
+| 엔드포인트 | 메서드 | 인증 | 설명 |
+|-----------|--------|------|------|
+| `/api/upload` | POST | JWT | Supabase Storage 파일 업로드 (이미지, 최대 5MB) |
+| `/api/villas/[villaId]/posts/my` | GET | JWT | 본인이 작성한 게시글 목록 |
+| `/api/villas/[villaId]/polls` | GET | JWT | 투표 목록 (진행중/마감 분리, voteCount/optionCount 포함) |
+| `/api/villas/[villaId]/polls` | POST | JWT(ADMIN) | 투표 생성 (선택지 중첩 생성) |
+| `/api/villas/[villaId]/polls/[pollId]` | GET | JWT | 투표 상세 (myVotedOptionId, isHead, isAdmin, roomNumbers) |
+| `/api/villas/[villaId]/polls/[pollId]/vote` | POST | JWT(HEAD) | 투표 참여 (1세대 1표 강제, P2002 → 409) |
+
+### 3. 데이터 모델 변경
+
+스키마 변경 없음 — `Poll`, `PollOption`, `Vote` 모델(`@@unique([pollId, roomNumber])`)은 기존 schema.prisma에 이미 정의되어 있었음. 이번 세션에서 API/UI 구현을 완성함.
+
+### 4. 기술 부채 현황 (2026-04-10 업데이트)
+
+| 항목 | 심각도 | 내용 |
+|------|--------|------|
+| `DATABASE_URL ?pgbouncer=true` 미적용 | **Critical** | Vercel 환경변수 수동 수정 필요 — 미적용 시 간헐적 운영 장애 |
+| Supabase `posts` 버킷 수동 생성 필요 | **High** | Supabase Dashboard에서 Public 버킷으로 직접 생성해야 F-48 이미지 업로드 동작 |
+| PortOne 환경변수 | High | 운영 전 PORTONE_IMP_KEY/SECRET 설정 필수 |
+| API catch 블록 에러 로깅 | Medium | 대부분의 API 라우트에서 에러를 삼키고 500만 반환 — 원인 추적 불가 |
+| migration 파일 부재 | Medium | `prisma db push` 사용으로 rollback 이력 없음 |
+| 외부 청구 Rate Limit | Medium | 공개 엔드포인트에 요청 빈도 제한 없음 |
+| invoice-reminder N+1 쿼리 | Medium | 대규모 빌라에서 성능 저하 가능 |
+| 알림 API 페이지네이션 | Low | `take: 50` 하드코딩 |
+| 초대 코드 Rate Limit | Low | 브루트포스 방어 없음 |
