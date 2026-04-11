@@ -402,3 +402,51 @@ Grep with pattern="<search term>" path="C:\Users\dmleh\.claude\projects\D--villa
 | F-58 투표 참여율 프로그레스 바 | 현재 voteCount 숫자만 표시, 전체 세대 대비 % 바 없음 |
 | F-59 투표 수정 | 마감 전 수정 미구현 |
 | F-60 미참여자 독촉 알림 | 미구현 |
+
+---
+
+## 2026-04-11 업데이트
+
+### 전체 기능 QA 점검 결과
+
+#### Major Issues (수정 완료)
+
+| # | 위치 | 이슈 | 수정 |
+|---|------|------|------|
+| 1 | 관리자 5개 파일 | `user.villaId` → 항상 null | `user.villa?.id`로 수정 |
+| 2 | `community/page.tsx:73` | `/community/new` 404 라우팅 | `/resident/community/new` |
+| 3 | `GET /tickets` | ADMIN 타 빌라 민원 열람 가능 | `villa.adminId !== user.sub` 검증 추가 |
+| 4 | `tickets/[ticketId]/route.ts` | 알림 실패 시 500 반환 (상태는 변경됨) | `.catch()` 비동기 분리 |
+| 5 | TODO API 4개 | 200 OK 반환 (silent failure) | 501 반환으로 교체 |
+| 6 | `/api/pay/[billId]/confirm` | Rate Limit 없는 공개 엔드포인트 | 인메모리 billId당 1분 5회 제한 |
+
+#### Minor Issues (수정 완료)
+
+| # | 위치 | 이슈 | 수정 |
+|---|------|------|------|
+| 1 | `POST /tickets` | try/catch 누락 | 전체 감쌈 |
+| 2 | `invoices/my` | PENDING 신청자도 청구서 조회 가능 | `status: 'APPROVED'` 필터 추가 |
+| 3 | `dashboard` | `?role=ADMIN` 쿼리 우회 가능 | JWT role만 사용 |
+| 4 | `upload/route.ts` | 클라이언트 MIME 신뢰 | 매직 바이트(JPEG/PNG/WebP/GIF) 검증 추가 |
+| 5 | `polls/[id]/page.tsx` | 낙관적 업데이트 퍼센트 오차 | 투표 후 서버 재조회 |
+| 6 | `invoice-reminder/route.ts` | N+1 쿼리 | 단일 OR 쿼리로 최적화 |
+| 7 | `notifications/route.ts` | `take: 50` 하드코딩 | cursor 기반 페이지네이션 |
+| 8 | `vercel.json` | Cron KST 오전 실행 오류 | `"0 15 * * *"` (KST 00:00)으로 통일 |
+
+#### Positive (검증 통과)
+- 1세대 1표: DB unique + API + 클라이언트 3중 방어 + Race condition P2002 처리 ✅
+- PortOne 결제: status + 금액 + merchant_uid 3중 검증 ✅
+- CSRF 방어, 에러 메시지 보안, Cron 보안 ✅
+
+#### 해소된 기술 부채
+- `invoice-reminder` N+1 쿼리 → 단일 OR 쿼리 최적화 ✅
+- 알림 `take: 50` → cursor 페이지네이션 ✅
+
+#### 남은 기술 부채
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `/api/pay/confirm` Rate Limit | Medium | 인메모리 방식 → 서버리스 인스턴스 간 공유 불가. Upstash Redis 전환 권장 |
+| 초대 코드 Rate Limit | Low | 6자리 코드 브루트포스 방어 없음 |
+| 이미지 업로드 고아 파일 | Low | 게시글 POST 실패 시 Supabase Storage에 파일 잔존 |
+| API catch 에러 로깅 | Low | 일부 라우트 `console.error` 미적용 |

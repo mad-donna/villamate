@@ -373,3 +373,64 @@ border-t border-neutral-100              ← 콘텐츠와 구분선
 ```
 
 → `needsSetup` 화면(빌라 등록 유도)과 명확히 구분. 서버 오류 시 잘못된 안내 방지.
+
+---
+
+## 2026-04-11 업데이트
+
+### 전체 디자인 점검 결과
+
+#### Critical Issues
+
+**1. 하드코딩 색상 (디자인 토큰 이탈)**
+- `WidgetCard.tsx`: `border-l-blue-600`, `border-l-red-500` 등 Tailwind 기본 팔레트 직접 사용
+- `bg-blue-600` → `bg-primary-600`, `border-l-red-500` → `border-l-error-500` 등으로 교체 필요
+- **미수정** — 다음 세션에서 처리 예정
+
+**2. `alert()` / `confirm()` 브라우저 기본 다이얼로그 18개 파일**
+- OS 스타일 팝업 → VillaMate `rounded-2xl` 디자인 언어와 단절
+- `manage/tickets/page.tsx`의 토스트 패턴(`bg-neutral-800`) 전체 확장 필요
+- **미수정** — 다음 세션에서 처리 예정
+
+#### Should Fix (미수정, 다음 세션)
+
+- 로딩 상태 3가지 패턴 혼재 → `<Skeleton>` 컴포넌트로 통일 필요
+- 에러 상태 컴포넌트 불일치 → `<ErrorState message onRetry>` 전역 컴포넌트 필요
+- `PENDING` Badge 색상 입주민(neutral) vs 관리자(warning) 불일치
+- `<Card>` 컴포넌트 미사용 — 인라인 `p-4/p-5/p-6` 혼재
+- `<Button>` 직접 스타일 선언 일부 잔존 (hover/focus/disabled 누락)
+
+#### 접근성 이슈 (미수정)
+
+| 위치 | 이슈 |
+|------|------|
+| `Chip.tsx` | `<span>` 클릭 → `<button>` 교체 필요 |
+| `NotificationList.tsx` | `<li onClick>` → `role="button" tabIndex={0}` 필요 |
+| `profile/page.tsx:293` | 터치 타깃 `min-h-[40px]` → `min-h-[44px]` |
+
+#### 완료된 디자인 작업 (2026-04-11)
+
+**F-58 투표 참여율 프로그레스 바**
+- `PollCard`: voteCount/totalHouseholds 비율 → `h-1.5` 프로그레스 바
+- 진행 중: `bg-primary-500` / 마감: `bg-neutral-400` 색상 구분
+- `N/M세대 (X%)` 텍스트 + 바 조합
+
+**F-70/71 주차 관리 UI**
+- 차량 카드: 번호판(bold) + 방문 badge(warning-50/700) + 차종/호수/출차 예정
+- 번호판 검색: 검색 바 + 인라인 결과 표시
+- 일반/방문 토글: 커스텀 토글 스위치 (`w-10 h-6 rounded-full`)
+
+**F-62/63/64 장부 UI**
+- Summary 카드 3열 그리드: 수입(green-600) / 지출(red-500) / 잔액(primary-600)
+- 수입 금액: `text-success-600 + "원"` / 지출 금액: `text-error-500 - "원"`
+- 영수증 첨부: 점선 박스 → 업로드 → 썸네일 미리보기 패턴
+
+#### 색상 토큰 보완 필요 (미수정)
+
+`globals.css`에 누락된 중간 토큰:
+```css
+--color-warning-50, -100, -200, -700
+--color-success-50, -200, -700
+--color-error-50, -200
+--color-neutral-600
+```

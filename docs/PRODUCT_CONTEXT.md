@@ -1911,3 +1911,81 @@ pgProvider String?  // 결제 PG사 (예: html5_inicis)
 | invoice-reminder N+1 쿼리 | Medium | 대규모 빌라에서 성능 저하 가능 |
 | 알림 API 페이지네이션 | Low | `take: 50` 하드코딩 |
 | 초대 코드 Rate Limit | Low | 브루트포스 방어 없음 |
+
+---
+
+## 2026-04-11 아키텍처 변경 및 QA 반영
+
+### 1. 아키텍처 변경점
+
+**보안 패치 (QA 결과 반영)**
+- `GET /api/villas/[villaId]/tickets`: ADMIN 역할이 URL villaId를 조작해 타 빌라 민원을 열람할 수 있던 취약점 수정 → JWT sub와 villa.adminId 비교로 소속 빌라 강제 검증
+- `GET /api/dashboard`: `?role=ADMIN` 쿼리 파라미터로 권한 우회 가능하던 취약점 제거 → JWT role만 신뢰
+- `POST /api/upload`: Content-Type 헤더 위조를 통한 비이미지 파일 업로드 차단 → 매직 바이트(첫 12바이트) MIME 검증 추가 (JPEG/PNG/GIF/WebP 지원)
+- `POST /api/pay/[billId]/confirm`: 비인증 엔드포인트 DDoS 방어 → 인메모리 Map 기반 billId당 1분 5회 Rate Limit 추가
+
+**비동기 패턴 개선**
+- 티켓 상태 변경 시 알림 발송 실패가 HTTP 500으로 전파되던 문제 수정 → `.catch((e) => console.error(...))` 패턴으로 분리, 알림 실패가 메인 응답에 영향 없음
+
+**신규 도메인: 차량 관리 (F-70/71)**
+- `Vehicle` 모델 활용: plateNumber, modelName, isVisitor, expectedDeparture, registeredBy
+- GET 시 ADMIN은 전체, 입주민은 본인 등록 차량만 조회
+- `?plate=` 쿼리 파라미터로 부분 일치 검색 (`contains` + `mode: 'insensitive'`)
+- 번호판 유효성: `/^[가-힣0-9]{4,10}$/` 서버 사이드 정규식 검증
+- 중복 등록 시 Prisma P2002 → 409 Conflict
+
+**신규 도메인: 공용 장부 (F-62/63/64)**
+- `LedgerTransaction` 모델: type(`INCOME`/`EXPENSE`), amount(Decimal), description, transactionDate, receiptUrl, createdBy
+- GET: year+month 쿼리 파라미터로 월별 필터, summary `{ totalIncome, totalExpense, balance }` 자동 집계
+- POST: ADMIN 전용, 영수증 이미지는 기존 `/api/upload` 재사용 → `receiptUrl` 저장
+- 입주민/관리자 모두 조회 가능, 등록은 ADMIN 전용
+
+**투표 참여율 (F-58)**
+- `GET /api/villas/[villaId]/polls` 응답에 `totalHouseholds` 추가 (HEAD + APPROVED 세대 수 병렬 집계)
+- `Promise.all([polls query, count query])`로 N+1 없이 단일 요청
+- 프론트엔드 PollCard에 참여율 프로그레스 바 (`h-1.5`, primary/neutral 색상 구분)
+
+**성능 개선**
+- `GET /api/cron/invoice-reminder`: N+1 쿼리 → 단일 OR 배치 쿼리로 최적화
+- `GET /api/notifications`: `take: 50` 하드코딩 → cursor 기반 페이지네이션 (`limit` 최대 50, `nextCursor` 반환)
+
+**Cron 스케줄 수정**
+- `vercel.json`: invoice-reminder, expire-subscriptions 모두 `"0 15 * * *"` (UTC) = KST 자정으로 통일
+
+### 2. API 변경
+
+| 엔드포인트 | 메서드 | 인증 | 설명 |
+|-----------|--------|------|------|
+| `/api/villas/[villaId]/vehicles` | GET | JWT | 차량 목록 (ADMIN=전체, 입주민=본인) + `?plate=` 부분검색 |
+| `/api/villas/[villaId]/vehicles` | POST | JWT | 차량 등록 (번호판 정규식 검증, P2002→409) |
+| `/api/villas/[villaId]/vehicles/[vehicleId]` | DELETE | JWT | 차량 삭제 (본인 또는 ADMIN) |
+| `/api/villas/[villaId]/ledger` | GET | JWT | 장부 조회 (월별 필터, summary 포함) |
+| `/api/villas/[villaId]/ledger` | POST | JWT(ADMIN) | 장부 내역 등록 (영수증 URL 포함) |
+| `/api/villas/[villaId]/polls` | GET | JWT | **변경**: `totalHouseholds` 필드 추가 |
+| `/api/notifications` | GET | JWT | **변경**: cursor 페이지네이션 (`cursor`, `limit`, `nextCursor`) |
+| `/api/pay/[billId]/confirm` | POST | - | **변경**: Rate Limit 추가 (1분 5회) |
+| `/api/upload` | POST | JWT | **변경**: 매직 바이트 MIME 검증 추가 |
+
+**501로 교체된 미구현 API** (기존 200 OK 반환하던 TODO stub):
+- `POST /api/villas/[villaId]/polls/[pollId]/remind`
+- `POST /api/subscription/activate-coupon`
+
+### 3. 데이터 모델 변경
+
+스키마 변경 없음 — `Vehicle`, `LedgerTransaction` 모델은 기존 schema.prisma에 이미 정의되어 있었음. 이번 세션에서 API/UI 구현을 완성함.
+
+### 4. 기술 부채 현황 (2026-04-11 업데이트)
+
+| 항목 | 심각도 | 상태 | 내용 |
+|------|--------|------|------|
+| `DATABASE_URL ?pgbouncer=true` 미적용 | **Critical** | 미해결 | Vercel 환경변수 수동 수정 필요 |
+| Supabase `posts`/`receipts` 버킷 수동 생성 | **High** | 미해결 | Dashboard에서 Public 버킷 직접 생성 필요 |
+| PortOne 환경변수 | High | 미해결 | 운영 전 PORTONE_IMP_KEY/SECRET 설정 필수 |
+| Rate Limit 인메모리 Map | Medium | 부분해결 | 결제 확인만 적용, 인메모리라 서버 재시작 시 초기화 / 멀티 인스턴스 미지원 |
+| migration 파일 부재 | Medium | 미해결 | `prisma db push` 사용으로 rollback 이력 없음 |
+| API catch 블록 에러 로깅 | Medium | 부분해결 | 알림 관련만 `console.error` 추가, 대부분 API는 여전히 500만 반환 |
+| 초대 코드 Rate Limit | Low | 미해결 | 브루트포스 방어 없음 |
+| 투표 낙관적 업데이트 제거 | Low | **해결** | 서버 재조회로 교체 (정확도 향상) |
+| 알림 API 페이지네이션 | Low | **해결** | cursor 기반 페이지네이션 구현 완료 |
+| invoice-reminder N+1 쿼리 | Medium | **해결** | 단일 OR 쿼리로 최적화 완료 |
+| Cron KST 스케줄 오류 | Medium | **해결** | `"0 15 * * *"` UTC로 통일 |

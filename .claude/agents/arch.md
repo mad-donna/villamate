@@ -2004,3 +2004,56 @@ GET /api/villas/[villaId]/posts/my
 | 투표 API 3개 | TODO stub | ✅ 완전 구현 |
 | 투표 UI (admin/resident) | 제목만 있는 빈 페이지 | ✅ 완전 구현 |
 | `.claude/settings.local.json` git 추적 | Git 추적 중 (push 차단) | ✅ `git rm --cached`로 영구 제거 |
+
+---
+
+## 2026-04-11 업데이트
+
+### 1. 아키텍처 변경점
+
+**차량 관리 도메인 신규 추가**
+- `Vehicle` 모델 기존 스키마에 존재 → API + UI 완전 구현
+- `GET/POST /api/villas/[villaId]/vehicles` — 목록/검색/등록
+- `DELETE /api/villas/[villaId]/vehicles/[vehicleId]` — 삭제
+- 번호판 검색은 `?plate=` 쿼리 파라미터로 부분 일치 검색 (별도 엔드포인트 없이 GET에 통합)
+
+**장부 도메인 완전 구현**
+- `LedgerTransaction` 모델 기존 스키마 → API + UI 완전 구현
+- `GET/POST /api/villas/[villaId]/ledger` — 월별 필터 + summary 포함
+- 입주민(조회 전용) / 관리자(등록 가능) 권한 분기
+
+**결제 확인 엔드포인트 Rate Limiting 추가**
+- `/api/pay/[billId]/confirm` — 인메모리 Map 기반 billId당 1분 5회 제한
+- ⚠️ 서버리스 인스턴스 간 공유 불가 — Upstash Redis 전환 시 교체 필요
+
+### 2. API 변경
+
+| 엔드포인트 | 변경 내용 |
+|-----------|----------|
+| `GET /polls` | `totalHouseholds` 필드 추가 (HEAD + APPROVED 세대수) |
+| `GET /tickets` | ADMIN 소속 빌라 검증 추가 (`villa.adminId !== user.sub` → 403) |
+| `GET /dashboard` | `?role` 쿼리 파라미터 제거 — JWT role만 신뢰 |
+| `POST /upload` | 매직 바이트 MIME 검증 추가 (바이너리 레벨) |
+| `GET /notifications` | `take:50` → cursor 기반 페이지네이션 (`limit`, `cursor`, `nextCursor`) |
+| `GET /villas/[villaId]/ledger` | 신규: 월별 장부 조회 + summary |
+| `POST /villas/[villaId]/ledger` | 신규: 장부 등록 (관리자 전용) |
+| `GET/POST /villas/[villaId]/vehicles` | 신규: 차량 목록/검색/등록 |
+| `DELETE /villas/[villaId]/vehicles/[vehicleId]` | 신규: 차량 삭제 |
+| TODO API 4개 | 200 OK → 501 반환 (ledger 제외 building-events, activate-coupon, polls/remind) |
+
+### 3. 보안 개선
+
+| 항목 | 내용 |
+|------|------|
+| `?role=ADMIN` 우회 | dashboard API에서 쿼리 파라미터 role 무시 |
+| MIME 스니핑 | 업로드 시 매직 바이트 실제 검증 |
+| Rate Limit | 결제 확인 API 인메모리 제한 |
+| 알림 비동기 분리 | 티켓 상태 변경 알림 실패가 200 응답에 영향 안 주도록 |
+
+### 4. Cron 스케줄 교정
+
+```
+invoice-reminder:    "0 1 * * *"  →  "0 15 * * *" (KST 00:00)
+expire-subscriptions: "0 0 * * *"  →  "0 15 * * *" (KST 00:00)
+publish-invoices:     "0 15 * * *"  (이미 올바름)
+```

@@ -1503,3 +1503,72 @@ try {
 | Supabase `posts` 버킷 미생성 | High | 배포 환경에서 수동 생성 + Public 설정 필요 |
 | F-58 투표 참여율 바 | Low | 전체 세대수 대비 % 미구현 (voteCount 숫자만 표시) |
 | `villa/page.tsx` 일부 서브페이지 stub | Medium | ledger, building, invoices 페이지는 내용 있으나 일부 미완성 |
+
+---
+
+## 2026-04-11 업데이트
+
+### 완료된 기능 구현
+
+#### F-58 투표 참여율 프로그레스 바
+
+**변경 파일**: `api/villas/[villaId]/polls/route.ts`, `(resident)/villa/polls/page.tsx`
+
+- `GET /polls` API에 `totalHouseholds` 추가 — `residentRecord.count({ residentType: 'HEAD', status: 'APPROVED' })`와 polls 쿼리를 `Promise.all`로 병렬 실행
+- `PollCard` 컴포넌트에 참여율 프로그레스 바 추가: `voteCount / totalHouseholds * 100`
+- 진행 중 `bg-primary-500` / 마감 `bg-neutral-400`
+
+#### F-70 차량 등록 + F-71 번호판 검색
+
+**신규 파일**: `api/villas/[villaId]/vehicles/route.ts`, `api/villas/[villaId]/vehicles/[vehicleId]/route.ts`, `(resident)/villa/vehicles/page.tsx`
+
+- 번호판 정규식: `/^[가-힣0-9]{4,10}$/`
+- 중복 번호판: Prisma P2002 catch → 409 반환
+- 번호판 검색: `?plate=` 쿼리로 `contains` 부분 일치
+- 입주민: 본인 차량만 / 관리자: 전체 목록
+- `villa/page.tsx`에 주차 관리 메뉴 추가
+
+#### F-62 장부 조회 + F-63 장부 등록 + F-64 영수증 첨부
+
+**변경/신규 파일**: `api/villas/[villaId]/ledger/route.ts`, `(resident)/villa/ledger/page.tsx`, `(admin)/manage/ledger/page.tsx`
+
+- GET: `year`+`month` 쿼리로 월별 필터 (`gte: 1일, lt: 다음달 1일`)
+- GET 응답에 `summary: { totalIncome, totalExpense, balance }` 포함
+- POST: 관리자 전용, `createdBy: user.sub` 저장
+- 영수증: 기존 `/api/upload` 재사용 → `receiptUrl`에 저장
+
+### 버그 수정 패턴 (오늘 확정된 코딩 규칙)
+
+**localStorage villaId 읽기 패턴**:
+```typescript
+// 관리자
+const user = JSON.parse(raw);
+return user.villa?.id ?? null;
+
+// 입주민 (겸용)
+return user.residentVilla?.id ?? user.villa?.id ?? null;
+```
+
+**알림 발송 비동기 분리 패턴**:
+```typescript
+// 잘못된 패턴 (알림 실패 시 500 반환)
+await notifyXxx(...);
+return ok(result);
+
+// 올바른 패턴 (알림 실패가 응답에 영향 없음)
+notifyXxx(...).catch((e) => console.error('[domain] 알림 실패:', e));
+return ok(result);
+```
+
+**TODO API 처리 원칙**:
+- 구현 전 API는 `return err('준비 중인 기능입니다.', 501)` — 200 OK 반환 금지
+
+### 알려진 기술 부채 (2026-04-11 기준)
+
+| 항목 | 심각도 | 비고 |
+|------|--------|------|
+| `/api/pay/confirm` Rate Limit 인메모리 | Medium | Upstash Redis 전환 권장 |
+| 디자인 토큰 이탈 (alert, 하드코딩 색상) | Medium | 다음 세션 처리 예정 |
+| `<Skeleton>` 컴포넌트 미통일 | Low | 일부 페이지 `animate-pulse` 인라인 사용 |
+| `<Card>` 컴포넌트 미사용 | Low | 인라인 `p-4/5/6` 혼재 |
+| Supabase `posts` 버킷 Public 설정 | High | 배포 환경 수동 확인 필요 |
