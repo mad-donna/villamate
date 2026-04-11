@@ -30,16 +30,22 @@ export async function GET(
     const access = await assertVillaAccess(villaId, user.sub);
     if (!access) return err('접근 권한이 없습니다.', 403);
 
-    const polls = await prisma.poll.findMany({
-      where: { villaId },
-      include: {
-        options: { select: { id: true, text: true } },
-        _count: { select: { votes: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [polls, totalHouseholds] = await Promise.all([
+      prisma.poll.findMany({
+        where: { villaId },
+        include: {
+          options: { select: { id: true, text: true } },
+          _count: { select: { votes: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.residentRecord.count({
+        where: { villaId, residentType: 'HEAD', status: 'APPROVED' },
+      }),
+    ]);
 
     return ok({
+      totalHouseholds,
       polls: polls.map((p) => ({
         id: p.id,
         title: p.title,

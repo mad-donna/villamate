@@ -14,6 +14,7 @@ interface Poll {
   optionCount: number;
   voteCount: number;
   isClosed: boolean;
+  totalHouseholds: number;
 }
 
 function formatDate(iso: string) {
@@ -28,6 +29,7 @@ export default function ResidentPollsPage() {
   const router = useRouter();
   const [villaId, setVillaId] = useState('');
   const [polls, setPolls] = useState<Poll[]>([]);
+  const [totalHouseholds, setTotalHouseholds] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -44,8 +46,9 @@ export default function ResidentPollsPage() {
     try {
       const res = await fetch(`/api/villas/${villaId}/polls`);
       if (!res.ok) throw new Error('fetch failed');
-      const data = await res.json() as { polls: Poll[] };
-      setPolls(data.polls);
+      const data = await res.json() as { polls: Poll[]; totalHouseholds: number };
+      setTotalHouseholds(data.totalHouseholds);
+      setPolls(data.polls.map((p) => ({ ...p, totalHouseholds: data.totalHouseholds })));
     } catch {
       setError('투표 목록을 불러오는 데 실패했습니다.');
     } finally {
@@ -118,6 +121,10 @@ export default function ResidentPollsPage() {
 }
 
 function PollCard({ poll, onClick }: { poll: Poll; onClick: () => void }) {
+  const participationRate = poll.totalHouseholds > 0
+    ? Math.round((poll.voteCount / poll.totalHouseholds) * 100)
+    : 0;
+
   return (
     <button
       type="button"
@@ -135,6 +142,22 @@ function PollCard({ poll, onClick }: { poll: Poll; onClick: () => void }) {
         <span>·</span>
         <span>{poll.isAnonymous ? '익명' : '기명'}</span>
       </div>
+      {poll.totalHouseholds > 0 && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-neutral-500">참여율</span>
+            <span className="font-medium text-neutral-700">
+              {poll.voteCount}/{poll.totalHouseholds}세대 ({participationRate}%)
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${poll.isClosed ? 'bg-neutral-400' : 'bg-primary-500'}`}
+              style={{ width: `${participationRate}%` }}
+            />
+          </div>
+        </div>
+      )}
     </button>
   );
 }
