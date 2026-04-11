@@ -94,24 +94,13 @@ export default function ResidentPollDetailPage({
       const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? '투표에 실패했습니다.');
 
-      // 투표 후 결과 반영
+      // 투표 후 서버에서 최신 결과 재조회 (낙관적 업데이트 시 퍼센트 오차 방지)
       setMyVotedOptionId(selectedOptionId);
-      setPoll((prev) => {
-        if (!prev) return prev;
-        const newTotal = prev.totalVotes + 1;
-        return {
-          ...prev,
-          totalVotes: newTotal,
-          options: prev.options.map((o) => {
-            const newCount = o.id === selectedOptionId ? o.voteCount + 1 : o.voteCount;
-            return {
-              ...o,
-              voteCount: newCount,
-              percent: Math.round((newCount / newTotal) * 100),
-            };
-          }),
-        };
-      });
+      const refreshed = await fetch(`/api/villas/${villaId}/polls/${pollId}`);
+      if (refreshed.ok) {
+        const refreshedData = await refreshed.json() as { poll: PollDetail; myVotedOptionId: string | null; isHead: boolean };
+        setPoll(refreshedData.poll);
+      }
     } catch (e) {
       setVoteError(e instanceof Error ? e.message : '투표에 실패했습니다.');
     } finally {

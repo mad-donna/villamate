@@ -15,7 +15,7 @@ export async function GET(
 
     // 본인의 ResidentRecord 확인
     const residentRecord = await prisma.residentRecord.findFirst({
-      where: { villaId, userId: user.sub },
+      where: { villaId, userId: user.sub, status: 'APPROVED' },
       select: { id: true },
     });
 

@@ -30,7 +30,8 @@ function getVillaId(): string | null {
   try {
     const raw = localStorage.getItem('user');
     if (!raw) return null;
-    return JSON.parse(raw).villaId ?? null;
+    const user = JSON.parse(raw);
+    return user.villa?.id ?? null;
   } catch {
     return null;
   }

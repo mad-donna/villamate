@@ -53,19 +53,30 @@ export async function POST(req: NextRequest) {
 
   let reminded = 0;
 
-  // 3일차 독촉 알림
+  // 3일차: 이미 발송된 알림을 단일 쿼리로 조회 (N+1 방지)
+  const threeDayPaymentIds = threeDayTargets
+    .filter((p) => p.residentRecord)
+    .map((p) => p.id);
+
+  const existingThreeDay = threeDayPaymentIds.length > 0
+    ? await prisma.notification.findMany({
+        where: {
+          type: 'PAYMENT_REMINDER',
+          OR: threeDayPaymentIds.map((id) => ({ body: { contains: id } })),
+        },
+        select: { body: true },
+      })
+    : [];
+  const sentThreeDayIds = new Set(
+    existingThreeDay.flatMap((n) => {
+      const match = n.body.match(/payment:([^\s)]+)/);
+      return match ? [match[1]] : [];
+    }),
+  );
+
   for (const payment of threeDayTargets) {
     if (!payment.residentRecord) continue;
-
-    // 이미 동일 paymentId로 PAYMENT_REMINDER 알림이 발송된 경우 skip
-    const existing = await prisma.notification.findFirst({
-      where: {
-        userId: payment.residentRecord.userId,
-        type: 'PAYMENT_REMINDER',
-        body: { contains: payment.id },
-      },
-    });
-    if (existing) continue;
+    if (sentThreeDayIds.has(payment.id)) continue;
 
     await createNotification({
       userId: payment.residentRecord.userId,
@@ -77,20 +88,31 @@ export async function POST(req: NextRequest) {
     reminded++;
   }
 
-  // 7일차 최종 독촉 알림
+  // 7일차: 이미 발송된 최종 알림을 단일 쿼리로 조회 (N+1 방지)
+  const sevenDayPaymentIds = sevenDayTargets
+    .filter((p) => p.residentRecord)
+    .map((p) => p.id);
+
+  const existingSevenDay = sevenDayPaymentIds.length > 0
+    ? await prisma.notification.findMany({
+        where: {
+          type: 'PAYMENT_REMINDER',
+          title: { contains: '최종' },
+          OR: sevenDayPaymentIds.map((id) => ({ body: { contains: id } })),
+        },
+        select: { body: true },
+      })
+    : [];
+  const sentSevenDayIds = new Set(
+    existingSevenDay.flatMap((n) => {
+      const match = n.body.match(/payment:([^\s)]+)/);
+      return match ? [match[1]] : [];
+    }),
+  );
+
   for (const payment of sevenDayTargets) {
     if (!payment.residentRecord) continue;
-
-    // 7일차 최종 알림('[최종 안내]' 포함)이 이미 발송됐으면 skip
-    const existing = await prisma.notification.findFirst({
-      where: {
-        userId: payment.residentRecord.userId,
-        type: 'PAYMENT_REMINDER',
-        body: { contains: payment.id },
-        title: { contains: '최종' },
-      },
-    });
-    if (existing) continue;
+    if (sentSevenDayIds.has(payment.id)) continue;
 
     await createNotification({
       userId: payment.residentRecord.userId,

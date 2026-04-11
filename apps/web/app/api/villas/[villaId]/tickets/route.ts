@@ -11,6 +11,14 @@ export async function GET(
 
   const { villaId } = await params;
 
+  if (user.role === 'ADMIN') {
+    const villa = await prisma.villa.findUnique({
+      where: { id: villaId },
+      select: { adminId: true },
+    });
+    if (!villa || villa.adminId !== user.sub) return err('권한이 없습니다.', 403);
+  }
+
   const where =
     user.role === 'ADMIN'
       ? { villaId }
@@ -49,18 +57,22 @@ export async function POST(
     return err('올바르지 않은 카테고리입니다.');
   }
 
-  const ticket = await prisma.ticket.create({
-    data: {
-      villaId,
-      reporterId: user.sub,
-      title: title.trim(),
-      description: description.trim(),
-      category: category as 'COMMON_FACILITY' | 'PARKING' | 'NOISE_COMPLAINT' | 'ETC',
-    },
-    include: {
-      reporter: { select: { id: true, name: true } },
-    },
-  });
+  try {
+    const ticket = await prisma.ticket.create({
+      data: {
+        villaId,
+        reporterId: user.sub,
+        title: title.trim(),
+        description: description.trim(),
+        category: category as 'COMMON_FACILITY' | 'PARKING' | 'NOISE_COMPLAINT' | 'ETC',
+      },
+      include: {
+        reporter: { select: { id: true, name: true } },
+      },
+    });
 
-  return ok(ticket, 201);
+    return ok(ticket, 201);
+  } catch {
+    return err('서버 오류가 발생했습니다.', 500);
+  }
 }

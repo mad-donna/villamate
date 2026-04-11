@@ -5,6 +5,5 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ villaId: string; pollId: string }> }
 ) {
-  // TODO: implement
-  return ok({ message: 'TODO' });
+  return err('준비 중인 기능입니다.', 501);
 }

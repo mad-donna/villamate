@@ -22,10 +22,19 @@ export async function POST(req: NextRequest) {
     const MAX_SIZE = 5 * 1024 * 1024; // 5MB
     if (file.size > MAX_SIZE) return err('파일 크기는 5MB 이하여야 합니다.', 400);
 
+    const arrayBuffer = await file.arrayBuffer();
+
+    // 실제 바이너리 매직 바이트로 MIME 검증 (클라이언트 신뢰 방지)
+    const bytes = new Uint8Array(arrayBuffer.slice(0, 12));
+    const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF;
+    const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47;
+    const isGif = bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38;
+    const isWebp = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+      && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+    if (!isJpeg && !isPng && !isGif && !isWebp) return err('이미지 파일만 업로드 가능합니다.', 400);
+
     const ext = file.name.split('.').pop() ?? 'jpg';
     const fileName = `posts/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-
-    const arrayBuffer = await file.arrayBuffer();
     const { error } = await supabase.storage
       .from('posts')
       .upload(fileName, arrayBuffer, {

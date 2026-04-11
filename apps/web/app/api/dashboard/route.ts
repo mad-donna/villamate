@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const villaId = searchParams.get('villaId') ?? user.villaId;
-    const role = searchParams.get('role') ?? user.role;
+    const role = user.role;
 
     if (!villaId) {
       return ok({ needsSetup: true });

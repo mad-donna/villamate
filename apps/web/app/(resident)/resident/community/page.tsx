@@ -70,7 +70,7 @@ export default function ResidentCommunityPage() {
         <h1 className="text-2xl font-bold text-neutral-900">커뮤니티</h1>
         <Button
           size="sm"
-          onClick={() => router.push('/community/new')}
+          onClick={() => router.push('/resident/community/new')}
         >
           ✏️ 글쓰기
         </Button>
@@ -104,7 +104,7 @@ export default function ResidentCommunityPage() {
                   <button
                     key={post.id}
                     type="button"
-                    onClick={() => router.push(`/community/${post.id}`)}
+                    onClick={() => router.push(`/resident/community/${post.id}`)}
                     className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] text-left hover:bg-neutral-50 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
                   >
                     <span className="text-warning-500 shrink-0">📌</span>
@@ -144,7 +144,7 @@ export default function ResidentCommunityPage() {
                 <button
                   key={post.id}
                   type="button"
-                  onClick={() => router.push(`/community/${post.id}`)}
+                  onClick={() => router.push(`/resident/community/${post.id}`)}
                   className="w-full bg-white rounded-2xl shadow-sm p-4 text-left hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-center gap-2 mb-1">

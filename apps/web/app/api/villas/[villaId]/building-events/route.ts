@@ -5,14 +5,12 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ villaId: string }> }
 ) {
-  // TODO: implement
-  return ok({ message: 'TODO' });
+  return err('준비 중인 기능입니다.', 501);
 }
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ villaId: string }> }
 ) {
-  // TODO: implement
-  return ok({ message: 'TODO' });
+  return err('준비 중인 기능입니다.', 501);
 }

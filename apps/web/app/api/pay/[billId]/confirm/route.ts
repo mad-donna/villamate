@@ -2,6 +2,21 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ok, err } from '@/lib/api';
 
+// 인메모리 Rate Limit: billId당 1분에 5회
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(key: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  if (entry.count >= 5) return true;
+  entry.count++;
+  return false;
+}
+
 /**
  * PortOne REST API 액세스 토큰을 발급합니다.
  */
@@ -75,6 +90,10 @@ export async function POST(
 ) {
   try {
     const { billId } = await params;
+
+    if (isRateLimited(billId)) {
+      return err('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', 429);
+    }
 
     const billing = await prisma.externalBilling.findUnique({
       where: { id: billId },

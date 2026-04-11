@@ -6,13 +6,24 @@ export async function GET(req: NextRequest) {
   const user = await getUser(req);
   if (!user) return err('인증이 필요합니다.', 401);
 
+  const { searchParams } = new URL(req.url);
+  const limit = Math.min(parseInt(searchParams.get('limit') ?? '20', 10), 50);
+  const cursor = searchParams.get('cursor') ?? undefined;
+
   const notifications = await prisma.notification.findMany({
     where: { userId: user.sub },
     orderBy: { createdAt: 'desc' },
-    take: 50,
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const hasMore = notifications.length > limit;
+  if (hasMore) notifications.pop();
 
-  return ok({ notifications, unreadCount });
+  const nextCursor = hasMore ? notifications[notifications.length - 1]?.id : null;
+  const unreadCount = await prisma.notification.count({
+    where: { userId: user.sub, isRead: false },
+  });
+
+  return ok({ notifications, unreadCount, nextCursor });
 }

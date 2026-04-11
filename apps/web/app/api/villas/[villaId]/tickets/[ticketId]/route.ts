@@ -38,13 +38,13 @@ export async function PATCH(
     data: { status: status as TicketStatus },
   });
 
-  await notifyTicketStatusChange(
+  notifyTicketStatusChange(
     ticketId,
     ticket.reporterId,
     villaId,
     ticket.title,
     status as 'IN_PROGRESS' | 'RESOLVED',
-  );
+  ).catch((e) => console.error('[ticket] 알림 발송 실패:', e));
 
   return ok(updated);
 }
