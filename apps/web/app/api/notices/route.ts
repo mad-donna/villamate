@@ -8,6 +8,7 @@ export async function GET() {
       where: { isPublished: true },
       orderBy: { createdAt: 'desc' },
       select: { id: true, title: true, content: true, createdAt: true },
+      take: 50,
     });
     return ok(notices);
   } catch {

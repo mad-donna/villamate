@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   ChartBarIcon,
   BuildingOffice2Icon,
@@ -9,7 +10,9 @@ import {
   MegaphoneIcon,
   QuestionMarkCircleIcon,
   BookOpenIcon,
+  ArrowRightStartOnRectangleIcon,
 } from '@heroicons/react/24/outline';
+import { getBoUser, clearBoAuth } from '@/lib/backoffice-auth';
 
 interface SidebarItem {
   href: string;
@@ -52,6 +55,13 @@ function SidebarLink({ item }: { item: SidebarItem }) {
 }
 
 function Sidebar() {
+  const router = useRouter();
+
+  function handleLogout() {
+    clearBoAuth();
+    router.push('/backoffice/login');
+  }
+
   return (
     <aside className="hidden lg:flex flex-col w-60 flex-shrink-0 h-screen sticky top-0 bg-white border-r border-neutral-200 p-4 gap-1">
       <div className="px-3 py-4 mb-2">
@@ -80,8 +90,42 @@ function Sidebar() {
           ))}
         </nav>
       </div>
+
+      {/* 하단 로그아웃 */}
+      <div className="mt-auto">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 w-full rounded-xl px-3 py-2 text-sm font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
+        >
+          <ArrowRightStartOnRectangleIcon className="h-5 w-5 flex-shrink-0" />
+          로그아웃
+        </button>
+      </div>
     </aside>
   );
+}
+
+function BackofficeGuard({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (pathname === '/backoffice/login') {
+      setChecked(true);
+      return;
+    }
+    const user = getBoUser();
+    if (!user) {
+      router.replace('/backoffice/login');
+    } else {
+      setChecked(true);
+    }
+  }, [pathname, router]);
+
+  // 인증 확인 전 렌더 차단 — 민감 데이터 플리커 방지
+  if (!checked) return null;
+  return <>{children}</>;
 }
 
 export default function BackofficeLayout({
@@ -89,10 +133,19 @@ export default function BackofficeLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isLoginPage = pathname === '/backoffice/login';
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
+
   return (
-    <div className="flex min-h-screen bg-neutral-50">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">{children}</main>
-    </div>
+    <BackofficeGuard>
+      <div className="flex min-h-screen bg-neutral-50">
+        <Sidebar />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
+    </BackofficeGuard>
   );
 }

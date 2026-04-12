@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
 
+const VALID_CATEGORIES = ['GENERAL', 'ADMIN', 'RESIDENT', 'BILLING', 'POLL', 'COMMUNITY'] as const;
+
 // GET /api/backoffice/guides/[id] — 내용 포함 단건 조회
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -31,10 +33,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       category?: string; order?: number; isPublished?: boolean;
     };
 
+    if (
+      body.category !== undefined &&
+      !VALID_CATEGORIES.includes(body.category as typeof VALID_CATEGORIES[number])
+    ) {
+      return err('올바르지 않은 카테고리입니다.', 400);
+    }
+
     const guide = await prisma.guide.update({
       where: { id },
       data: {
-        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+        ...(body.title?.trim() ? { title: body.title.trim() } : {}),
         ...(body.content !== undefined ? { content: body.content } : {}),
         ...(body.category !== undefined ? { category: body.category } : {}),
         ...(body.order !== undefined ? { order: body.order } : {}),

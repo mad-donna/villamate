@@ -183,8 +183,11 @@ export default function GuidesPage() {
     setLoadingEdit(id);
     try {
       const res = await fetch(`/api/backoffice/guides/${id}`, { headers: boAuthHeaders() });
+      if (!res.ok) throw new Error('가이드를 불러올 수 없습니다.');
       const data = (await res.json()) as GuideFull;
       setModalGuide(data);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '불러오기 실패');
     } finally {
       setLoadingEdit(null);
     }

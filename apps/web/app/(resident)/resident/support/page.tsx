@@ -93,7 +93,7 @@ export default function SupportPage() {
   }, []);
 
   return (
-    <main className="pb-8">
+    <main className="pb-20">
       {/* 헤더 */}
       <header className="px-4 pt-6 pb-4">
         <h1 className="text-xl font-bold text-neutral-900">고객센터</h1>

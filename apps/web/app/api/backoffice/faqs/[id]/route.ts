@@ -20,8 +20,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const faq = await prisma.faq.update({
       where: { id },
       data: {
-        ...(body.question !== undefined ? { question: body.question.trim() } : {}),
-        ...(body.answer !== undefined ? { answer: body.answer.trim() } : {}),
+        ...(body.question?.trim() ? { question: body.question.trim() } : {}),
+        ...(body.answer?.trim()   ? { answer: body.answer.trim() }     : {}),
         ...(body.order !== undefined ? { order: body.order } : {}),
         ...(body.isPublished !== undefined ? { isPublished: body.isPublished } : {}),
       },

@@ -3,14 +3,10 @@
 import { useEffect, useState } from 'react';
 import { boAuthHeaders } from '@/lib/backoffice-auth';
 
-interface BasicStats {
-  villas: { total: number; freeTrial: number; active: number; expired: number };
-  users: { total: number; admins: number; residents: number };
-}
-
 interface KpiData {
   subscriptionDistribution: { FREE_TRIAL: number; ACTIVE: number; EXPIRED: number };
   monthlyTrend: { month: string; villas: number; users: number }[];
+  totals: { villas: number; users: number; admins: number; residents: number };
 }
 
 function StatCard({ label, value, accent }: { label: string; value: number; accent?: string }) {
@@ -22,29 +18,22 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
   );
 }
 
-// 구독 상태 도넛 차트 (SVG-free, CSS)
+// 구독 상태 도넛 차트 (CSS conic-gradient)
 function DonutChart({ data }: { data: { FREE_TRIAL: number; ACTIVE: number; EXPIRED: number } }) {
   const total = data.FREE_TRIAL + data.ACTIVE + data.EXPIRED;
   if (total === 0) return <p className="text-sm text-neutral-400 py-8 text-center">데이터 없음</p>;
 
   const segments = [
-    { label: '무료체험', value: data.FREE_TRIAL, color: 'bg-blue-500' },
-    { label: '구독중', value: data.ACTIVE, color: 'bg-green-500' },
-    { label: '만료', value: data.EXPIRED, color: 'bg-red-400' },
+    { label: '무료체험', value: data.FREE_TRIAL, hex: '#3b82f6' },
+    { label: '구독중',   value: data.ACTIVE,     hex: '#22c55e' },
+    { label: '만료',     value: data.EXPIRED,    hex: '#f87171' },
   ];
 
-  // 코닉 그라디언트 문자열 생성
   let pct = 0;
   const stops = segments
     .map((s) => {
       const share = (s.value / total) * 100;
-      const color =
-        s.color === 'bg-blue-500'
-          ? '#3b82f6'
-          : s.color === 'bg-green-500'
-            ? '#22c55e'
-            : '#f87171';
-      const stop = `${color} ${pct}% ${pct + share}%`;
+      const stop = `${s.hex} ${pct}% ${pct + share}%`;
       pct += share;
       return stop;
     })
@@ -52,7 +41,6 @@ function DonutChart({ data }: { data: { FREE_TRIAL: number; ACTIVE: number; EXPI
 
   return (
     <div className="flex items-center gap-6">
-      {/* 도넛 */}
       <div
         className="w-28 h-28 rounded-full flex-shrink-0"
         style={{
@@ -61,11 +49,10 @@ function DonutChart({ data }: { data: { FREE_TRIAL: number; ACTIVE: number; EXPI
           WebkitMask: 'radial-gradient(circle at center, transparent 44%, black 45%)',
         }}
       />
-      {/* 범례 */}
       <div className="flex flex-col gap-2">
         {segments.map((s) => (
           <div key={s.label} className="flex items-center gap-2 text-sm">
-            <span className={['w-3 h-3 rounded-full flex-shrink-0', s.color].join(' ')} />
+            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: s.hex }} />
             <span className="text-neutral-600 w-16">{s.label}</span>
             <span className="font-semibold text-neutral-900">{s.value}</span>
             <span className="text-neutral-400 text-xs">({((s.value / total) * 100).toFixed(0)}%)</span>
@@ -79,95 +66,69 @@ function DonutChart({ data }: { data: { FREE_TRIAL: number; ACTIVE: number; EXPI
 // 신규 가입 추이 막대 차트
 function BarChart({ data }: { data: { month: string; villas: number; users: number }[] }) {
   const maxVillas = Math.max(...data.map((d) => d.villas), 1);
-  const maxUsers = Math.max(...data.map((d) => d.users), 1);
+  const maxUsers  = Math.max(...data.map((d) => d.users), 1);
+
+  const Bar = ({
+    values, max, color,
+  }: { values: { month: string; v: number }[]; max: number; color: string }) => (
+    <div className="flex items-end gap-2 h-20">
+      {values.map((d) => (
+        <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
+          <span className="text-xs font-semibold text-neutral-700">{d.v || ''}</span>
+          <div
+            className="w-full rounded-t-md transition-all"
+            style={{
+              height: `${(d.v / max) * 60}px`,
+              minHeight: d.v > 0 ? '4px' : '0',
+              background: color,
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+
+  const labels = data.map((d) => (
+    <div key={d.month} className="flex-1 text-center text-xs text-neutral-400">
+      {d.month.slice(5)}월
+    </div>
+  ));
 
   return (
     <div className="space-y-4">
-      {/* 빌라 막대 */}
       <div>
         <p className="text-xs font-semibold text-neutral-500 mb-2">신규 빌라</p>
-        <div className="flex items-end gap-2 h-20">
-          {data.map((d) => (
-            <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-xs font-semibold text-neutral-700">{d.villas || ''}</span>
-              <div
-                className="w-full bg-primary-500 rounded-t-md transition-all"
-                style={{ height: `${(d.villas / maxVillas) * 60}px`, minHeight: d.villas > 0 ? '4px' : '0' }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2 mt-1">
-          {data.map((d) => (
-            <div key={d.month} className="flex-1 text-center text-xs text-neutral-400">
-              {d.month.slice(5)}월
-            </div>
-          ))}
-        </div>
+        <Bar values={data.map((d) => ({ month: d.month, v: d.villas }))} max={maxVillas} color="#3b82f6" />
+        <div className="flex gap-2 mt-1">{labels}</div>
       </div>
-
-      {/* 사용자 막대 */}
       <div>
         <p className="text-xs font-semibold text-neutral-500 mb-2">신규 사용자</p>
-        <div className="flex items-end gap-2 h-20">
-          {data.map((d) => (
-            <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-xs font-semibold text-neutral-700">{d.users || ''}</span>
-              <div
-                className="w-full bg-orange-400 rounded-t-md transition-all"
-                style={{ height: `${(d.users / maxUsers) * 60}px`, minHeight: d.users > 0 ? '4px' : '0' }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2 mt-1">
-          {data.map((d) => (
-            <div key={d.month} className="flex-1 text-center text-xs text-neutral-400">
-              {d.month.slice(5)}월
-            </div>
-          ))}
-        </div>
+        <Bar values={data.map((d) => ({ month: d.month, v: d.users }))} max={maxUsers} color="#f97316" />
+        <div className="flex gap-2 mt-1">{labels}</div>
       </div>
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<BasicStats | null>(null);
   const [kpi, setKpi] = useState<KpiData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/backoffice/villas', { headers: boAuthHeaders() }).then(
-        (r) => r.json() as Promise<{ subscriptionStatus: string }[]>,
-      ),
-      fetch('/api/backoffice/users', { headers: boAuthHeaders() }).then(
-        (r) => r.json() as Promise<{ role: string }[]>,
-      ),
-      fetch('/api/backoffice/kpi', { headers: boAuthHeaders() }).then(
-        (r) => r.json() as Promise<KpiData>,
-      ),
-    ])
-      .then(([villas, users, kpiData]) => {
-        setStats({
-          villas: {
-            total: villas.length,
-            freeTrial: villas.filter((v) => v.subscriptionStatus === 'FREE_TRIAL').length,
-            active: villas.filter((v) => v.subscriptionStatus === 'ACTIVE').length,
-            expired: villas.filter((v) => v.subscriptionStatus === 'EXPIRED').length,
-          },
-          users: {
-            total: users.length,
-            admins: users.filter((u) => u.role === 'ADMIN').length,
-            residents: users.filter((u) => u.role === 'RESIDENT').length,
-          },
-        });
-        setKpi(kpiData);
-      })
+    fetch('/api/backoffice/kpi', { headers: boAuthHeaders() })
+      .then((r) => r.json() as Promise<KpiData>)
+      .then(setKpi)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const skeletonGrid = (n: number) => (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {Array.from({ length: n }).map((_, i) => (
+        <div key={i} className="bg-white rounded-2xl p-5 animate-pulse h-24" />
+      ))}
+    </div>
+  );
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8">
@@ -177,47 +138,44 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl p-5 animate-pulse h-24" />
-          ))}
+        <div className="space-y-4">
+          {skeletonGrid(4)}
+          {skeletonGrid(3)}
         </div>
-      ) : stats ? (
+      ) : kpi ? (
         <>
-          {/* 기본 통계 카드 */}
+          {/* 통계 카드 */}
           <div className="space-y-4">
             <div>
               <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">빌라</p>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="전체 빌라" value={stats.villas.total} />
-                <StatCard label="무료 체험" value={stats.villas.freeTrial} accent="text-blue-600" />
-                <StatCard label="구독 중" value={stats.villas.active} accent="text-green-600" />
-                <StatCard label="구독 만료" value={stats.villas.expired} accent="text-red-500" />
+                <StatCard label="전체 빌라"  value={kpi.totals.villas}                           />
+                <StatCard label="무료 체험"  value={kpi.subscriptionDistribution.FREE_TRIAL} accent="text-blue-600"  />
+                <StatCard label="구독 중"    value={kpi.subscriptionDistribution.ACTIVE}    accent="text-green-600" />
+                <StatCard label="구독 만료"  value={kpi.subscriptionDistribution.EXPIRED}   accent="text-red-500"   />
               </div>
             </div>
             <div>
               <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">사용자</p>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                <StatCard label="전체 사용자" value={stats.users.total} />
-                <StatCard label="동대표" value={stats.users.admins} accent="text-orange-600" />
-                <StatCard label="입주민" value={stats.users.residents} accent="text-primary-600" />
+                <StatCard label="전체 사용자" value={kpi.totals.users}     />
+                <StatCard label="동대표"      value={kpi.totals.admins}    accent="text-orange-600"  />
+                <StatCard label="입주민"      value={kpi.totals.residents} accent="text-primary-600" />
               </div>
             </div>
           </div>
 
           {/* KPI 차트 */}
-          {kpi && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-sm font-bold text-neutral-700 mb-5">구독 상태 분포</h2>
-                <DonutChart data={kpi.subscriptionDistribution} />
-              </div>
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-sm font-bold text-neutral-700 mb-5">최근 6개월 신규 가입 추이</h2>
-                <BarChart data={kpi.monthlyTrend} />
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="text-sm font-bold text-neutral-700 mb-5">구독 상태 분포</h2>
+              <DonutChart data={kpi.subscriptionDistribution} />
             </div>
-          )}
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <h2 className="text-sm font-bold text-neutral-700 mb-5">최근 6개월 신규 가입 추이</h2>
+              <BarChart data={kpi.monthlyTrend} />
+            </div>
+          </div>
         </>
       ) : (
         <p className="text-sm text-neutral-400">데이터를 불러올 수 없습니다.</p>

@@ -46,7 +46,7 @@ export default function GuidePage() {
     activeCategory === 'ALL' ? guides : guides.filter((g) => g.category === activeCategory);
 
   return (
-    <main className="px-4 pt-6 pb-6">
+    <main className="px-4 pt-6 pb-20">
       <header className="mb-5">
         <h1 className="text-xl font-bold text-neutral-900">앱 이용 가이드</h1>
         <p className="text-sm text-neutral-500 mt-1">VillaMate 사용법을 확인하세요.</p>

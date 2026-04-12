@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
 
+const VALID_CATEGORIES = ['GENERAL', 'ADMIN', 'RESIDENT', 'BILLING', 'POLL', 'COMMUNITY'] as const;
+
 // GET /api/backoffice/guides — 전체 목록 (order asc)
 export async function GET(req: NextRequest) {
   try {
@@ -34,12 +36,16 @@ export async function POST(req: NextRequest) {
       category?: string; order?: number; isPublished?: boolean;
     };
     if (!body.title?.trim()) return err('제목을 입력해주세요.', 400);
+    const category = body.category ?? 'GENERAL';
+    if (!VALID_CATEGORIES.includes(category as typeof VALID_CATEGORIES[number])) {
+      return err('올바르지 않은 카테고리입니다.', 400);
+    }
 
     const guide = await prisma.guide.create({
       data: {
         title: body.title.trim(),
         content: body.content ?? '',
-        category: body.category ?? 'GENERAL',
+        category,
         order: body.order ?? 0,
         isPublished: body.isPublished ?? false,
       },

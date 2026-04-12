@@ -15,8 +15,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const notice = await prisma.systemNotice.update({
       where: { id },
       data: {
-        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
-        ...(body.content !== undefined ? { content: body.content.trim() } : {}),
+        ...(body.title?.trim() ? { title: body.title.trim() } : {}),
+        ...(body.content?.trim() ? { content: body.content.trim() } : {}),
         ...(body.isPublished !== undefined ? { isPublished: body.isPublished } : {}),
       },
     });
