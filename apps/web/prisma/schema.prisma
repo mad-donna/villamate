@@ -151,6 +151,8 @@ model ResidentRecord {
   payments     InvoicePayment[]
 
   @@unique([villaId, roomNumber, userId])
+  @@index([userId])
+  @@index([villaId, status])
 }
 
 model Invoice {
@@ -188,6 +190,8 @@ model InvoicePayment {
   pgProvider       String? // 결제 PG사 (예: html5_inicis)
 
   @@unique([invoiceId, roomNumber])
+  @@index([residentRecordId])
+  @@index([invoiceId, status])
 }
 
 model ExternalBilling {
@@ -217,6 +221,9 @@ model Post {
   comments  Comment[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+
+  @@index([villaId, createdAt(sort: Desc)])
+  @@index([authorId])
 }
 
 model Comment {
@@ -242,6 +249,8 @@ model Poll {
   options     PollOption[]
   votes       Vote[]
   createdAt   DateTime     @default(now())
+
+  @@index([villaId, endDate])
 }
 
 model PollOption {
@@ -277,6 +286,8 @@ model LedgerTransaction {
   receiptUrl      String?
   createdBy       String
   createdAt       DateTime   @default(now())
+
+  @@index([villaId, transactionDate(sort: Desc)])
 }
 
 model BuildingEvent {
@@ -293,6 +304,8 @@ model BuildingEvent {
   contactNumber  String?
   attachmentUrl  String?
   createdAt      DateTime              @default(now())
+
+  @@index([villaId, eventDate(sort: Desc)])
 }
 
 model Vehicle {
@@ -322,6 +335,9 @@ model Ticket {
   status      TicketStatus   @default(PENDING)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+
+  @@index([villaId, status])
+  @@index([reporterId])
 }
 
 model Notification {
@@ -335,6 +351,9 @@ model Notification {
   body      String
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model Coupon {
@@ -345,4 +364,40 @@ model Coupon {
   extensionDays Int       @default(30)
   expiresAt     DateTime?
   createdAt     DateTime  @default(now())
+}
+
+model SystemNotice {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished, createdAt(sort: Desc)])
+}
+
+model Faq {
+  id          String   @id @default(uuid())
+  question    String
+  answer      String
+  order       Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished, order])
+}
+
+model Guide {
+  id          String   @id @default(uuid())
+  title       String
+  content     String   // Tiptap HTML (DOMPurify sanitized)
+  category    String   @default("GENERAL")
+  order       Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished, order])
 }

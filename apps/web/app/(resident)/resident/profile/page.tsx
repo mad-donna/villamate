@@ -202,6 +202,7 @@ export default function ResidentProfilePage() {
   const [user, setUser] = useState<StoredUser | null>(null);
   const [passwordSheetOpen, setPasswordSheetOpen] = useState(false);
   const [showAdminSwitch, setShowAdminSwitch] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   useEffect(() => {
     setUser(getUser());
@@ -218,6 +219,32 @@ export default function ResidentProfilePage() {
   function handleSwitchToAdmin() {
     setViewMode('admin');
     router.push('/home');
+  }
+
+  async function handleWithdraw() {
+    const confirmed = confirm(
+      '정말 탈퇴하시겠습니까?\n계정 정보가 익명화되며 이 작업은 되돌릴 수 없습니다.',
+    );
+    if (!confirmed) return;
+    setWithdrawing(true);
+    try {
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch('/api/auth/me', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        alert(data.error ?? '탈퇴에 실패했습니다.');
+        return;
+      }
+      clearAuth();
+      router.push('/login');
+    } catch {
+      alert('네트워크 오류가 발생했습니다.');
+    } finally {
+      setWithdrawing(false);
+    }
   }
 
   const sections: Section[] = [
@@ -246,8 +273,12 @@ export default function ResidentProfilePage() {
       title: '앱 정보',
       items: [
         {
-          label: '고객센터',
-          onClick: () => alert('고객센터: support@villamate.kr'),
+          label: '앱 이용 가이드',
+          href: '/resident/guide',
+        },
+        {
+          label: '고객센터 · FAQ',
+          href: '/resident/support',
         },
       ],
     },
@@ -258,6 +289,11 @@ export default function ResidentProfilePage() {
           label: '로그아웃',
           destructive: true,
           onClick: handleLogout,
+        },
+        {
+          label: withdrawing ? '처리 중...' : '회원 탈퇴',
+          destructive: true,
+          onClick: handleWithdraw,
         },
       ],
     },
