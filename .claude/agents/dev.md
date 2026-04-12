@@ -1572,3 +1572,146 @@ return ok(result);
 | `<Skeleton>` 컴포넌트 미통일 | Low | 일부 페이지 `animate-pulse` 인라인 사용 |
 | `<Card>` 컴포넌트 미사용 | Low | 인라인 `p-4/5/6` 혼재 |
 | Supabase `posts` 버킷 Public 설정 | High | 배포 환경 수동 확인 필요 |
+
+---
+
+## 2026-04-11 (2차) 업데이트 — F-66~69, F-41/42, F-59/60, F-09, F-76, F-78/79
+
+### 신규 구현 기능
+
+#### F-66~68 건물 이력 등록·분류·사진 첨부
+
+**`app/api/villas/[villaId]/building-events/route.ts`**
+- GET: 관리자 + 승인 입주민 접근, `?category=` 필터 지원
+- POST: 관리자 전용, `title/category/eventDate` 필수, `photoUrl/vendor/contact` 선택
+
+**`app/(admin)/manage/building/page.tsx`** — 전체 재작성
+- 카테고리 필터 바 (REPAIR/INSPECTION/CONTRACT/CLEANING/ETC)
+- 인라인 등록 폼: 분류 그리드 선택, 제목/날짜/내용/업체명/연락처/사진
+- 사진 업로드 후 `ImageViewer` 연동
+
+**`app/(resident)/villa/building/page.tsx`** — 읽기 전용 목록
+
+#### F-69 ImageViewer 풀스크린 뷰어
+
+**`components/ui/ImageViewer.tsx`** (신규)
+```tsx
+// createPortal(document.body) + z-[999]
+// ESC 키, 배경 클릭 닫기
+// body.overflow hidden 토글
+export function ImageViewer({ src, alt, onClose }: ImageViewerProps)
+```
+
+장부(영수증), 건물 이력 사진 등 공통 사용.
+
+#### F-41 공지 푸시 알림
+
+`POST /api/villas/[villaId]/posts` 변경:
+```typescript
+// isNotice: true 시 fire-and-forget 알림
+prisma.notification.createMany({ data: residentIds.map(...) })
+  .then(() => {})
+  .catch((e) => console.error('[posts] 알림 실패:', e));
+```
+`NotificationType.SYSTEM` 사용, 발송 실패가 게시글 등록 응답에 영향 없음.
+
+#### F-42 투표 독촉 알림 (수동)
+
+**`POST /api/villas/[villaId]/polls/[pollId]/remind`**
+- 이미 투표한 roomNumber Set 구성 → 미참여 세대주 필터
+- `prisma.notification.createMany` POLL 타입 알림
+
+**`app/(admin)/manage/polls/[id]/page.tsx`** — 하단 시트 내 "독촉 알림 보내기" 버튼
+
+#### F-59 투표 수정
+
+**`PATCH /api/villas/[villaId]/polls/[pollId]`**
+- 마감된 투표 수정 불가 (400)
+- 제목/설명/익명여부/종료일만 수정 가능 (선택지 수정 불가 — 기존 투표 무결성 보장)
+
+관리자 투표 상세 페이지에 "수정" 헤더 버튼 추가 (진행 중 투표만 노출).
+
+#### F-60 투표 독촉 Cron
+
+**`app/api/cron/poll-reminder/route.ts`**
+- 마감 24시간 이내 투표 조회 (`endDate: { gt: now, lte: in24h }`)
+- 투표한 roomNumber Set → 미참여 HEAD 입주민 필터 → `createMany` POLL 알림
+
+#### F-09 회원 탈퇴
+
+**`app/api/auth/me/route.ts`** (DELETE)
+- ADMIN + managedVilla 존재 시 400 (위임 먼저)
+- 익명화: name/email/password/phone 덮어쓰기
+- `email: deleted_{id}@villamate.invalid` — 탈퇴 판별 키
+
+관리자/입주민 프로필 페이지에 "회원 탈퇴" 항목 추가 (confirm 다이얼로그 포함).
+
+#### F-76 구독 만료 알림 Cron
+
+**`app/api/cron/subscription-reminder/route.ts`**
+- D-7 / D-3 / D-1 윈도우 UTC 기준 날짜 산술 계산
+- 각 빌라 관리자에게 SYSTEM 알림 발송
+
+#### F-78 백오피스 로그인
+
+**`app/api/backoffice/auth/login/route.ts`**
+- POST: bcrypt.compare, `role !== 'SUPER_ADMIN'` → 403
+- `signToken` JWT 반환 (기존 `lib/auth.ts` 재사용)
+
+**`app/(backoffice)/backoffice/login/page.tsx`**
+- `bo_token`/`bo_user` localStorage 저장 후 대시보드 리다이렉트
+
+**`lib/backoffice-auth.ts`** (신규)
+```typescript
+export function boAuthHeaders(): Record<string, string>  // Authorization: Bearer bo_token
+export function getBoUser(): BoUser | null
+export function clearBoAuth()
+```
+
+#### F-79 백오피스 빌라·사용자 관리
+
+**`GET /api/backoffice/villas`** — `?status=` + `?q=` 필터, admin 정보 + residentCount 포함
+**`PATCH /api/backoffice/villas/[id]`** — subscriptionStatus / subscriptionExpiry 수동 변경
+**`GET /api/backoffice/users`** — `?role=` + `?q=` 필터, 탈퇴 회원 판별 포함
+
+프론트엔드:
+- `app/(backoffice)/villas/page.tsx` — 구독 상태 배지/필터, `EditSubscriptionModal`
+- `app/(backoffice)/users/page.tsx` — 역할 배지, 검색/필터, 탈퇴 회원 dim 처리
+- `app/(backoffice)/dashboard/page.tsx` — Stats 카드 (빌라 4개, 사용자 3개)
+
+### 알려진 기술 부채 (2026-04-11 2차 추가)
+
+| 항목 | 심각도 | 비고 |
+|------|--------|------|
+| 백오피스 서버 사이드 인증 없음 | High | JS 비활성화 시 클라이언트 가드 우회 가능 |
+| 건물 이력 사진 `posts` 버킷 공유 | Medium | `building-events` 전용 버킷 분리 권장 |
+| 공지 알림 발송 실패 로그 없음 | Low | fire-and-forget — 추적 불가 |
+
+## 2026-04-12 개발 패턴 추가
+
+### Tiptap 편집기 사용 패턴
+- `RichTextEditor` 컴포넌트: `components/ui/RichTextEditor.tsx`
+- 저장 시 반드시 `DOMPurify.sanitize(content, { USE_PROFILES: { html: true } })` 적용
+- 렌더링 시 `dangerouslySetInnerHTML={{ __html: safeHtml }}` + `prose prose-sm` 클래스
+
+### 공개 API 작성 원칙
+- 인증 불필요 API는 반드시 `take` 상한 설정 (`take: 100` 기본)
+- `isPublished: true` 필터로 비게시 콘텐츠 차단
+- PATCH에서 빈 문자열 저장 차단: `body.field?.trim() ? { field: body.field.trim() } : {}`
+
+### 백오피스 CRUD 패턴
+- 목록 페이지: 로딩 스켈레톤 → 빈 상태 → 테이블 3단계 분기
+- 수정: 단건 조회(`GET /[id]`) 후 모달 표시 (목록 응답에 content 제외)
+- 게시 토글: `PATCH { isPublished: !current }` 낙관적 업데이트
+
+### 카테고리 화이트리스트 패턴
+```ts
+const VALID_CATEGORIES = ['GENERAL', 'ADMIN', ...] as const;
+if (!VALID_CATEGORIES.includes(body.category as ...)) return err('올바르지 않은 카테고리', 400);
+```
+
+### 신규 패키지
+- Tiptap: `@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`
+- XSS: `dompurify`, `@types/dompurify`
+- 스타일: `@tailwindcss/typography` (@plugin 방식, globals.css에 선언)
+- 테스트: `jest`, `@types/jest`, `ts-jest`, `jest-environment-node`

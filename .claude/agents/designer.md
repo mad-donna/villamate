@@ -434,3 +434,55 @@ border-t border-neutral-100              ← 콘텐츠와 구분선
 --color-error-50, -200
 --color-neutral-600
 ```
+
+---
+
+## 2026-04-11 (2차) 업데이트
+
+### 완료된 디자인 작업
+
+**F-66~68 건물 이력 UI**
+- 카테고리 배지: REPAIR(red-100/700), INSPECTION(blue-100/700), CONTRACT(purple-100/700), CLEANING(green-100/700), ETC(neutral-100/500)
+- 인라인 등록 폼: 분류 그리드(3열) + 제목/날짜/내용 + 업체명/연락처(선택) + 사진 업로드
+- 관리자: 등록 폼 + 목록 통합 페이지 (`manage/building`)
+- 입주민: 읽기 전용 목록 (`villa/building`)
+
+**F-69 ImageViewer**
+- 전체화면 오버레이: `bg-black/90`, `z-[999]`
+- 상단 우측 닫기 버튼 (`×`, white, text-3xl)
+- 이미지 중앙 정렬 (`max-h-[90vh] max-w-[90vw] object-contain`)
+- 배경 클릭 + ESC 키 닫기
+
+**F-78/79 백오피스 UI**
+- 백오피스 로그인: 중앙 카드 (`max-w-sm`), primary-600 버튼
+- 사이드바: `w-56`, 로고 + 네비 항목 + 로그아웃 버튼 하단 고정
+- 구독 상태 배지: FREE_TRIAL(info), ACTIVE(success), EXPIRED(error)
+- 역할 배지: ADMIN(warning), RESIDENT(info), SUPER_ADMIN(neutral)
+- 탈퇴 회원 행: `opacity-50` dim 처리
+- 구독 변경 모달: `max-w-sm`, 상태 3버튼 토글 + date input
+
+**F-09 회원 탈퇴 UX**
+- 프로필 하단 "계정 관리" 섹션에 `text-red-500` 탈퇴 항목
+- 2단계 confirm: 브라우저 `confirm()` → API 호출 패턴
+
+## 2026-04-12 신규 화면 디자인 패턴
+
+### 백오피스 콘텐츠 관리 페이지 (공통 패턴)
+- 헤더: `text-2xl font-bold` 제목 + `text-sm text-neutral-500` 부제목 + 우측 primary 버튼
+- 테이블: `bg-white rounded-2xl shadow-sm overflow-hidden` + `divide-y divide-neutral-50`
+- 빈 상태: `text-center py-20 text-neutral-400`
+- 상태 배지: `<Badge>` 컴포넌트 클릭으로 토글 (success=게시중, neutral=비공개)
+
+### 입주민 앱 신규 화면
+- 가이드 목록: 카테고리 필터 pill (`rounded-full`, 가로 스크롤 `no-scrollbar`)
+- 가이드 상세: `prose prose-sm` + `@tailwindcss/typography` + 카테고리 뱃지
+- 고객센터: 탭 UI (`bg-neutral-100 rounded-xl p-1` 내부 active=`bg-white shadow-sm`)
+- FAQ 아코디언: ChevronDown/Up 토글, `whitespace-pre-wrap` 답변
+
+### 하단 패딩 기준
+- 입주민 앱 페이지: 최소 `pb-20` (BottomNav 56px + 여백 24px)
+
+### RichTextEditor 툴바 스타일
+- `px-2 py-1 rounded text-sm font-medium text-neutral-600 hover:bg-neutral-100`
+- active 상태: `bg-neutral-200`
+- 구분선: `w-px h-5 bg-neutral-200 mx-1`

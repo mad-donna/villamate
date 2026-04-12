@@ -153,7 +153,7 @@ app/
 | F-06 | JWT 기반 세션 유지 (localStorage + 자동 갱신) | 1 | ✅ | 이전 AsyncStorage → localStorage |
 | F-07 | 모든 보호 API에 JWT 인증 적용 (middleware.ts 전역) | 1 | ✅ | PUBLIC_API 배열로 예외 처리 |
 | F-08 | 401 응답 시 자동 로그아웃 + 로그인 리다이렉트 | 1 | ✅ | Next.js middleware |
-| F-09 | 회원 탈퇴 (소프트 삭제 — 익명화) | 2 | ⬜ | |
+| F-09 | 회원 탈퇴 (소프트 삭제 — 익명화) | 2 | ✅ | `deleted_{id}@villamate.invalid` 익명화 |
 
 ### 4-2. 빌라 등록 및 관리 (동대표)
 
@@ -210,8 +210,8 @@ app/
 | F-38 | 알림 DB 저장 및 알림함 조회 | 1 | ✅ | GET /api/notifications + unreadCount |
 | F-39 | 읽음 처리 (개별 / 전체) | 1 | ✅ | PATCH /notifications/[id]/read, /read-all |
 | F-40 | 미읽음 뱃지 (헤더 벨 아이콘) | 1 | ✅ | unreadCount 응답, 프로필 뱃지 |
-| F-41 | 관리자 공지 수동 푸시 (→ 전 입주민 알림함) | 2 | ⬜ | |
-| F-42 | 투표 미참여 세대 독촉 알림 | 2 | ⬜ | |
+| F-41 | 관리자 공지 수동 푸시 (→ 전 입주민 알림함) | 2 | ✅ | isNotice POST 시 createMany 알림 |
+| F-42 | 투표 미참여 세대 독촉 알림 | 2 | ✅ | /remind 엔드포인트, 수동 트리거 |
 | F-43 | Web Push 알림 (브라우저) | 3 | ⬜ | iOS Safari 지원 현황 검토 필요 |
 
 ### 4-7. 커뮤니티 게시판
@@ -243,8 +243,8 @@ app/
 | F-56 | 1세대 1표 강제 (`@@unique([pollId, roomNumber])`) | 2 | ✅ | 2026-04-10 완료. DB + Prisma P2002 catch 이중 검증 |
 | F-57 | 투표 결과 시각화 (퍼센트 바, 기명 시 호수 표시) | 2 | ✅ | 2026-04-10 완료 |
 | F-58 | 투표 참여율 프로그레스 바 | 2 | ✅ | 2026-04-11 완료. totalHouseholds 기반 % 바 |
-| F-59 | 투표 수정 (마감 전) | 2 | ⬜ | |
-| F-60 | 미참여자 독촉 알림 | 2 | ⬜ | |
+| F-59 | 투표 수정 (마감 전) | 2 | ✅ | PATCH — 제목/설명/익명/종료일 (선택지 제외) |
+| F-60 | 미참여자 독촉 알림 | 2 | ✅ | Cron 자동 — 마감 24h 전 미참여 세대주 |
 | F-61 | 본인인증 + 타임스탬프 (법적 증거 능력) | 3 | ⬜ | PASS 연동 |
 
 ### 4-10. 재무 장부
@@ -260,10 +260,10 @@ app/
 
 | # | 요구사항 | Phase | 상태 | 비고 |
 |---|---------|-------|------|------|
-| F-66 | 건물 수리·하자 이력 디지털 아카이빙 | 2 | ⬜ | `BuildingEvent` 모델 |
-| F-67 | 카테고리별 이력 분류 (하자보수/정기점검/유지계약/청소/기타) | 2 | ⬜ | |
-| F-68 | 사진 첨부 (Supabase Storage) | 2 | ⬜ | 로컬 디스크 제거 |
-| F-69 | 계약서/영수증 풀스크린 이미지 뷰어 | 2 | ⬜ | |
+| F-66 | 건물 수리·하자 이력 디지털 아카이빙 | 2 | ✅ | GET/POST `/building-events` |
+| F-67 | 카테고리별 이력 분류 (하자보수/정기점검/유지계약/청소/기타) | 2 | ✅ | `BuildingEventCategory` enum 필터 |
+| F-68 | 사진 첨부 (Supabase Storage) | 2 | ✅ | `/api/upload` 연동, photoUrl 저장 |
+| F-69 | 계약서/영수증 풀스크린 이미지 뷰어 | 2 | ✅ | `ImageViewer` 공통 컴포넌트 (createPortal) |
 
 ### 4-12. 주차 관리
 
@@ -280,19 +280,19 @@ app/
 | F-73 | 1개월 무료 체험 → 유료 전환 (월 19,900원) | 1 | ✅ | 구독 관리 페이지 + GET /subscription |
 | F-74 | 쿠폰 코드로 무료 기간 활성화 | 1 | ✅ | POST /subscription/coupon, $transaction |
 | F-75 | 구독 만료(EXPIRED) 시 핵심 기능 제한 | 1 | ✅ | lib/subscription.ts — requireActiveSubscription() |
-| F-76 | 구독 만료 전 알림 (D-7, D-3, D-1) | 2 | ⬜ | Cron |
+| F-76 | 구독 만료 전 알림 (D-7, D-3, D-1) | 2 | ✅ | Cron — `subscription-reminder` |
 | F-77 | Toss Payments 빌링키 자동결제 | 3 | ⬜ | 핵심 수익 자동화 |
 
 ### 4-14. 백오피스 (SUPER_ADMIN)
 
 | # | 요구사항 | Phase | 상태 | 비고 |
 |---|---------|-------|------|------|
-| F-78 | SUPER_ADMIN 로그인 (JWT 별도 발급) | 2 | ⬜ | |
-| F-79 | 전체 빌라·사용자 목록 조회 및 상태 관리 | 2 | ⬜ | |
-| F-80 | 플랫폼 KPI 대시보드 (구독 상태 차트, 신규 가입 추이) | 2 | ⬜ | |
-| F-81 | 시스템 공지사항 CRUD | 2 | ⬜ | |
-| F-82 | FAQ CRUD | 2 | ⬜ | |
-| F-83 | 관리자 가이드 라이브러리 CRUD (Tiptap 편집기) | 2 | ⬜ | |
+| F-78 | SUPER_ADMIN 로그인 (JWT 별도 발급) | 2 | ✅ | bo_token, backoffice/login |
+| F-79 | 전체 빌라·사용자 목록 조회 및 상태 관리 | 2 | ✅ | /backoffice/villas, /backoffice/users |
+| F-80 | 플랫폼 KPI 대시보드 (구독 상태 차트, 신규 가입 추이) | 2 | ✅ | 2026-04-12 완료. groupBy + $queryRaw 집계, 도넛·막대 차트 |
+| F-81 | 시스템 공지사항 CRUD | 2 | ✅ | 2026-04-12 완료 |
+| F-82 | FAQ CRUD | 2 | ✅ | 2026-04-12 완료. order 오름차순 정렬 |
+| F-83 | 관리자 가이드 라이브러리 CRUD (Tiptap 편집기) | 2 | ✅ | 2026-04-12 완료. DOMPurify XSS 방어, 카테고리 6종 |
 | F-84 | 빌라별 청구서/납부 현황 조회 | 3 | ⬜ | |
 | F-85 | 구독 현황 및 MRR 모니터링 | 3 | ⬜ | |
 
@@ -301,10 +301,10 @@ app/
 | # | 요구사항 | Phase | 상태 | 비고 |
 |---|---------|-------|------|------|
 | F-86 | 비밀번호 변경 | 1 | ✅ | PATCH /api/auth/password |
-| F-87 | 앱 이용 가이드 화면 | 2 | ⬜ | |
-| F-88 | 관리자 가이드 라이브러리 (앱 내 열람) | 2 | ⬜ | |
-| F-89 | 시스템 공지사항 조회 | 2 | ⬜ | |
-| F-90 | 고객센터 / FAQ 조회 | 2 | ⬜ | |
+| F-87 | 앱 이용 가이드 화면 | 2 | ✅ | 2026-04-12 완료. 카테고리 필터, 프로필 바로가기 |
+| F-88 | 관리자 가이드 라이브러리 (앱 내 열람) | 2 | ✅ | 2026-04-12 완료. prose 렌더링, DOMPurify sanitize |
+| F-89 | 시스템 공지사항 조회 | 2 | ✅ | 2026-04-12 완료. F-90 고객센터 탭에 포함 |
+| F-90 | 고객센터 / FAQ 조회 | 2 | ✅ | 2026-04-12 완료. 아코디언 FAQ + 시스템 공지 탭 |
 
 ---
 
@@ -316,16 +316,16 @@ app/
 | NF-02 | API 응답에서 민감 필드 제외 (password 등) | 1 | ✅ | 구조분해로 password 제거 |
 | NF-03 | JWT 전역 적용 (PUBLIC_API 배열로 예외 처리) | 1 | ✅ | middleware.ts — NestJS 아님 |
 | NF-04 | SubscriptionGuard — 유료 기능 라우트 제한 | 1 | ✅ | lib/subscription.ts |
-| NF-05 | XSS 방어 (백오피스 Tiptap 콘텐츠 sanitize) | 2 | ⬜ | DOMPurify |
+| NF-05 | XSS 방어 (백오피스 Tiptap 콘텐츠 sanitize) | 2 | ✅ | 2026-04-12 완료. DOMPurify 이중 방어 + CSP 헤더 전역 적용 |
 | NF-06 | CSRF 방어 | 1 | ✅ | middleware.ts Origin/Referer 검증 레이어 추가 |
 | NF-07 | TypeScript strict mode 전면 적용 | 1 | ✅ | prisma 역관계 누락 수정, 쿼리 오류 수정 포함 |
 | NF-08 | 모바일 퍼스트 반응형 (375px 기준 → 768px 태블릿 대응) | 1 | ✅ | max-w-lg mx-auto, BottomNav 정렬 |
 | NF-09 | 터치 타깃 최소 44×44px | 1 | ✅ | Button.tsx sm min-h-[44px] 적용 |
-| NF-10 | 핵심 API 응답 시간 < 500ms (p95) | 2 | ⬜ | |
+| NF-10 | 핵심 API 응답 시간 < 500ms (p95) | 2 | ✅ | 2026-04-12 완료. 복합 인덱스 9개 추가, KPI DB 집계 최적화 |
 | NF-11 | 오픈뱅킹 연동 — 조회 권한만, 이체 권한 배제 | 3 | ⬜ | 금융위 허가 검토 |
 | NF-12 | 전자투표 본인인증 + 타임스탬프 (법적 증거) | 3 | ⬜ | |
 | NF-13 | NestJS 도메인별 모듈 분리 (auth / villa / invoice / poll / ...) | 1 | ⬜ | 이전 monolith 재발 방지 |
-| NF-14 | 테스트 — NestJS e2e (Jest + supertest) 핵심 도메인 커버 | 2 | ⬜ | |
+| NF-14 | 테스트 — NestJS e2e (Jest + supertest) 핵심 도메인 커버 | 2 | ✅ | 2026-04-12 완료. Jest + ts-jest, 5개 도메인 32개 케이스 |
 
 ---
 
@@ -442,6 +442,7 @@ app/
 | 2026-04-05 | Sprint 2 진입 — F-29(PortOne PG 결제), F-30(청구서 PDF), F-31(외부 청구 공개 결제) 완료. InvoicePayment에 impUid/pgProvider 필드 추가. Vercel 배포 완료. |
 | 2026-04-07 | Sprint 1 진입 — F-51(민원 접수), F-52(민원 상태 관리), F-53(민원 알림) 완료. 루트 URL 랜딩 페이지 추가. Badge variant 빌드 오류 수정. |
 | 2026-04-10 | F-46(커뮤니티 댓글), F-47(내 게시글), F-48(게시글 이미지 첨부), F-54(투표 생성), F-55(투표 참여), F-56(1세대 1표), F-57(투표 결과 시각화) 완료. Supabase Storage `posts` 버킷 연동. `/api/upload` 라우트 구현. 1세대 1표 Prisma P2002 이중 검증 패턴 확립. |
+| 2026-04-12 | Sprint 3 완료 — F-80(KPI 대시보드), F-81(시스템 공지사항 CRUD), F-82(FAQ CRUD), F-83(가이드 CRUD), F-87(가이드 목록), F-88(가이드 열람), F-89(공지 조회, F-90 포함), F-90(고객센터·FAQ), NF-05(XSS 방어 완성), NF-10(DB 인덱스 9개), NF-14(Jest 테스트 32개). SystemNotice/Faq/Guide 신규 Prisma 모델 추가. CSP 헤더 전역 적용. Tiptap + DOMPurify 도입. |
 
 ---
 

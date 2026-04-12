@@ -97,13 +97,13 @@
 | F-90 | 고객센터·FAQ 조회 — 아코디언 FAQ + 시스템 공지 탭 + 이메일 연락처 | 2026-04-12 |
 | NF-10 | DB 인덱스 — Post/Poll/Ticket/Notification/Ledger/BuildingEvent/ResidentRecord 등 핵심 쿼리 최적화 | 2026-04-12 |
 | NF-14 | e2e 테스트 — Jest + ts-jest, 4개 도메인(auth/posts/polls/tickets/ledger) 32개 케이스 전부 통과 | 2026-04-12 |
+| F-89 | 시스템 공지 조회 — F-90 고객센터·FAQ 탭에 포함 완료 | 2026-04-12 |
 
 ---
 
-## Sprint 3 — 잔여 항목
+## Sprint 3 — 잔여 항목 없음
 
-| # | 기능 | 요구사항 | 비고 |
-| F-89 | 시스템 공지 조회 | 시스템 공지사항 조회 (F-90 고객센터 탭에 포함 완료) | ✅ 완료 |
+Sprint 3 계획 기능 전체 완료. Sprint 4(Phase 3 장기 항목)으로 전환.
 
 ---
 

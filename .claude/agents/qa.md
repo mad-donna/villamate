@@ -450,3 +450,79 @@ Grep with pattern="<search term>" path="C:\Users\dmleh\.claude\projects\D--villa
 | 초대 코드 Rate Limit | Low | 6자리 코드 브루트포스 방어 없음 |
 | 이미지 업로드 고아 파일 | Low | 게시글 POST 실패 시 Supabase Storage에 파일 잔존 |
 | API catch 에러 로깅 | Low | 일부 라우트 `console.error` 미적용 |
+
+---
+
+## 2026-04-11 (2차) 업데이트 — F-66~69, F-41/42, F-59/60, F-09, F-76, F-78/79
+
+### 신규 기능 QA 체크리스트
+
+#### F-09 회원 탈퇴 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `DELETE /api/auth/me` | ADMIN + 빌라 관리 중이면 탈퇴 차단 | ✅ |
+| 탈퇴 후 이메일 | `deleted_{id}@villamate.invalid` — 중복 가입 불가 | ✅ |
+| 탈퇴 후 로그인 | bcrypt(random UUID) — 기존 비밀번호로 접근 불가 | ✅ |
+| 클라이언트 confirm | 두 단계 확인 다이얼로그 | ✅ |
+
+#### F-59 투표 수정 데이터 정합성
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 마감 투표 수정 | `endDate < now` 체크 → 400 | ✅ |
+| 선택지 수정 불가 | PATCH body에서 options 무시 | ✅ (기존 투표 무결성 보장) |
+| 종료일 과거 설정 | `endDate <= now` 시 400 | ✅ |
+
+#### F-76/78 백오피스 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 백오피스 API | `role !== 'SUPER_ADMIN'` → 403 | ✅ |
+| 백오피스 로그인 | `bo_token` vs 일반 `token` 네임스페이스 분리 | ✅ |
+| 백오피스 레이아웃 | 클라이언트 사이드 가드만 — 서버 사이드 검증 없음 | ⚠️ 기술 부채 |
+| 구독 상태 변경 | VALID_STATUSES 화이트리스트 검증 | ✅ |
+| 만료일 형식 | `isNaN(expiry.getTime())` 검증 | ✅ |
+
+#### F-60 Cron 독촉 알림 중복 방지
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 이미 마감된 투표 | `endDate: { gt: now }` 조건 — 마감 투표 제외 | ✅ |
+| 이미 투표한 세대 | `votes` Set 조회 후 필터링 | ✅ |
+| 동일 날 중복 Cron | ⚠️ 중복 실행 방지 없음 — Vercel Cron 보장에 의존 | ⚠️ |
+
+### 남은 기술 부채 (2026-04-11 2차 기준)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| 백오피스 서버 사이드 인증 | High | 현재 클라이언트 가드만 존재 |
+| `/api/pay/confirm` Rate Limit | Medium | 인메모리 → 서버리스 간 미공유 |
+| 건물 이력 사진 `posts` 버킷 공유 | Medium | 전용 버킷 분리 권장 |
+| Cron 중복 실행 방지 | Low | Vercel 보장 의존 |
+| 공지 알림 발송 실패 추적 | Low | fire-and-forget 로그 없음 |
+
+## 2026-04-12 QA 점검 결과 — Sprint 3
+
+### 점검 범위
+백오피스 콘텐츠 관리(F-80~83), 입주민 가이드·고객센터(F-87~90), NF-05/10/14
+
+### Critical: 없음
+
+### Major — 전부 수정 완료
+1. **BackofficeGuard 플리커**: `checked` 상태 추가 → 인증 확인 전 `null` 반환
+2. **KPI API 풀스캔**: `groupBy` + `$queryRaw DATE_TRUNC` DB 집계로 교체
+3. **대시보드 3회 API 호출**: `/api/backoffice/kpi` 단일 호출로 통합 (`totals` 필드 추가)
+4. **공개 API 무한 반환**: `take: 100/50/100` 상한 추가
+5. **PATCH 빈 문자열 저장**: `trim()` 후 falsy 시 해당 필드 무시
+
+### Minor — 4건 수정, 2건 주석 처리
+- ✅ 백오피스 로그인 `JSON.parse` 미보호 → `getBoUser()` 재사용
+- ✅ Guide category 화이트리스트 검증 추가
+- ✅ 입주민 하단 패딩 pb-6/pb-8 → pb-20 통일
+- ✅ `openEdit` 실패 시 alert 에러 피드백
+- 📝 RichTextEditor onChange DOMPurify 미적용 (저장 시 적용되므로 실질적 위험 없음)
+- 📝 Vercel Cron 5개 동시 스케줄 — Pro 플랜 확인 권장
+
+### 체크리스트 패턴 (공개 API)
+- `isPublished: true` 필터 + `take` 상한 + 비게시 404 처리

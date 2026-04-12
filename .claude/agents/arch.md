@@ -2057,3 +2057,91 @@ invoice-reminder:    "0 1 * * *"  →  "0 15 * * *" (KST 00:00)
 expire-subscriptions: "0 0 * * *"  →  "0 15 * * *" (KST 00:00)
 publish-invoices:     "0 15 * * *"  (이미 올바름)
 ```
+
+---
+
+## 2026-04-11 (2차) 업데이트 — F-66~69, F-41/42, F-59/60, F-09, F-76, F-78/79
+
+### 1. 아키텍처 변경
+
+**백오피스 네임스페이스 신규 추가**
+- `/api/backoffice/` 경로로 SUPER_ADMIN 전용 API 분리
+- 일반 앱 세션(`token`/`user`)과 완전 분리된 `bo_token`/`bo_user` localStorage 키 사용
+- `lib/backoffice-auth.ts` 신규 — `getBoUser()`, `getBoToken()`, `boAuthHeaders()`, `clearBoAuth()`
+- `middleware.ts`: `/api/backoffice/auth/` PUBLIC_API 배열에 추가 (로그인 엔드포인트 인증 우회)
+- 백오피스 레이아웃: `BackofficeGuard` 클라이언트 사이드 가드 (로그인 미완료 시 `/backoffice/login` 리다이렉트)
+- ⚠️ 서버 사이드 인증 없음 — 클라이언트 가드만 존재 (기술 부채)
+
+**ImageViewer 포털 컴포넌트 신규**
+- `components/ui/ImageViewer.tsx` — `createPortal`로 `document.body`에 마운트
+- z-index 999, 배경 블러, ESC 키 닫기, 배경 클릭 닫기
+- `body.overflow = 'hidden'` 마운트/언마운트 시 토글
+- 영수증(장부), 건물 이력 사진 뷰어로 공통 사용
+
+**건물 이력(BuildingEvent) 도메인 활성화**
+- `BuildingEvent` 모델은 기존 스키마에 존재, API + UI 구현
+- `BuildingEventCategory` enum: REPAIR / INSPECTION / CONTRACT / CLEANING / ETC
+
+**Cron 2개 신규 추가**
+```
+poll-reminder:          "0 15 * * *" — 마감 24시간 전 미참여 세대주 자동 독촉
+subscription-reminder:  "0 15 * * *" — 구독 만료 D-7/D-3/D-1 관리자 알림
+```
+`vercel.json` crons 배열에 추가됨.
+
+**회원 탈퇴(소프트 삭제) 아키텍처**
+- 실제 레코드 삭제 없음 — 개인정보 익명화
+- `name` → "탈퇴 회원", `email` → `deleted_{id}@villamate.invalid`, `password` → bcrypt(UUID), `phone` → null
+- 탈퇴 회원 판별: `email.endsWith('@villamate.invalid')`
+- ADMIN이 빌라를 관리 중이면 탈퇴 불가 (400 반환, 위임 먼저 요구)
+
+### 2. API 변경
+
+| 엔드포인트 | 변경 내용 |
+|-----------|----------|
+| `GET /api/villas/[villaId]/building-events` | 신규: 카테고리 필터, 관리자+승인입주민 접근 |
+| `POST /api/villas/[villaId]/building-events` | 신규: 관리자 전용 등록, 사진 URL 포함 |
+| `PATCH /api/villas/[villaId]/polls/[pollId]` | 신규: 마감 전 제목/설명/익명/종료일 수정 (선택지 수정 불가) |
+| `POST /api/villas/[villaId]/polls/[pollId]/remind` | 신규: 미참여 세대주 수동 독촉 알림 |
+| `POST /api/villas/[villaId]/posts` | 변경: `isNotice: true` 시 전체 입주민 SYSTEM 알림 fire-and-forget |
+| `DELETE /api/auth/me` | 신규: 회원 탈퇴 (익명화) |
+| `GET /api/cron/poll-reminder` | 신규: 마감 24h 전 자동 독촉 Cron |
+| `GET /api/cron/subscription-reminder` | 신규: 구독 만료 D-7/3/1 알림 Cron |
+| `POST /api/backoffice/auth/login` | 신규: SUPER_ADMIN 전용 JWT 로그인 |
+| `GET /api/backoffice/villas` | 신규: 전체 빌라 목록 (상태·이름 필터) |
+| `PATCH /api/backoffice/villas/[id]` | 신규: 구독 상태·만료일 수동 변경 |
+| `GET /api/backoffice/users` | 신규: 전체 사용자 목록 (역할·이름 필터) |
+
+### 3. 데이터 모델
+
+스키마 변경 없음. 기존 `BuildingEvent` 모델 활용.
+
+### 4. 기술 부채 (신규 추가)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| 백오피스 서버 사이드 인증 없음 | High | `BackofficeGuard` 클라이언트 전용 — JS 비활성화 시 우회 가능 |
+| 건물 이력 사진 `posts` 버킷 공유 | Medium | 전용 `building-events` 버킷 분리 권장 |
+| 공지 푸시 알림 fire-and-forget 로그 없음 | Low | 발송 실패 시 추적 불가 |
+
+## 2026-04-12 아키텍처 변경
+
+### 신규 레이어: 백오피스 콘텐츠 관리
+- 플랫폼 운영자(SUPER_ADMIN)가 관리하는 3개 콘텐츠 테이블 추가: `SystemNotice`, `Faq`, `Guide`
+- 백오피스 API 패턴 확립: `/api/backoffice/**` — 전 엔드포인트 `role !== 'SUPER_ADMIN'` 검증
+- 공개 조회 API 분리: `/api/faqs`, `/api/notices`, `/api/guides` — 인증 없이 접근 가능
+
+### KPI 집계 아키텍처
+- DB 집계 패턴 도입: `prisma.villa.groupBy()` + `prisma.$queryRaw` (DATE_TRUNC)
+- 전체 테이블 메모리 로드 → DB 수준 집계로 전환, 규모 확장성 확보
+- 대시보드 단일 API 원칙: 3개 분리 호출 → `/api/backoffice/kpi` 단일 엔드포인트
+
+### 보안 강화
+- CSP 헤더 `next.config.ts` 전역 적용 (X-Frame-Options DENY, X-XSS-Protection, Referrer-Policy)
+- Tiptap HTML 콘텐츠: 저장 시(백오피스) + 렌더링 시(입주민) 이중 DOMPurify sanitize
+- BackofficeGuard: `checked` 상태 패턴 도입 → SSR 플리커 없이 인증 확인 전 렌더 차단
+
+### 테스트 인프라
+- Jest + ts-jest 도입 (`jest.config.ts`, `moduleNameMapper @/*`)
+- 테스트 헬퍼 패턴: `makeRequest()` + `authHeaders()` (x-user-* 헤더 인증 주입)
+- 커버리지: auth/posts/polls/tickets/ledger 5개 도메인, 32개 케이스

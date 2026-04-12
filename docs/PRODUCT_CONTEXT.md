@@ -1989,3 +1989,94 @@ pgProvider String?  // 결제 PG사 (예: html5_inicis)
 | 알림 API 페이지네이션 | Low | **해결** | cursor 기반 페이지네이션 구현 완료 |
 | invoice-reminder N+1 쿼리 | Medium | **해결** | 단일 OR 쿼리로 최적화 완료 |
 | Cron KST 스케줄 오류 | Medium | **해결** | `"0 15 * * *"` UTC로 통일 |
+
+---
+
+## 2026-04-11 (2차) 개발 진행사항
+
+### 완료 기능: F-66/67/68/69, F-41/42, F-59/60, F-09, F-76, F-78/79
+
+### 1. 아키텍처 변경
+
+**백오피스 서브시스템 추가**
+- `/api/backoffice/` 네임스페이스로 SUPER_ADMIN 전용 API 분리
+- 일반 앱 세션(`token`/`user`)과 분리된 `bo_token`/`bo_user` 사용
+- `lib/backoffice-auth.ts` 신규 유틸리티
+- `BackofficeGuard` 클라이언트 사이드 인증 가드 (서버 사이드 없음 — 기술 부채)
+
+**ImageViewer 공통 컴포넌트**
+- `components/ui/ImageViewer.tsx` — `createPortal` 기반 풀스크린 뷰어
+- 장부 영수증, 건물 이력 사진 공통 사용
+
+**Cron 2개 추가**
+```
+poll-reminder:         마감 24h 전 미참여 세대주 자동 독촉 (매일 KST 00:00)
+subscription-reminder: 구독 만료 D-7/D-3/D-1 관리자 알림 (매일 KST 00:00)
+```
+
+**회원 탈퇴 소프트 삭제 패턴**
+- 물리 삭제 없이 개인정보 익명화
+- `email: deleted_{id}@villamate.invalid` — 탈퇴 판별 식별자
+
+### 2. 신규 API
+
+| 엔드포인트 | 메서드 | 인증 | 설명 |
+|-----------|--------|------|------|
+| `/api/villas/[villaId]/building-events` | GET | JWT | 건물 이력 목록 (카테고리 필터) |
+| `/api/villas/[villaId]/building-events` | POST | JWT(ADMIN) | 건물 이력 등록 |
+| `/api/villas/[villaId]/polls/[pollId]` | PATCH | JWT(ADMIN) | 투표 수정 (선택지 제외) |
+| `/api/villas/[villaId]/polls/[pollId]/remind` | POST | JWT(ADMIN) | 미참여 세대주 수동 독촉 |
+| `/api/auth/me` | DELETE | JWT | 회원 탈퇴 (익명화) |
+| `/api/cron/poll-reminder` | GET | CRON_SECRET | 자동 투표 독촉 Cron |
+| `/api/cron/subscription-reminder` | GET | CRON_SECRET | 구독 만료 자동 알림 Cron |
+| `/api/backoffice/auth/login` | POST | - | 백오피스 로그인 |
+| `/api/backoffice/villas` | GET | bo_token | 전체 빌라 목록 |
+| `/api/backoffice/villas/[id]` | PATCH | bo_token | 구독 상태·만료일 변경 |
+| `/api/backoffice/users` | GET | bo_token | 전체 사용자 목록 |
+
+**변경된 API**:
+- `POST /api/villas/[villaId]/posts`: `isNotice: true` 시 전체 입주민 SYSTEM 알림 fire-and-forget 추가
+
+### 3. 데이터 모델 변경
+
+스키마 변경 없음. 기존 `BuildingEvent` 모델 활성화 (`BuildingEventCategory` enum 포함).
+
+### 4. 기술 부채 현황 (2026-04-11 2차 업데이트)
+
+| 항목 | 심각도 | 상태 | 내용 |
+|------|--------|------|------|
+| 백오피스 서버 사이드 인증 없음 | **High** | 미해결 | 클라이언트 가드만 — JS 비활성화 시 우회 가능 |
+| `DATABASE_URL ?pgbouncer=true` 미적용 | **Critical** | 미해결 | Vercel 환경변수 수동 수정 필요 |
+| Supabase `posts` 버킷 Public 설정 | **High** | 미해결 | 건물 이력 사진도 동일 버킷 사용 |
+| 건물 이력 전용 Storage 버킷 없음 | Medium | 미해결 | `posts` 버킷 공유 중 — 전용 버킷 분리 권장 |
+| Rate Limit 인메모리 Map | Medium | 부분해결 | 결제 확인만 적용, 멀티 인스턴스 미지원 |
+| 공지 알림 발송 실패 추적 없음 | Low | 미해결 | fire-and-forget — 발송 실패 추적 불가 |
+| Cron 중복 실행 방지 없음 | Low | 미해결 | Vercel Cron 보장에 의존 |
+
+## 2026-04-12 업데이트
+
+### 플랫폼 운영 도구 완성
+백오피스(SUPER_ADMIN)가 입주민 앱의 콘텐츠를 직접 관리할 수 있는 시스템이 갖춰졌다.
+
+**콘텐츠 관리 3종**
+- 시스템 공지사항: 전 빌라 공통 공지 (게시/비공개)
+- FAQ: 자주 묻는 질문 (순서 조정 가능)
+- 가이드 라이브러리: 앱 사용 가이드 (Tiptap 리치 텍스트, 카테고리별 분류)
+
+**입주민 앱 접근 경로**
+프로필 → 앱 이용 가이드 → 가이드 열람
+프로필 → 고객센터 · FAQ → FAQ 아코디언 / 시스템 공지 탭
+
+**KPI 대시보드**
+플랫폼 운영자가 구독 상태 분포와 월별 신규 가입 추이를 시각적으로 모니터링할 수 있다.
+
+### 품질 기준 달성
+- NF-05 XSS 방어: CSP 헤더 전역 적용 + Tiptap HTML DOMPurify 이중 방어
+- NF-10 응답 속도: 핵심 9개 쿼리 복합 인덱스 + KPI DB 집계
+- NF-14 테스트: Jest 32개 케이스 (auth/posts/polls/tickets/ledger)
+
+### 기술 부채 현황 (신규)
+1. KPI `$queryRaw DATE_TRUNC` — PostgreSQL 전용, DB 교체 시 수정 필요
+2. CSP `unsafe-inline` — nonce 기반으로 전환 권장 (Next.js 15 nonce 지원)
+3. 공개 API Rate Limit 미구현 — Upstash Redis 도입 시 추가 예정
+4. Vercel Cron 5개 동시 실행 — Pro 플랜 이상 확인 필요
