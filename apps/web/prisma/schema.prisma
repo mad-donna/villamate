@@ -137,6 +137,19 @@ model Villa {
   vehicles           Vehicle[]
   tickets            Ticket[]
   notifications      Notification[]      @relation("VillaNotifications")
+  tossBillingKey     TossBillingKey?
+}
+
+model TossBillingKey {
+  id          String   @id @default(uuid())
+  villaId     String   @unique
+  villa       Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  billingKey  String
+  customerKey String
+  cardCompany String?
+  cardNumber  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model ResidentRecord {

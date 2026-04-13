@@ -19,6 +19,7 @@
     "@tiptap/pm": "^3.22.3",
     "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
+    "@tosspayments/tosspayments-sdk": "^2.6.0",
     "@types/dompurify": "^3.0.5",
     "@types/web-push": "^3.6.4",
     "bcryptjs": "^2.4.3",
