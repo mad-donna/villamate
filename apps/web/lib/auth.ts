@@ -11,6 +11,7 @@ export interface JwtPayload {
   email: string;
   role: string;
   villaId?: string;
+  needsSetup?: boolean;
 }
 
 export async function signToken(payload: JwtPayload): Promise<string> {

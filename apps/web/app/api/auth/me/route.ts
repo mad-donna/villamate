@@ -3,6 +3,37 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
 
+// GET /api/auth/me — 현재 로그인 유저 정보 조회
+export async function GET(req: NextRequest) {
+  const user = await getUser(req);
+  if (!user) return err('인증이 필요합니다.', 401);
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.sub },
+    select: { id: true, email: true, name: true, phone: true, role: true },
+  });
+  if (!dbUser) return err('사용자를 찾을 수 없습니다.', 404);
+
+  let villaId: string | undefined;
+  let villa = null;
+
+  if (dbUser.role === 'ADMIN') {
+    const v = await prisma.villa.findFirst({
+      where: { adminId: dbUser.id },
+      select: { id: true, name: true, address: true, inviteCode: true, subscriptionStatus: true },
+    });
+    if (v) { villaId = v.id; villa = v; }
+  } else if (dbUser.role === 'RESIDENT') {
+    const r = await prisma.residentRecord.findFirst({
+      where: { userId: dbUser.id, status: 'APPROVED' },
+      select: { villaId: true, villa: { select: { id: true, name: true, address: true, inviteCode: true, subscriptionStatus: true } } },
+    });
+    if (r) { villaId = r.villaId; villa = r.villa; }
+  }
+
+  return ok({ user: { ...dbUser, villaId, villa } });
+}
+
 /**
  * DELETE /api/auth/me
  * 회원 탈퇴 — 소프트 삭제(익명화).

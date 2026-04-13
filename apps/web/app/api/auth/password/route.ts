@@ -27,6 +27,7 @@ export async function PATCH(req: NextRequest) {
   });
 
   if (!dbUser) return err('사용자를 찾을 수 없습니다.', 404);
+  if (!dbUser.password) return err('소셜 계정은 비밀번호를 변경할 수 없습니다.', 400);
 
   const passwordMatch = await bcrypt.compare(currentPassword, dbUser.password);
   if (!passwordMatch) {

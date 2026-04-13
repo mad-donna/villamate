@@ -26,6 +26,10 @@ export async function POST(req: NextRequest) {
       return err(INVALID_CREDENTIALS_MSG, 401);
     }
 
+    // 소셜 전용 계정(password null)은 이메일 로그인 불가
+    if (!user.password) {
+      return err(INVALID_CREDENTIALS_MSG, 401);
+    }
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
       return err(INVALID_CREDENTIALS_MSG, 401);

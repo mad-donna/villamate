@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       select: { id: true, email: true, name: true, password: true, role: true },
     });
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
       return err('이메일 또는 비밀번호가 올바르지 않습니다.', 401);
     }
 
