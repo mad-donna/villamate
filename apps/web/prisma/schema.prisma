@@ -103,11 +103,12 @@ model User {
   posts           Post[]
   comments        Comment[]
   votes           Vote[]
-  notifications   Notification[]
-  vehicles        Vehicle[]
-  tickets         Ticket[]
-  polls           Poll[]
-  buildingEvents  BuildingEvent[]
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
+  vehicles          Vehicle[]
+  tickets           Ticket[]
+  polls             Poll[]
+  buildingEvents    BuildingEvent[]
 }
 
 model Villa {
@@ -354,6 +355,18 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([userId, createdAt(sort: Desc)])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Coupon {

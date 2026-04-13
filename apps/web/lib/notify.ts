@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import { NotificationType } from '@prisma/client';
+import { sendPushToUser } from './webpush';
 
 interface CreateNotificationInput {
   userId: string;
@@ -10,7 +11,9 @@ interface CreateNotificationInput {
 }
 
 export async function createNotification(input: CreateNotificationInput) {
-  return prisma.notification.create({ data: input });
+  const notification = await prisma.notification.create({ data: input });
+  sendPushToUser(input.userId, { title: input.title, body: input.body }).catch(() => {});
+  return notification;
 }
 
 export async function createNotificationForVilla(
@@ -38,6 +41,11 @@ export async function createNotificationForVilla(
   await prisma.notification.createMany({
     data: userIds.map((userId) => ({ userId, villaId, type, title, body })),
   });
+
+  // Web Push — 비동기 발송 (실패해도 알림 저장에 영향 없음)
+  Promise.allSettled(
+    userIds.map((userId) => sendPushToUser(userId, { title, body })),
+  ).catch(() => {});
 }
 
 export async function notifyTicketStatusChange(
@@ -62,4 +70,6 @@ export async function notifyTicketStatusChange(
       body,
     },
   });
+
+  sendPushToUser(reporterId, { title, body }).catch(() => {});
 }
