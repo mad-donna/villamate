@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { ImageViewer } from '@/components/ui/ImageViewer';
 
 interface LedgerTransaction {
   id: string;
@@ -67,6 +68,9 @@ export default function AdminLedgerPage() {
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+
+  // 이미지 뷰어
+  const [viewerSrc, setViewerSrc] = useState<string | null>(null);
 
   // 토스트
   const [toast, setToast] = useState<string | null>(null);
@@ -568,14 +572,12 @@ export default function AdminLedgerPage() {
                       {tx.description}
                     </p>
                     {tx.receiptUrl && (
-                      <a
-                        href={tx.receiptUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary-600 hover:underline"
+                      <button
+                        onClick={() => setViewerSrc(tx.receiptUrl!)}
+                        className="text-xs text-primary-600 hover:underline text-left"
                       >
                         영수증 보기
-                      </a>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -599,6 +601,11 @@ export default function AdminLedgerPage() {
           ))
         )}
       </div>
+
+      {/* 이미지 뷰어 */}
+      {viewerSrc && (
+        <ImageViewer src={viewerSrc} alt="영수증" onClose={() => setViewerSrc(null)} />
+      )}
 
       {/* 토스트 */}
       {toast && (

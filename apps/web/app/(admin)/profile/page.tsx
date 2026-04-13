@@ -202,11 +202,38 @@ export default function AdminProfilePage() {
   const [user, setUser] = useState<StoredUser | null>(null);
   const [passwordSheetOpen, setPasswordSheetOpen] = useState(false);
   const [dualMode, setDualMode] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   useEffect(() => {
     setUser(getUser());
     setDualMode(hasDualMode());
   }, []);
+
+  async function handleWithdraw() {
+    const confirmed = confirm(
+      '정말 탈퇴하시겠습니까?\n계정 정보가 익명화되며 이 작업은 되돌릴 수 없습니다.',
+    );
+    if (!confirmed) return;
+    setWithdrawing(true);
+    try {
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch('/api/auth/me', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        alert(data.error ?? '탈퇴에 실패했습니다.');
+        return;
+      }
+      clearAuth();
+      router.push('/login');
+    } catch {
+      alert('네트워크 오류가 발생했습니다.');
+    } finally {
+      setWithdrawing(false);
+    }
+  }
 
   function handleLogout() {
     if (!confirm('로그아웃 하시겠습니까?')) return;
@@ -269,6 +296,11 @@ export default function AdminProfilePage() {
           label: '로그아웃',
           destructive: true,
           onClick: handleLogout,
+        },
+        {
+          label: withdrawing ? '처리 중...' : '회원 탈퇴',
+          destructive: true,
+          onClick: handleWithdraw,
         },
       ],
     },

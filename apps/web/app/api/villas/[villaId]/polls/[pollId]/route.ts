@@ -90,3 +90,70 @@ export async function GET(
     return err('서버 오류가 발생했습니다.', 500);
   }
 }
+
+// PATCH: 투표 수정 (관리자 전용, 마감 전만 허용)
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ villaId: string; pollId: string }> },
+) {
+  try {
+    const user = await getUser(req);
+    if (!user) return err('인증이 필요합니다.', 401);
+
+    const { villaId, pollId } = await params;
+
+    const villa = await prisma.villa.findUnique({
+      where: { id: villaId },
+      select: { adminId: true },
+    });
+    if (!villa) return err('빌라를 찾을 수 없습니다.', 404);
+    if (villa.adminId !== user.sub) return err('관리자만 투표를 수정할 수 있습니다.', 403);
+
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      select: { id: true, villaId: true, endDate: true },
+    });
+    if (!poll || poll.villaId !== villaId) return err('투표를 찾을 수 없습니다.', 404);
+    if (new Date(poll.endDate) < new Date()) return err('마감된 투표는 수정할 수 없습니다.', 400);
+
+    const body = (await req.json()) as {
+      title?: string;
+      description?: string;
+      isAnonymous?: boolean;
+      endDate?: string;
+    };
+
+    if (body.title !== undefined && !body.title.trim()) {
+      return err('제목을 입력해주세요.', 400);
+    }
+
+    let parsedEndDate: Date | undefined;
+    if (body.endDate) {
+      parsedEndDate = new Date(body.endDate);
+      if (isNaN(parsedEndDate.getTime()) || parsedEndDate <= new Date()) {
+        return err('종료일은 현재 시간 이후여야 합니다.', 400);
+      }
+    }
+
+    const updated = await prisma.poll.update({
+      where: { id: pollId },
+      data: {
+        ...(body.title ? { title: body.title.trim() } : {}),
+        ...(body.description !== undefined ? { description: body.description.trim() || null } : {}),
+        ...(body.isAnonymous !== undefined ? { isAnonymous: body.isAnonymous } : {}),
+        ...(parsedEndDate ? { endDate: parsedEndDate } : {}),
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        isAnonymous: true,
+        endDate: true,
+      },
+    });
+
+    return ok(updated);
+  } catch {
+    return err('서버 오류가 발생했습니다.', 500);
+  }
+}

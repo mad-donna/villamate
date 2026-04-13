@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from './lib/auth';
 
-const PUBLIC_API = ['/api/auth/', '/api/cron/', '/api/pay/'];
+const PUBLIC_API = ['/api/auth/', '/api/cron/', '/api/pay/', '/api/backoffice/auth/'];
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 

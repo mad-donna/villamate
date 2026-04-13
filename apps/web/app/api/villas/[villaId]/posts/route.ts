@@ -122,6 +122,30 @@ export async function POST(
       },
     });
 
+    // 공지 등록 시 전 입주민에게 알림 발송 (비동기, 실패해도 응답에 영향 없음)
+    if (isNotice) {
+      prisma.residentRecord
+        .findMany({
+          where: { villaId, status: 'APPROVED' },
+          select: { userId: true },
+        })
+        .then((residents) => {
+          if (residents.length === 0) return;
+          return prisma.notification.createMany({
+            data: residents.map((r) => ({
+              userId: r.userId,
+              villaId,
+              type: 'SYSTEM' as const,
+              title: `📢 공지사항: ${post.title}`,
+              body: post.content.length > 60
+                ? post.content.slice(0, 60) + '...'
+                : post.content,
+            })),
+          });
+        })
+        .catch(() => {/* 알림 실패는 무시 */});
+    }
+
     return ok({ post }, 201);
   } catch {
     return err('서버 오류가 발생했습니다.', 500);

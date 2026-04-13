@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ImageViewer } from '@/components/ui/ImageViewer';
 
 interface LedgerTransaction {
   id: string;
@@ -44,6 +45,7 @@ export default function LedgerPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [viewerSrc, setViewerSrc] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
@@ -247,14 +249,12 @@ export default function LedgerPage() {
                       {tx.description}
                     </p>
                     {tx.receiptUrl && (
-                      <a
-                        href={tx.receiptUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary-600 hover:underline"
+                      <button
+                        onClick={() => setViewerSrc(tx.receiptUrl!)}
+                        className="text-xs text-primary-600 hover:underline text-left"
                       >
                         영수증 보기
-                      </a>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -278,6 +278,11 @@ export default function LedgerPage() {
           ))
         )}
       </div>
+
+      {/* 이미지 뷰어 */}
+      {viewerSrc && (
+        <ImageViewer src={viewerSrc} alt="영수증" onClose={() => setViewerSrc(null)} />
+      )}
     </main>
   );
 }
