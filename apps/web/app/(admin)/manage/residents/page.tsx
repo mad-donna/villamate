@@ -423,11 +423,11 @@ export default function ResidentsPage() {
         <>
           {/* 오버레이 */}
           <div
-            className="fixed inset-0 bg-black/40 z-40"
+            className="fixed inset-0 bg-black/40 z-70"
             onClick={() => setSheetOpen(false)}
           />
           {/* 시트 */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-50 flex flex-col max-h-[80vh]">
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-80 flex flex-col max-h-[80vh]">
             {/* 핸들 */}
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-neutral-200" />
@@ -513,7 +513,7 @@ export default function ResidentsPage() {
 
       {/* 토스트 */}
       {toast && (
-        <div className="fixed bottom-20 left-0 right-0 mx-auto w-fit px-5 py-3 bg-neutral-800 text-white text-sm font-medium rounded-2xl shadow-lg z-50">
+        <div className="fixed bottom-20 left-0 right-0 mx-auto w-fit px-5 py-3 bg-neutral-800 text-white text-sm font-medium rounded-2xl shadow-lg z-60">
           {toast}
         </div>
       )}

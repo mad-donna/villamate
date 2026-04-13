@@ -404,7 +404,7 @@ export default function SubscriptionPage() {
       {toast && (
         <div
           className={[
-            'fixed bottom-6 left-1/2 -translate-x-1/2 z-50',
+            'fixed bottom-20 left-1/2 -translate-x-1/2 z-60',
             'px-5 py-3 rounded-2xl shadow-lg text-sm font-medium text-white transition-all duration-300',
             toast.type === 'success' ? 'bg-[#16A34A]' : 'bg-[#DC2626]',
           ].join(' ')}
