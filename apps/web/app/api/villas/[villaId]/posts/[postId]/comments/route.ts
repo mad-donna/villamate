@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
+import { sendPushToUser } from '@/lib/webpush';
 
 // POST: 댓글 작성 (Phase 2 — API stub)
 export async function POST(
@@ -51,6 +52,28 @@ export async function POST(
         author: { select: { id: true, name: true } },
       },
     });
+
+    // 원글 작성자에게 알림 (본인 댓글 제외)
+    const postWithAuthor = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { authorId: true, title: true },
+    });
+    if (postWithAuthor && postWithAuthor.authorId !== user.sub) {
+      await prisma.notification.create({
+        data: {
+          userId: postWithAuthor.authorId,
+          villaId,
+          type: 'COMMUNITY',
+          title: '새 댓글이 달렸습니다',
+          body: `${comment.author.name}: ${body.content.trim().slice(0, 50)}`,
+        },
+      });
+      sendPushToUser(postWithAuthor.authorId, {
+        title: '새 댓글',
+        body: `${comment.author.name}: ${body.content.trim().slice(0, 50)}`,
+        url: `/community/${postId}`,
+      }).catch(() => {});
+    }
 
     return ok({ comment }, 201);
   } catch {

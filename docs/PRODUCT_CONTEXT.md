@@ -2080,3 +2080,106 @@ subscription-reminder: 구독 만료 D-7/D-3/D-1 관리자 알림 (매일 KST 00
 2. CSP `unsafe-inline` — nonce 기반으로 전환 권장 (Next.js 15 nonce 지원)
 3. 공개 API Rate Limit 미구현 — Upstash Redis 도입 시 추가 예정
 4. Vercel Cron 5개 동시 실행 — Pro 플랜 이상 확인 필요
+
+---
+
+## 21. 구현 현황 (2026-04-13 기준)
+
+### 이 세션에서 완료된 기능
+
+#### F-43 Web Push 알림 (브라우저)
+
+VAPID 기반 Web Push 알림 인프라 구축. 앱 알림함에 더해 브라우저 네이티브 알림 채널을 추가함으로써, 앱이 백그라운드 상태일 때도 입주민에게 알림을 전달할 수 있게 되었다.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `PushSubscription` 모델 추가 (userId, endpoint, p256dh, auth, villaId) |
+| 환경변수 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` |
+| 서버 | `lib/webpush.ts` — lazy init 패턴 (`getWebPush()`)으로 빌드 타임 env 오류 방지 |
+| API | `POST/DELETE /api/push/subscribe` — 구독 upsert/삭제 |
+| 통합 | `lib/notify.ts`의 `createNotification` 등에서 `sendPushToUser()` 비동기 병행 발송 |
+| Service Worker | `public/sw.js` — `push` 이벤트 수신, `notificationclick` 핸들링 |
+| UI | 입주민 프로필 → 알림 설정 — 푸시 구독 온오프 배너 (`PushBanner`) |
+
+**핵심 기술 결정**: `web-push` 모듈을 모듈 최상위에서 초기화하면 Vercel 빌드 시 환경변수 부재로 오류 발생. `getWebPush()` 함수 내부에서 런타임에만 초기화하는 lazy init 패턴으로 해결.
+
+#### F-77 Toss Payments 빌링키 자동결제
+
+구독 모델의 핵심 수익 자동화. 관리자가 카드를 한 번 등록하면 구독 만료 시 자동으로 갱신된다.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `TossBillingKey` 모델 추가 (villaId unique, billingKey, customerKey, cardCompany, cardNumber) |
+| 환경변수 | `NEXT_PUBLIC_TOSS_CLIENT_KEY`, `TOSS_SECRET_KEY` |
+| 서버 | `lib/toss.ts` — `issueBillingKey()`, `chargeBilling()` |
+| API | `GET/POST/DELETE /api/villas/[villaId]/subscription/billing-key` |
+| Cron | `POST /api/cron/auto-payment` — 만료 빌라 자동결제 (UTC 00:00, `vercel.json` 등록) |
+| UI | 관리자 프로필 → 구독 → 카드 등록/해제 페이지 (Toss Payments SDK 연동) |
+
+**환경변수 주의**: `NEXT_PUBLIC_TOSS_CLIENT_KEY`는 빌드 시점에 번들 포함되므로 설정 후 반드시 재배포 필요.
+
+#### F-04 카카오·구글 소셜 로그인
+
+OAuth 2.0 Authorization Code Flow 구현. 소셜 계정으로도 빌라메이트에 가입/로그인할 수 있다.
+
+| 구분 | 내용 |
+|------|------|
+| DB | `SocialAccount` 모델 추가 (userId, provider, providerId — provider+providerId unique), `User.password → String?` (nullable) |
+| 환경변수 | `KAKAO_CLIENT_ID/SECRET`, `GOOGLE_CLIENT_ID/SECRET` |
+| 보안 | state 파라미터 CSRF 방어 — HttpOnly 쿠키 저장 후 콜백 시 검증 |
+| API | `GET /api/auth/oauth/[provider]` — state 쿠키 설정 + OAuth redirect |
+| API | `GET /api/auth/callback/[provider]` — state 검증, 유저 upsert, JWT 발급 |
+| API | `GET /api/auth/me` — 현재 유저 정보 조회 (소셜 로그인 후 localStorage 동기화) |
+| 중간 페이지 | `/auth/social` — token 쿼리로 받아 localStorage 저장 후 이동 |
+| 로그인 UI | `/login` — 카카오(노랑) / 구글(흰색 테두리) 소셜 버튼 추가 |
+
+**기존 이메일 로그인 영향**: `User.password`를 nullable로 변경함에 따라 소셜 전용 계정은 이메일 로그인 불가 처리 (동일한 `401` 반환으로 계정 존재 여부 은닉).
+
+#### F-05 소셜 로그인 후 프로필 보완
+
+소셜 신규 사용자는 이름/전화번호/역할을 보완해야 앱을 이용할 수 있다.
+
+| 구분 | 내용 |
+|------|------|
+| JWT | `needsSetup?: boolean` 필드 추가 — 소셜 신규 유저 플래그 |
+| API | `PATCH /api/auth/social-complete` — 이름/전화번호/역할 저장, 역할별 villaId 조회 후 JWT 재발급 |
+| 페이지 | `/profile-setup` — 이름/전화번호/역할 선택 폼 (token 쿼리로 인증) |
+
+#### BottomNav 겹침 버그 수정 + z-index 계층 시스템
+
+Toast 알림이 BottomNav에 가려지는 문제 등 레이어 충돌 버그를 전면 수정하고 z-index 계층 규칙을 수립했다.
+
+| 레이어 | z-index | 적용 요소 |
+|--------|---------|-----------|
+| BottomNav | `z-50` | 하단 네비게이션 바 |
+| Toast | `z-60` | 토스트 알림 (`bottom-20` 이상 배치) |
+| Sheet Overlay | `z-70` | 바텀시트 배경 딤 |
+| Sheet Panel | `z-80` | 바텀시트 콘텐츠 |
+| ImageViewer | `z-[999]` | 전체화면 이미지 뷰어 |
+
+### 신규 Prisma 모델 (2026-04-13)
+
+| 모델 | 목적 |
+|------|------|
+| `PushSubscription` | Web Push 구독 엔드포인트 저장 |
+| `TossBillingKey` | Toss Payments 자동결제 빌링키 (villaId unique) |
+| `SocialAccount` | 소셜 계정 연결 (kakao/google, provider+providerId unique) |
+
+### 환경변수 추가 내역
+
+| 변수 | 용도 | 설정 여부 |
+|------|------|-----------|
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web Push 공개 키 | ✅ |
+| `VAPID_PRIVATE_KEY` | Web Push 비공개 키 | ✅ |
+| `NEXT_PUBLIC_TOSS_CLIENT_KEY` | Toss Payments 클라이언트 키 (테스트) | ✅ |
+| `TOSS_SECRET_KEY` | Toss Payments 서버 비밀 키 | ✅ |
+| `KAKAO_CLIENT_ID` | 카카오 OAuth 앱 ID | ⬜ 미설정 |
+| `KAKAO_CLIENT_SECRET` | 카카오 OAuth 시크릿 | ⬜ 미설정 |
+| `GOOGLE_CLIENT_ID` | 구글 OAuth 클라이언트 ID | ⬜ 미설정 |
+| `GOOGLE_CLIENT_SECRET` | 구글 OAuth 클라이언트 시크릿 | ⬜ 미설정 |
+
+### 기술 부채 현황 (2026-04-13 추가)
+1. 소셜 로그인 환경변수 미설정 — `KAKAO_CLIENT_ID/SECRET`, `GOOGLE_CLIENT_ID/SECRET` Vercel 등록 필요
+2. Toss 자동결제 Rate Limit 없는 공개 Cron — CRON_SECRET 검증 추가 권장
+3. 소셜 계정 연결 해제 UI 미구현 — 현재 DB 직접 삭제만 가능
+4. Web Push iOS Safari 지원 — Safari 16.4+ 이상에서만 지원, 하위 버전 graceful degradation 처리됨

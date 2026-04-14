@@ -261,6 +261,14 @@ export default function AdminProfilePage() {
           label: '구독 관리',
           href: '/profile/subscription',
         },
+        {
+          label: '내 빌라 목록',
+          href: '/profile/my-villas',
+        },
+        {
+          label: '동대표 교체',
+          href: '/profile/transfer-admin',
+        },
       ],
     },
     {

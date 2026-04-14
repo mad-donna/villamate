@@ -33,6 +33,7 @@ export async function GET(
       where: { id: postId },
       include: {
         author: { select: { id: true, name: true } },
+        _count: { select: { likes: true } },
       },
     });
 
@@ -40,13 +41,19 @@ export async function GET(
       return err('게시글을 찾을 수 없습니다.', 404);
     }
 
-    const comments = await prisma.comment.findMany({
-      where: { postId },
-      include: {
-        author: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    const [comments, myLike] = await Promise.all([
+      prisma.comment.findMany({
+        where: { postId },
+        include: {
+          author: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.postLike.findUnique({
+        where: { postId_userId: { postId, userId: user.sub } },
+        select: { id: true },
+      }),
+    ]);
 
     return ok({
       post: {
@@ -58,6 +65,8 @@ export async function GET(
         imageUrl: post.imageUrl,
         createdAt: post.createdAt,
         author: post.author,
+        likeCount: post._count.likes,
+        liked: !!myLike,
       },
       comments: comments.map((c) => ({
         id: c.id,

@@ -42,7 +42,7 @@ export async function GET(
       where: { villaId },
       include: {
         author: { select: { id: true, name: true } },
-        _count: { select: { comments: true } },
+        _count: { select: { comments: true, likes: true } },
       },
       orderBy: [{ isNotice: 'desc' }, { createdAt: 'desc' }],
     });
@@ -58,6 +58,7 @@ export async function GET(
         createdAt: p.createdAt,
         author: p.author,
         commentCount: p._count.comments,
+        likeCount: p._count.likes,
       })),
     });
   } catch {

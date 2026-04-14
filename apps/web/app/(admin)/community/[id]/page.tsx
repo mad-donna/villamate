@@ -19,6 +19,8 @@ interface Post {
   imageUrl: string | null;
   createdAt: string;
   author: Author;
+  likeCount: number;
+  liked: boolean;
 }
 
 interface Comment {
@@ -53,6 +55,7 @@ export default function AdminPostDetailPage({
   const [commentText, setCommentText] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState('');
+  const [liking, setLiking] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
@@ -130,6 +133,20 @@ export default function AdminPostDetailPage({
     }
   }
 
+  async function handleLike() {
+    if (!post || !villaId || liking) return;
+    setLiking(true);
+    try {
+      const res = await fetch(`/api/villas/${villaId}/posts/${postId}/like`, { method: 'POST' });
+      const data = await res.json() as { liked?: boolean; likeCount?: number };
+      if (res.ok && data.likeCount !== undefined) {
+        setPost((prev) => prev ? { ...prev, liked: data.liked!, likeCount: data.likeCount! } : prev);
+      }
+    } finally {
+      setLiking(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
       {/* 헤더 */}
@@ -197,6 +214,25 @@ export default function AdminPostDetailPage({
                 className="mt-4 rounded-xl w-full object-cover"
               />
             )}
+            {/* 좋아요 */}
+            <div className="mt-4 pt-3 border-t border-neutral-100 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLike}
+                disabled={liking}
+                className={[
+                  'flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full transition-colors',
+                  post.liked
+                    ? 'bg-red-50 text-red-500'
+                    : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200',
+                ].join(' ')}
+              >
+                <svg className="w-4 h-4" fill={post.liked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {post.likeCount}
+              </button>
+            </div>
           </div>
 
           {/* 댓글 섹션 */}

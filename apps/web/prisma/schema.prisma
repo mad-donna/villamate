@@ -110,6 +110,7 @@ model User {
   tickets           Ticket[]
   polls             Poll[]
   buildingEvents    BuildingEvent[]
+  postLikes         PostLike[]
 }
 
 model Villa {
@@ -139,6 +140,7 @@ model Villa {
   tickets            Ticket[]
   notifications      Notification[]      @relation("VillaNotifications")
   tossBillingKey     TossBillingKey?
+  energyUsages       EnergyUsage[]
 }
 
 model SocialAccount {
@@ -246,11 +248,25 @@ model Post {
   isNotice  Boolean      @default(false)
   imageUrl  String?
   comments  Comment[]
+  likes     PostLike[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
   @@index([villaId, createdAt(sort: Desc)])
   @@index([authorId])
+}
+
+model PostLike {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
 }
 
 model Comment {
@@ -344,6 +360,7 @@ model Vehicle {
   plateNumber       String
   modelName         String?
   isVisitor         Boolean  @default(false)
+  visitorName       String?  // QR 등록 방문자 이름
   expectedDeparture String?
   createdAt         DateTime @default(now())
 
@@ -439,4 +456,23 @@ model Guide {
   updatedAt   DateTime @updatedAt
 
   @@index([isPublished, order])
+}
+
+model EnergyUsage {
+  id           String   @id @default(uuid())
+  villaId      String
+  villa        Villa    @relation(fields: [villaId], references: [id], onDelete: Cascade)
+  year         Int
+  month        Int      // 1-12
+  electricKwh  Float?   // 전기 사용량 (kWh)
+  electricFee  Int?     // 전기 요금 (원)
+  waterTon     Float?   // 수도 사용량 (톤)
+  waterFee     Int?     // 수도 요금 (원)
+  gasMj        Float?   // 가스 사용량 (MJ)
+  gasFee       Int?     // 가스 요금 (원)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([villaId, year, month])
+  @@index([villaId, year])
 }

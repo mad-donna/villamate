@@ -112,6 +112,7 @@ export default function AdminHomePage() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [multiVillaCount, setMultiVillaCount] = useState(0);
 
   useEffect(() => {
     const storedUser = getStoredUser();
@@ -124,15 +125,21 @@ export default function AdminHomePage() {
 
     const villaId = storedUser.villa?.id;
 
-    fetch(`/api/dashboard?role=ADMIN${villaId ? `&villaId=${villaId}` : ''}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
+    Promise.all([
+      fetch(`/api/dashboard?role=ADMIN${villaId ? `&villaId=${villaId}` : ''}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(async (res) => {
         if (!res.ok) throw new Error('dashboard fetch failed');
         return res.json() as Promise<AdminDashboardData | { needsSetup: true }>;
-      })
-      .then((json) => {
-        if ('needsSetup' in json && json.needsSetup) {
+      }),
+      fetch('/api/me/villas', { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => r.json())
+        .then((d: { villas?: unknown[] }) => d.villas?.length ?? 0)
+        .catch(() => 0),
+    ])
+      .then(([json, villaCount]) => {
+        setMultiVillaCount(villaCount as number);
+        if ('needsSetup' in (json as object) && (json as { needsSetup: true }).needsSetup) {
           setNeedsSetup(true);
         } else {
           setData(json as AdminDashboardData);
@@ -186,13 +193,25 @@ export default function AdminHomePage() {
         <header>
           <p className="text-sm text-neutral-500">안녕하세요,</p>
           <h1 className="text-xl font-bold text-neutral-900">{userName}님 👋</h1>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <p className="text-sm text-neutral-500">{villa.name}</p>
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${subscriptionBadgeClass[villa.subscriptionStatus]}`}
             >
               {subscriptionLabel[villa.subscriptionStatus]}
             </span>
+            {multiVillaCount > 1 && (
+              <button
+                type="button"
+                onClick={() => router.push('/profile/my-villas')}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                빌라 전환
+              </button>
+            )}
           </div>
         </header>
 

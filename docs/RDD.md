@@ -148,8 +148,8 @@ app/
 | F-01 | 이메일 + 비밀번호 로그인 / 신규 가입 | 1 | ✅ | bcrypt 해싱, JWT 발급 |
 | F-02 | 회원가입 3단계 플로우 (이메일 → 약관 동의 → 프로필 입력) | 1 | ✅ | |
 | F-03 | 역할 선택 (동대표 / 입주민) | 1 | ✅ | |
-| F-04 | 카카오·구글 소셜 로그인 | 3 | ⬜ | 이메일 로그인으로 Phase 1~2 커버 |
-| F-05 | 소셜 로그인 후 전화번호·이메일 보완 | 3 | ⬜ | |
+| F-04 | 카카오·구글 소셜 로그인 | 3 | ✅ | 2026-04-13 완료. OAuth 2.0 PKCE, state CSRF 방어, SocialAccount 모델, 카카오·구글 콜백 |
+| F-05 | 소셜 로그인 후 전화번호·이메일 보완 | 3 | ✅ | 2026-04-13 완료. needsSetup JWT flag, /profile-setup 페이지, /api/auth/social-complete |
 | F-06 | JWT 기반 세션 유지 (localStorage + 자동 갱신) | 1 | ✅ | 이전 AsyncStorage → localStorage |
 | F-07 | 모든 보호 API에 JWT 인증 적용 (middleware.ts 전역) | 1 | ✅ | PUBLIC_API 배열로 예외 처리 |
 | F-08 | 401 응답 시 자동 로그아웃 + 로그인 리다이렉트 | 1 | ✅ | Next.js middleware |
@@ -212,7 +212,7 @@ app/
 | F-40 | 미읽음 뱃지 (헤더 벨 아이콘) | 1 | ✅ | unreadCount 응답, 프로필 뱃지 |
 | F-41 | 관리자 공지 수동 푸시 (→ 전 입주민 알림함) | 2 | ✅ | isNotice POST 시 createMany 알림 |
 | F-42 | 투표 미참여 세대 독촉 알림 | 2 | ✅ | /remind 엔드포인트, 수동 트리거 |
-| F-43 | Web Push 알림 (브라우저) | 3 | ⬜ | iOS Safari 지원 현황 검토 필요 |
+| F-43 | Web Push 알림 (브라우저) | 3 | ✅ | 2026-04-13 완료. VAPID + Service Worker, PushSubscription 모델, lazy init으로 빌드 오류 방지 |
 
 ### 4-7. 커뮤니티 게시판
 
@@ -281,7 +281,7 @@ app/
 | F-74 | 쿠폰 코드로 무료 기간 활성화 | 1 | ✅ | POST /subscription/coupon, $transaction |
 | F-75 | 구독 만료(EXPIRED) 시 핵심 기능 제한 | 1 | ✅ | lib/subscription.ts — requireActiveSubscription() |
 | F-76 | 구독 만료 전 알림 (D-7, D-3, D-1) | 2 | ✅ | Cron — `subscription-reminder` |
-| F-77 | Toss Payments 빌링키 자동결제 | 3 | ⬜ | 핵심 수익 자동화 |
+| F-77 | Toss Payments 빌링키 자동결제 | 3 | ✅ | 2026-04-13 완료. TossBillingKey 모델, issueBillingKey/chargeBilling, auto-payment Cron |
 
 ### 4-14. 백오피스 (SUPER_ADMIN)
 
@@ -443,6 +443,7 @@ app/
 | 2026-04-07 | Sprint 1 진입 — F-51(민원 접수), F-52(민원 상태 관리), F-53(민원 알림) 완료. 루트 URL 랜딩 페이지 추가. Badge variant 빌드 오류 수정. |
 | 2026-04-10 | F-46(커뮤니티 댓글), F-47(내 게시글), F-48(게시글 이미지 첨부), F-54(투표 생성), F-55(투표 참여), F-56(1세대 1표), F-57(투표 결과 시각화) 완료. Supabase Storage `posts` 버킷 연동. `/api/upload` 라우트 구현. 1세대 1표 Prisma P2002 이중 검증 패턴 확립. |
 | 2026-04-12 | Sprint 3 완료 — F-80(KPI 대시보드), F-81(시스템 공지사항 CRUD), F-82(FAQ CRUD), F-83(가이드 CRUD), F-87(가이드 목록), F-88(가이드 열람), F-89(공지 조회, F-90 포함), F-90(고객센터·FAQ), NF-05(XSS 방어 완성), NF-10(DB 인덱스 9개), NF-14(Jest 테스트 32개). SystemNotice/Faq/Guide 신규 Prisma 모델 추가. CSP 헤더 전역 적용. Tiptap + DOMPurify 도입. |
+| 2026-04-13 | Phase 3 선행 — F-04(카카오·구글 소셜 로그인), F-05(소셜 프로필 보완), F-43(Web Push VAPID), F-77(Toss Payments 빌링키 자동결제) 완료. SocialAccount/PushSubscription/TossBillingKey Prisma 모델 추가. User.password nullable(String?) 변경. auto-payment Cron 등록. BottomNav z-index 계층(z-50/60/70/80) 확립. |
 
 ---
 

@@ -11,6 +11,8 @@ import {
   QuestionMarkCircleIcon,
   BookOpenIcon,
   ArrowRightStartOnRectangleIcon,
+  CurrencyDollarIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { getBoUser, clearBoAuth } from '@/lib/backoffice-auth';
 
@@ -24,6 +26,8 @@ const platformItems: SidebarItem[] = [
   { href: '/backoffice/dashboard', label: '대시보드', Icon: ChartBarIcon },
   { href: '/backoffice/villas', label: '빌라 목록', Icon: BuildingOffice2Icon },
   { href: '/backoffice/users', label: '사용자', Icon: UsersIcon },
+  { href: '/backoffice/billing', label: '청구 현황', Icon: DocumentTextIcon },
+  { href: '/backoffice/mrr', label: 'MRR 모니터링', Icon: CurrencyDollarIcon },
 ];
 
 const contentItems: SidebarItem[] = [
