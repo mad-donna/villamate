@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getUser, clearAuth, hasDualMode, setViewMode, type StoredUser } from '@/lib/client-auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface SectionItem {
   label: string;
@@ -153,7 +154,7 @@ function SectionList({ sections }: { sections: Section[] }) {
           <div className="bg-white divide-y divide-neutral-100">
             {section.items.map((item) => {
               const baseClass = [
-                'flex items-center justify-between px-4 py-4 min-h-[44px] border-b border-neutral-100',
+                'flex items-center justify-between px-4 py-4 min-h-[44px] border-b border-neutral-100 hover:bg-neutral-50 transition-colors',
                 item.destructive
                   ? 'text-error-500'
                   : 'text-neutral-900',
@@ -203,6 +204,7 @@ export default function AdminProfilePage() {
   const [passwordSheetOpen, setPasswordSheetOpen] = useState(false);
   const [dualMode, setDualMode] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
 
   useEffect(() => {
     setUser(getUser());
@@ -210,9 +212,12 @@ export default function AdminProfilePage() {
   }, []);
 
   async function handleWithdraw() {
-    const confirmed = confirm(
-      '정말 탈퇴하시겠습니까?\n계정 정보가 익명화되며 이 작업은 되돌릴 수 없습니다.',
-    );
+    const confirmed = await confirmDialog({
+      title: '회원 탈퇴',
+      description: '정말 탈퇴하시겠습니까? 계정 정보가 익명화되며 이 작업은 되돌릴 수 없습니다.',
+      confirmLabel: '탈퇴',
+      variant: 'destructive',
+    });
     if (!confirmed) return;
     setWithdrawing(true);
     try {
@@ -223,20 +228,26 @@ export default function AdminProfilePage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        alert(data.error ?? '탈퇴에 실패했습니다.');
+        // toast 대신 간단한 alert은 이미 useConfirm으로 처리 불가이므로 메시지 표시
+        window.alert(data.error ?? '탈퇴에 실패했습니다.');
         return;
       }
       clearAuth();
       router.push('/login');
     } catch {
-      alert('네트워크 오류가 발생했습니다.');
+      window.alert('네트워크 오류가 발생했습니다.');
     } finally {
       setWithdrawing(false);
     }
   }
 
-  function handleLogout() {
-    if (!confirm('로그아웃 하시겠습니까?')) return;
+  async function handleLogout() {
+    const confirmed = await confirmDialog({
+      title: '로그아웃',
+      description: '로그아웃 하시겠습니까?',
+      confirmLabel: '로그아웃',
+    });
+    if (!confirmed) return;
     clearAuth();
     router.push('/login');
   }
@@ -255,7 +266,7 @@ export default function AdminProfilePage() {
         {
           label: '초대 코드 보기',
           rightLabel: inviteCode,
-          onClick: () => alert(`초대 코드: ${inviteCode}`),
+          onClick: () => confirmDialog({ title: `초대 코드: ${inviteCode}`, cancelLabel: '닫기', confirmLabel: '확인' }),
         },
         {
           label: '구독 관리',
@@ -293,7 +304,7 @@ export default function AdminProfilePage() {
         },
         {
           label: '고객센터',
-          onClick: () => alert('고객센터: support@villamate.kr'),
+          onClick: () => confirmDialog({ title: '고객센터', description: 'support@villamate.kr', cancelLabel: '닫기', confirmLabel: '확인' }),
         },
       ],
     },
@@ -316,6 +327,7 @@ export default function AdminProfilePage() {
 
   return (
     <main className="pt-6 pb-10">
+      {confirmDialogEl}
       {/* 아바타 + 사용자 정보 */}
       <div className="flex flex-col items-center gap-3 px-4 mb-8">
         <ProfileAvatar name={user?.name ?? '?'} />
@@ -341,7 +353,7 @@ export default function AdminProfilePage() {
             <button
               type="button"
               onClick={handleSwitchToResident}
-              className="text-sm font-semibold text-primary-700 bg-white border border-primary-300 rounded-xl px-4 py-2 min-h-[40px] hover:bg-primary-50 transition-colors"
+              className="text-sm font-semibold text-primary-700 bg-white border border-primary-300 rounded-xl px-4 py-2 min-h-[44px] hover:bg-primary-50 transition-colors"
             >
               전환
             </button>

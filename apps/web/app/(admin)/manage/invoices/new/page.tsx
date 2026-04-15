@@ -168,7 +168,7 @@ export default function NewInvoicePage() {
 
   return (
     <main className="px-4 pt-6 pb-32">
-      <h1 className="text-2xl font-bold text-neutral-900 mb-6">새 청구서 발행</h1>
+      <h1 className="text-xl font-bold text-neutral-900 mb-6">새 청구서 발행</h1>
 
       {/* 청구 유형 탭 */}
       <section className="mb-6">

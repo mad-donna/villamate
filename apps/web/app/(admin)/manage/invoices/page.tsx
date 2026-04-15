@@ -72,7 +72,7 @@ export default function InvoiceListPage() {
     <main className="px-4 pt-6 pb-24">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-neutral-900">청구서 관리</h1>
+        <h1 className="text-xl font-bold text-neutral-900">청구서 관리</h1>
         <Button
           size="sm"
           onClick={() => router.push('/manage/invoices/new')}

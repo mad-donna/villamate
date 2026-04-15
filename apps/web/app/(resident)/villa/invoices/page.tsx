@@ -60,9 +60,9 @@ function getUserInfo(): {
 }
 
 const statusBadgeVariant = {
-  PAID: '완납',
-  PENDING: '미납',
-  OVERDUE: '납기임박',
+  PAID: 'success',
+  PENDING: 'error',
+  OVERDUE: 'warning',
 } as const;
 
 export default function ResidentInvoicePage() {
@@ -126,19 +126,19 @@ export default function ResidentInvoicePage() {
   const handlePay = useCallback(
     async (payment: InvoicePayment) => {
       if (!sdkReady) {
-        alert('결제 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+        window.alert('결제 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
         return;
       }
 
       const impCode = process.env.NEXT_PUBLIC_PORTONE_IMP_CODE;
       if (!impCode) {
-        alert('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.');
+        window.alert('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.');
         return;
       }
 
       const { villaId, token, name, phone } = getUserInfo();
       if (!villaId || !token) {
-        alert('로그인 정보를 확인할 수 없습니다. 다시 로그인해주세요.');
+        window.alert('로그인 정보를 확인할 수 없습니다. 다시 로그인해주세요.');
         return;
       }
 
@@ -162,7 +162,7 @@ export default function ResidentInvoicePage() {
           },
           async (response: PortOneResponse) => {
             if (!response.success || !response.imp_uid) {
-              alert(`결제에 실패했습니다.\n${response.error_msg ?? ''}`);
+              window.alert(`결제에 실패했습니다.\n${response.error_msg ?? ''}`);
               setPayingId(null);
               return;
             }
@@ -184,7 +184,7 @@ export default function ResidentInvoicePage() {
               const verifyData = await verifyRes.json();
 
               if (!verifyRes.ok || verifyData.error) {
-                alert(
+                window.alert(
                   `결제 검증 실패: ${verifyData.error ?? '알 수 없는 오류가 발생했습니다.'}\n고객센터에 문의해주세요.`,
                 );
                 setPayingId(null);
@@ -205,16 +205,16 @@ export default function ResidentInvoicePage() {
                 ),
               );
 
-              alert('납부가 완료되었습니다.');
+              window.alert('납부가 완료되었습니다.');
             } catch {
-              alert('결제 검증 중 네트워크 오류가 발생했습니다. 고객센터에 문의해주세요.');
+              window.alert('결제 검증 중 네트워크 오류가 발생했습니다. 고객센터에 문의해주세요.');
             } finally {
               setPayingId(null);
             }
           },
         );
       } catch {
-        alert('결제창을 열 수 없습니다. 잠시 후 다시 시도해주세요.');
+        window.alert('결제창을 열 수 없습니다. 잠시 후 다시 시도해주세요.');
         setPayingId(null);
       }
     },
@@ -239,7 +239,7 @@ export default function ResidentInvoicePage() {
       />
 
       <main className="px-4 pt-6 pb-12">
-        <h1 className="text-2xl font-bold text-neutral-900 mb-6">관리비 내역</h1>
+        <h1 className="text-xl font-bold text-neutral-900 mb-6">관리비 내역</h1>
 
         {error && (
           <p className="text-center text-error-500 py-8">{error}</p>

@@ -82,7 +82,7 @@ export default function InvoicePDFButton({
     const popup = window.open('', '_blank', 'width=700,height=900,scrollbars=yes');
     if (!popup) {
       // 팝업 차단 시 fallback 안내
-      alert('팝업이 차단되었습니다. 브라우저 팝업 허용 설정 후 다시 시도해 주세요.');
+      window.alert('팝업이 차단되었습니다. 브라우저 팝업 허용 설정 후 다시 시도해 주세요.');
       return;
     }
     popup.document.write(html);

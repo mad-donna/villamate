@@ -226,7 +226,7 @@ export default function AdminVehiclesPage() {
                   <button
                     type="button"
                     onClick={() => handleDelete(v.id)}
-                    className="text-xs text-neutral-400 hover:text-red-500 transition-colors p-1"
+                    className="text-xs text-neutral-400 hover:text-error-500 transition-colors p-1"
                   >
                     삭제
                   </button>
@@ -262,7 +262,7 @@ export default function AdminVehiclesPage() {
                     <button
                       type="button"
                       onClick={() => handleDelete(v.id)}
-                      className="text-xs text-neutral-400 hover:text-red-500 transition-colors p-1"
+                      className="text-xs text-neutral-400 hover:text-error-500 transition-colors p-1"
                     >
                       삭제
                     </button>
@@ -349,7 +349,7 @@ export default function AdminVehiclesPage() {
                 />
               </div>
             )}
-            {formError && <p className="text-xs text-red-500">{formError}</p>}
+            {formError && <p role="alert" className="text-xs text-error-600">{formError}</p>}
             <div className="flex gap-2 pb-safe">
               <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-3 rounded-xl bg-neutral-100 text-sm font-semibold text-neutral-700">취소</button>
               <button type="submit" disabled={submitting} className="flex-1 py-3 rounded-xl bg-primary-600 text-sm font-semibold text-white disabled:opacity-50">

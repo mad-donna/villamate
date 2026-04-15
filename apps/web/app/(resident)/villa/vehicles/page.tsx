@@ -141,7 +141,7 @@ export default function VehiclesPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <h1 className="text-2xl font-bold text-neutral-900 flex-1">주차 관리</h1>
+        <h1 className="text-xl font-bold text-neutral-900 flex-1">주차 관리</h1>
         <Button size="sm" onClick={() => setShowForm(true)}>+ 차량 등록</Button>
       </div>
 

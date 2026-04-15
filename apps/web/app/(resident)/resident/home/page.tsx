@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getUser as getStoredUser, getToken } from '@/lib/client-auth';
 import { WidgetCard } from '@/components/ui/WidgetCard';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Button } from '@/components/ui/Button';
 
 // ---------- 타입 ----------
 
@@ -40,7 +41,7 @@ const shortcuts = [
   { label: '관리비 납부', icon: '💳', href: '/villa/invoices' },
   { label: '전자투표', icon: '🗳️', href: '/villa/polls' },
   { label: '공지사항', icon: '📢', href: '/resident/community' },
-  { label: '건물이력', icon: '🏗️', href: '/villa' },
+  { label: '건물이력', icon: '🏗️', href: '/villa/building' },
 ];
 
 // ---------- 로딩 스켈레톤 ----------
@@ -75,13 +76,14 @@ function NeedsSetup({ router }: { router: ReturnType<typeof useRouter> }) {
       <span className="text-5xl">🔑</span>
       <h1 className="text-xl font-bold text-neutral-900">아직 빌라에 가입하지 않으셨어요</h1>
       <p className="text-sm text-neutral-500">초대 코드를 입력하여 빌라에 가입해주세요.</p>
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        size="md"
+        className="mt-2"
         onClick={() => router.push('/join')}
-        className="mt-2 bg-blue-600 text-white text-sm font-semibold px-6 py-3 min-h-[44px] rounded-2xl active:scale-95 transition-transform"
       >
         빌라 가입하기
-      </button>
+      </Button>
     </main>
   );
 }
@@ -92,6 +94,7 @@ export default function ResidentHomePage() {
   const router = useRouter();
   const [data, setData] = useState<ResidentDashboardData | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -119,11 +122,26 @@ export default function ResidentHomePage() {
           setData(json as ResidentDashboardData);
         }
       })
-      .catch(() => setNeedsSetup(true))
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [router]);
 
   if (loading) return <DashboardSkeleton />;
+  if (fetchError) return (
+    <main className="px-4 pt-12 flex flex-col items-center text-center gap-4">
+      <span className="text-5xl">⚠️</span>
+      <h1 className="text-xl font-bold text-neutral-900">데이터를 불러오지 못했습니다</h1>
+      <p className="text-sm text-neutral-500">잠시 후 다시 시도해주세요.</p>
+      <Button
+        variant="primary"
+        size="md"
+        className="mt-2"
+        onClick={() => window.location.reload()}
+      >
+        다시 시도
+      </Button>
+    </main>
+  );
   if (needsSetup) return <NeedsSetup router={router} />;
   if (!data) return null;
 

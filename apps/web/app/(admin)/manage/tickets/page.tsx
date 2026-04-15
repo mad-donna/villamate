@@ -131,7 +131,7 @@ export default function TicketsPage() {
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
       <div className="px-4 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-neutral-900">민원 관리</h1>
+        <h1 className="text-xl font-bold text-neutral-900">민원 관리</h1>
       </div>
 
       <div className="px-4 mb-4 flex gap-2 flex-wrap">

@@ -31,9 +31,9 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
   RESOLVED: '완료',
 };
 
-const STATUS_VARIANTS: Record<TicketStatus, 'neutral' | 'success' | 'warning'> = {
-  PENDING: 'neutral',
-  IN_PROGRESS: 'warning',
+const STATUS_VARIANTS: Record<TicketStatus, 'warning' | 'info' | 'success'> = {
+  PENDING: 'warning',
+  IN_PROGRESS: 'info',
   RESOLVED: 'success',
 };
 
@@ -78,7 +78,7 @@ export default function TicketsPage() {
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
       <div className="flex items-center justify-between px-4 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-neutral-900">민원 접수</h1>
+        <h1 className="text-xl font-bold text-neutral-900">민원 접수</h1>
         <Button size="sm" onClick={() => router.push('/villa/tickets/new')}>
           + 접수하기
         </Button>

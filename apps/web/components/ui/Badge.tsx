@@ -1,11 +1,6 @@
 import { type HTMLAttributes } from 'react';
 
 type BadgeVariant =
-  | '완납'
-  | '미납'
-  | '납기임박'
-  | '진행중'
-  | '종료'
   | 'success'
   | 'error'
   | 'warning'
@@ -18,15 +13,10 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const variantClasses: Record<BadgeVariant, string> = {
-  완납: 'bg-green-100 text-green-700',
-  미납: 'bg-red-100 text-red-700',
-  납기임박: 'bg-orange-100 text-orange-700',
-  진행중: 'bg-blue-100 text-blue-700',
-  종료: 'bg-neutral-100 text-neutral-500',
-  success: 'bg-green-100 text-green-700',
-  error: 'bg-red-100 text-red-700',
-  warning: 'bg-orange-100 text-orange-700',
-  info: 'bg-blue-100 text-blue-700',
+  success: 'bg-success-100 text-success-700',
+  error: 'bg-error-100 text-error-700',
+  warning: 'bg-warning-100 text-warning-700',
+  info: 'bg-primary-100 text-primary-700',
   neutral: 'bg-neutral-100 text-neutral-500',
 };
 

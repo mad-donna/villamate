@@ -12,10 +12,10 @@ interface WidgetCardProps {
 }
 
 const borderColorMap: Record<string, string> = {
-  primary: 'border-l-blue-600',
-  error: 'border-l-red-500',
-  warning: 'border-l-orange-500',
-  success: 'border-l-green-500',
+  primary: 'border-l-primary-600',
+  error: 'border-l-error-500',
+  warning: 'border-l-warning-600',
+  success: 'border-l-success-600',
 };
 
 export function WidgetCard({

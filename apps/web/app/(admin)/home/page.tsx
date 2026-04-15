@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getUser as getStoredUser, getToken } from '@/lib/client-auth';
 import { WidgetCard } from '@/components/ui/WidgetCard';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Button } from '@/components/ui/Button';
 
 // ---------- 타입 ----------
 
@@ -45,9 +46,9 @@ const subscriptionLabel: Record<string, string> = {
 };
 
 const subscriptionBadgeClass: Record<string, string> = {
-  FREE_TRIAL: 'bg-blue-100 text-blue-700',
-  ACTIVE: 'bg-green-100 text-green-700',
-  EXPIRED: 'bg-red-100 text-red-700',
+  FREE_TRIAL: 'bg-primary-100 text-primary-700',
+  ACTIVE: 'bg-success-100 text-success-700',
+  EXPIRED: 'bg-error-100 text-error-700',
 };
 
 // ---------- 바로가기 메뉴 ----------
@@ -56,7 +57,7 @@ const shortcuts = [
   { label: '청구서 발행', icon: '🧾', href: '/manage/invoices' },
   { label: '입주민 관리', icon: '👥', href: '/manage/residents' },
   { label: '전자투표', icon: '🗳️', href: '/manage/polls' },
-  { label: '건물이력', icon: '🏗️', href: '/manage/building-events' },
+  { label: '건물이력', icon: '🏗️', href: '/manage/building' },
   { label: '커뮤니티', icon: '💬', href: '/community' },
   { label: '장부', icon: '📒', href: '/ledger' },
 ];
@@ -93,13 +94,14 @@ function NeedsSetup({ router }: { router: ReturnType<typeof useRouter> }) {
       <span className="text-5xl">🏠</span>
       <h1 className="text-xl font-bold text-neutral-900">빌라가 등록되지 않았습니다</h1>
       <p className="text-sm text-neutral-500">관리할 빌라를 먼저 등록해주세요.</p>
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        size="md"
+        className="mt-2"
         onClick={() => router.push('/onboarding')}
-        className="mt-2 bg-blue-600 text-white text-sm font-semibold px-6 py-3 min-h-[44px] rounded-2xl active:scale-95 transition-transform"
       >
         빌라 등록하기
-      </button>
+      </Button>
     </main>
   );
 }

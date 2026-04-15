@@ -122,7 +122,7 @@ export default function LedgerPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
           </svg>
         </button>
-        <h1 className="text-2xl font-bold text-neutral-900">공용 장부</h1>
+        <h1 className="text-xl font-bold text-neutral-900">공용 장부</h1>
       </div>
 
       {/* 년/월 선택기 */}

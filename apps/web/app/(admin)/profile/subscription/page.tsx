@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useConfirm } from '@/hooks/useConfirm';
 
 type SubscriptionStatus = 'FREE_TRIAL' | 'ACTIVE' | 'EXPIRED';
 
@@ -42,9 +43,9 @@ function authHeader() {
 
 function StatusBadge({ status }: { status: SubscriptionStatus }) {
   const config: Record<SubscriptionStatus, { label: string; className: string }> = {
-    FREE_TRIAL: { label: '무료 체험중', className: 'bg-blue-100 text-blue-700' },
-    ACTIVE: { label: '구독 활성', className: 'bg-green-100 text-green-700' },
-    EXPIRED: { label: '구독 만료', className: 'bg-red-100 text-red-700' },
+    FREE_TRIAL: { label: '무료 체험중', className: 'bg-primary-100 text-primary-700' },
+    ACTIVE: { label: '구독 활성', className: 'bg-success-100 text-success-700' },
+    EXPIRED: { label: '구독 만료', className: 'bg-error-100 text-error-700' },
   };
   const { label, className } = config[status];
   return (
@@ -96,6 +97,8 @@ export default function SubscriptionPage() {
   const [info, setInfo] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const [card, setCard] = useState<CardInfo | null>(null);
   const [cardLoading, setCardLoading] = useState(false);
@@ -183,7 +186,13 @@ export default function SubscriptionPage() {
   }
 
   async function handleUnregisterCard() {
-    if (!confirm('자동결제를 해제하시겠습니까?\n다음 결제일부터 자동 갱신되지 않습니다.')) return;
+    const confirmed = await confirm({
+      title: '자동결제 해제',
+      description: '자동결제를 해제하시겠습니까? 다음 결제일부터 자동 갱신되지 않습니다.',
+      confirmLabel: '해제',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
     const villaId = getVillaId();
     if (!villaId) return;
 
@@ -241,7 +250,8 @@ export default function SubscriptionPage() {
   const isExpired = info?.subscriptionStatus === 'EXPIRED';
 
   return (
-    <main className="max-w-lg mx-auto pb-16">
+    <main className="max-w-lg mx-auto pb-24">
+      {confirmDialog}
       <Suspense fallback={null}>
         <TossRedirectHandler onSuccess={handleTossSuccess} onFail={handleTossFail} />
       </Suspense>
@@ -262,9 +272,9 @@ export default function SubscriptionPage() {
 
       {/* 만료 경고 배너 */}
       {isExpired && (
-        <div className="mx-4 mb-4 flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl p-4">
-          <span className="text-red-500 text-lg leading-none mt-0.5">!</span>
-          <p className="text-sm text-red-700 font-medium">
+        <div className="mx-4 mb-4 flex items-start gap-3 bg-error-50 border border-error-200 rounded-2xl p-4">
+          <span className="text-error-500 text-lg leading-none mt-0.5">!</span>
+          <p className="text-sm text-error-700 font-medium">
             구독이 만료되어 서비스 이용이 제한됩니다. 자동결제를 등록하거나 쿠폰을 적용해주세요.
           </p>
         </div>
@@ -272,12 +282,12 @@ export default function SubscriptionPage() {
 
       {loading && (
         <div className="flex justify-center py-16">
-          <div className="w-8 h-8 border-4 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
       {!loading && fetchError && (
-        <p className="text-center text-red-500 py-8 px-4">{fetchError}</p>
+        <p className="text-center text-error-500 py-8 px-4">{fetchError}</p>
       )}
 
       {!loading && !fetchError && info && (
@@ -291,14 +301,14 @@ export default function SubscriptionPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-neutral-500">유효 기간</span>
-              <span className={`text-sm font-medium ${isExpired ? 'text-red-600' : 'text-neutral-900'}`}>
+              <span className={`text-sm font-medium ${isExpired ? 'text-error-600' : 'text-neutral-900'}`}>
                 {formatExpiryDate(info.subscriptionExpiry)}
               </span>
             </div>
             {info.daysRemaining !== null && (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-neutral-500">남은 일수</span>
-                <span className={`text-sm font-semibold ${info.daysRemaining <= 7 ? 'text-red-600' : 'text-neutral-900'}`}>
+                <span className={`text-sm font-semibold ${info.daysRemaining <= 7 ? 'text-error-600' : 'text-neutral-900'}`}>
                   {info.daysRemaining}일 남음
                 </span>
               </div>
@@ -309,7 +319,7 @@ export default function SubscriptionPage() {
           <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-neutral-900">자동결제</h2>
-              <span className="text-sm font-bold text-[#2563EB]">월 19,900원</span>
+              <span className="text-sm font-bold text-primary-600">월 19,900원</span>
             </div>
 
             {card ? (
@@ -375,7 +385,7 @@ export default function SubscriptionPage() {
           <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
             <div className="flex items-baseline justify-between">
               <h2 className="text-base font-semibold text-neutral-900">프리미엄 플랜</h2>
-              <span className="text-lg font-bold text-[#2563EB]">월 19,900원</span>
+              <span className="text-lg font-bold text-primary-600">월 19,900원</span>
             </div>
             <ul className="space-y-2">
               {[
@@ -389,7 +399,7 @@ export default function SubscriptionPage() {
                 '알림 및 푸시 메시지',
               ].map((feature) => (
                 <li key={feature} className="flex items-start gap-2 text-sm text-neutral-700">
-                  <span className="mt-0.5 text-[#16A34A] font-bold">✓</span>
+                  <span className="mt-0.5 text-success-700 font-bold">✓</span>
                   {feature}
                 </li>
               ))}
@@ -406,7 +416,7 @@ export default function SubscriptionPage() {
           className={[
             'fixed bottom-20 left-1/2 -translate-x-1/2 z-60',
             'px-5 py-3 rounded-2xl shadow-lg text-sm font-medium text-white transition-all duration-300',
-            toast.type === 'success' ? 'bg-[#16A34A]' : 'bg-[#DC2626]',
+            toast.type === 'success' ? 'bg-success-600' : 'bg-error-600',
           ].join(' ')}
           role="status"
           aria-live="polite"

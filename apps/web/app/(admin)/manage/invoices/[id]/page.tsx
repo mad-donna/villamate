@@ -57,9 +57,9 @@ function getVillaId(): string | null {
 }
 
 const statusBadgeVariant = {
-  PAID: '완납',
-  PENDING: '미납',
-  OVERDUE: '납기임박',
+  PAID: 'success',
+  PENDING: 'error',
+  OVERDUE: 'warning',
 } as const;
 
 export default function InvoiceDetailPage() {

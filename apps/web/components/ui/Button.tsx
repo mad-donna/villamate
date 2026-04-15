@@ -19,11 +19,11 @@ const variantClasses: Record<Variant, string> = {
   ghost:
     'bg-transparent text-neutral-700 hover:bg-neutral-100 active:bg-neutral-200 disabled:text-neutral-400',
   destructive:
-    'bg-error-500 text-white hover:bg-red-600 active:bg-red-700 disabled:bg-neutral-200 disabled:text-neutral-400',
+    'bg-error-500 text-white hover:bg-error-600 active:bg-error-700 disabled:bg-neutral-200 disabled:text-neutral-400',
 };
 
 const sizeClasses: Record<Size, string> = {
-  lg: 'h-13 px-6 text-base',
+  lg: 'h-12 px-6 text-base',
   md: 'h-11 px-5 text-sm',
   sm: 'min-h-[44px] px-4 text-sm',
 };

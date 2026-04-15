@@ -117,7 +117,7 @@ function ProfileSetupForm() {
 
 export default function ProfileSetupPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="min-h-screen bg-neutral-50" />}>
       <ProfileSetupForm />
     </Suspense>
   );

@@ -7,7 +7,8 @@ interface ChipProps {
 
 function Chip({ label, selected, onRemove, onClick }: ChipProps) {
   return (
-    <span
+    <button
+      type="button"
       onClick={onClick}
       className={[
         'inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium cursor-pointer select-none transition-colors',
@@ -30,7 +31,7 @@ function Chip({ label, selected, onRemove, onClick }: ChipProps) {
           ×
         </button>
       )}
-    </span>
+    </button>
   );
 }
 

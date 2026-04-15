@@ -250,7 +250,7 @@ export default function AdminLedgerPage() {
     <main className="min-h-screen bg-neutral-50 pb-24">
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-neutral-900">공용 장부</h1>
+        <h1 className="text-xl font-bold text-neutral-900">공용 장부</h1>
         {!showForm && (
           <Button size="sm" onClick={handleOpenForm}>
             + 내역 등록

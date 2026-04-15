@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import { Button } from '@/components/ui/Button';
 
 interface BillingData {
   id: string;
@@ -165,8 +166,8 @@ export default function PayPage() {
   if (completed) {
     return (
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-6">
-          <svg className="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="w-20 h-20 rounded-full bg-success-100 flex items-center justify-center mb-6">
+          <svg className="w-10 h-10 text-success-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         </div>
@@ -250,24 +251,16 @@ export default function PayPage() {
       {billing.status === 'PENDING' && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-100 px-4 py-4">
           <div className="max-w-md mx-auto">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
               onClick={handlePay}
+              loading={paying}
               disabled={paying}
-              className="w-full h-13 rounded-xl bg-primary-600 text-white font-semibold text-base hover:bg-primary-700 active:bg-primary-700 disabled:bg-neutral-200 disabled:text-neutral-400 transition-colors inline-flex items-center justify-center gap-2"
             >
-              {paying ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  처리 중...
-                </>
-              ) : (
-                `${formatAmount(billing.amount)} 납부하기`
-              )}
-            </button>
+              {paying ? '처리 중...' : `${formatAmount(billing.amount)} 납부하기`}
+            </Button>
             <p className="text-center text-xs text-neutral-400 mt-2">
               KG Inicis 안전 결제 · SSL 암호화
             </p>
@@ -280,9 +273,9 @@ export default function PayPage() {
 
 function StatusBadge({ status }: { status: BillingData['status'] }) {
   const classes: Record<BillingData['status'], string> = {
-    PENDING: 'bg-orange-100 text-orange-700',
-    PENDING_CONFIRMATION: 'bg-blue-100 text-blue-700',
-    COMPLETED: 'bg-green-100 text-green-700',
+    PENDING: 'bg-warning-100 text-warning-700',
+    PENDING_CONFIRMATION: 'bg-primary-100 text-primary-700',
+    COMPLETED: 'bg-success-100 text-success-700',
   };
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${classes[status]}`}>

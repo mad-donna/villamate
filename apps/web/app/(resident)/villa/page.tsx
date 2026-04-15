@@ -87,7 +87,7 @@ export default function VillaPage() {
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
       <div className="px-4 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-neutral-900">우리 빌라</h1>
+        <h1 className="text-xl font-bold text-neutral-900">우리 빌라</h1>
         <p className="text-sm text-neutral-500 mt-1">빌라 정보와 공동 서비스를 확인하세요.</p>
       </div>
 

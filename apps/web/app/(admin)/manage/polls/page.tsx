@@ -75,7 +75,7 @@ export default function AdminPollsPage() {
             </svg>
             관리
           </button>
-          <h1 className="text-2xl font-bold text-neutral-900">전자투표</h1>
+          <h1 className="text-xl font-bold text-neutral-900">전자투표</h1>
         </div>
         <Button size="sm" onClick={() => router.push('/manage/polls/new')}>
           + 투표 생성
