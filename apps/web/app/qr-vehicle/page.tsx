@@ -23,19 +23,15 @@ function QrVehicleForm() {
       setTokenValid(false);
       return;
     }
-    // 빌라 이름 미리 가져오기 (토큰 검증 겸)
-    fetch(`/api/villas/${villaId}/vehicles/visitor`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, plateNumber: '00테0000' }), // dry-run: plate 형식 오류로 400 응답 유도
-    })
+    // 전용 verify 엔드포인트로 토큰 유효성만 검사 (DB 기록 없음)
+    fetch(`/api/villas/${villaId}/vehicles/qr-verify?token=${encodeURIComponent(token)}`)
       .then((r) => r.json())
-      .then((d: { error?: string; villaName?: string }) => {
-        if (d.error === '유효하지 않거나 만료된 QR 코드입니다.' || d.error === '유효하지 않은 QR 코드입니다.') {
-          setTokenValid(false);
-        } else {
+      .then((d: { valid?: boolean; villaName?: string }) => {
+        if (d.valid) {
           setTokenValid(true);
           if (d.villaName) setVillaName(d.villaName);
+        } else {
+          setTokenValid(false);
         }
       })
       .catch(() => setTokenValid(false));

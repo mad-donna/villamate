@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { getUser, ok, err } from '@/lib/api';
 
 type Params = { params: Promise<{ villaId: string; postId: string }> };
@@ -44,11 +45,24 @@ export async function POST(req: NextRequest, { params }: Params) {
       await prisma.postLike.delete({ where: { id: existing.id } });
       const likeCount = await prisma.postLike.count({ where: { postId } });
       return ok({ liked: false, likeCount });
-    } else {
-      await prisma.postLike.create({ data: { postId, userId: user.sub } });
-      const likeCount = await prisma.postLike.count({ where: { postId } });
-      return ok({ liked: true, likeCount });
     }
+
+    // race condition 방어: 동시 요청으로 P2002(unique 충돌) 발생 시 이미 좋아요 상태로 처리
+    try {
+      await prisma.postLike.create({ data: { postId, userId: user.sub } });
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        const likeCount = await prisma.postLike.count({ where: { postId } });
+        return ok({ liked: true, likeCount });
+      }
+      throw e;
+    }
+
+    const likeCount = await prisma.postLike.count({ where: { postId } });
+    return ok({ liked: true, likeCount });
   } catch {
     return err('서버 오류가 발생했습니다.', 500);
   }

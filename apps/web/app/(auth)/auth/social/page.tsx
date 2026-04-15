@@ -9,33 +9,33 @@ function SocialAuthHandler() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const token = searchParams.get('token');
     const next = searchParams.get('next') ?? '/home';
 
-    if (!token) {
-      router.replace('/login?error=소셜+로그인에+실패했습니다.');
-      return;
-    }
+    // HttpOnly 쿠키에 담긴 JWT를 exchange-token 엔드포인트로 수령
+    fetch('/api/auth/exchange-token')
+      .then((r) => {
+        if (!r.ok) throw new Error('token not found');
+        return r.json();
+      })
+      .then(async (data: { token?: string; error?: string }) => {
+        const token = data.token;
+        if (!token) throw new Error('token missing');
 
-    // token을 저장하고 사용자 정보 조회
-    saveToken(token);
+        saveToken(token);
 
-    fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data: { user?: StoredUser; error?: string }) => {
-        if (data.user) {
-          saveUser(data.user);
-        }
-        // profile-setup은 token을 쿼리로 전달 (API 호출에 사용)
+        const meRes = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const meData = (await meRes.json()) as { user?: StoredUser };
+        if (meData.user) saveUser(meData.user);
+
         if (next === '/profile-setup') {
           router.replace(`/profile-setup?token=${encodeURIComponent(token)}`);
         } else {
           router.replace(next);
         }
       })
-      .catch(() => router.replace(next));
+      .catch(() => router.replace('/login?error=소셜+로그인에+실패했습니다.'));
   }, [router, searchParams]);
 
   return (

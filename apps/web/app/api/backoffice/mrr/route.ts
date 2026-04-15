@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
+import { SUBSCRIPTION_MONTHLY_PRICE } from '@/lib/pricing';
 
-// VillaMate 요금제 (월 구독 단가)
-const MONTHLY_PRICE = 29900; // 원
+const MONTHLY_PRICE = SUBSCRIPTION_MONTHLY_PRICE;
 
 // GET /api/backoffice/mrr
 // MRR = 현재 ACTIVE 구독 수 × 월 단가
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     // 현재 구독 현황
     const [activeCount, freeTrialCount, expiredCount] = await Promise.all([
       prisma.villa.count({ where: { subscriptionStatus: 'ACTIVE' } }),
-      prisma.villa.count({ where: { subscriptionStatus: 'ACTIVE', subscriptionExpiry: { gt: now } } }),
+      prisma.villa.count({ where: { subscriptionStatus: 'FREE_TRIAL' } }),
       prisma.villa.count({ where: { subscriptionStatus: 'EXPIRED' } }),
     ]);
 

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
 import { issueBillingKey } from '@/lib/toss';
+import { encryptBillingKey } from '@/lib/crypto';
 
 type Params = { params: Promise<{ villaId: string }> };
 
@@ -48,17 +49,19 @@ export async function POST(req: NextRequest, { params }: Params) {
     return err(e instanceof Error ? e.message : '빌링키 발급에 실패했습니다.', 502);
   }
 
+  const encryptedBillingKey = encryptBillingKey(keyInfo.billingKey);
+
   await prisma.tossBillingKey.upsert({
     where: { villaId },
     create: {
       villaId,
-      billingKey: keyInfo.billingKey,
+      billingKey: encryptedBillingKey,
       customerKey: keyInfo.customerKey,
       cardCompany: keyInfo.cardCompany,
       cardNumber: keyInfo.cardNumber,
     },
     update: {
-      billingKey: keyInfo.billingKey,
+      billingKey: encryptedBillingKey,
       customerKey: keyInfo.customerKey,
       cardCompany: keyInfo.cardCompany,
       cardNumber: keyInfo.cardNumber,

@@ -3,6 +3,12 @@ import { verifyToken } from './lib/auth';
 
 const PUBLIC_API = ['/api/auth/', '/api/cron/', '/api/pay/', '/api/backoffice/auth/'];
 
+// 동적 세그먼트를 포함하는 비로그인 공개 엔드포인트 (prefix matching 불가 경로)
+const PUBLIC_PATH_PATTERNS = [
+  /^\/api\/villas\/[^/]+\/vehicles\/visitor$/,
+  /^\/api\/villas\/[^/]+\/vehicles\/qr-verify$/,
+];
+
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 function isAllowedOrigin(origin: string, req: NextRequest): boolean {
@@ -33,8 +39,22 @@ function isAllowedOrigin(origin: string, req: NextRequest): boolean {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // 백오피스 페이지 서버 사이드 인증 (로그인 페이지 제외)
+  if (pathname.startsWith('/backoffice/') && pathname !== '/backoffice/login') {
+    const boSession = req.cookies.get('bo_session')?.value;
+    if (!boSession) {
+      return NextResponse.redirect(new URL('/backoffice/login', req.url));
+    }
+    const payload = await verifyToken(boSession);
+    if (!payload || payload.role !== 'SUPER_ADMIN') {
+      return NextResponse.redirect(new URL('/backoffice/login', req.url));
+    }
+    return NextResponse.next();
+  }
+
   if (!pathname.startsWith('/api/')) return NextResponse.next();
   if (PUBLIC_API.some((p) => pathname.startsWith(p))) return NextResponse.next();
+  if (PUBLIC_PATH_PATTERNS.some((p) => p.test(pathname))) return NextResponse.next();
 
   // CSRF 방어: 변경 메서드에 대해 Origin/Referer 헤더 검증
   if (MUTATING_METHODS.has(req.method)) {
@@ -84,5 +104,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: '/api/:path*',
+  matcher: ['/api/:path*', '/backoffice/:path*'],
 };

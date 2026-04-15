@@ -33,7 +33,13 @@ export async function POST(req: NextRequest) {
       && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
     if (!isJpeg && !isPng && !isGif && !isWebp) return err('이미지 파일만 업로드 가능합니다.', 400);
 
-    const ext = file.name.split('.').pop() ?? 'jpg';
+    const MIME_TO_EXT: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
+    const ext = MIME_TO_EXT[file.type] ?? 'jpg';
     const fileName = `posts/${Date.now()}-${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage
       .from('posts')

@@ -61,7 +61,8 @@ function SidebarLink({ item }: { item: SidebarItem }) {
 function Sidebar() {
   const router = useRouter();
 
-  function handleLogout() {
+  async function handleLogout() {
+    await fetch('/api/backoffice/auth/logout', { method: 'POST' }).catch(() => {});
     clearBoAuth();
     router.push('/backoffice/login');
   }

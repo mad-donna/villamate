@@ -2,11 +2,13 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { chargeBilling } from '@/lib/toss';
 import { createNotification } from '@/lib/notify';
+import { SUBSCRIPTION_MONTHLY_PRICE, SUBSCRIPTION_ORDER_NAME } from '@/lib/pricing';
+import { decryptBillingKey } from '@/lib/crypto';
 
-const MONTHLY_AMOUNT = 19900;
-const ORDER_NAME = 'VillaMate 월간 구독';
+const MONTHLY_AMOUNT = SUBSCRIPTION_MONTHLY_PRICE;
+const ORDER_NAME = SUBSCRIPTION_ORDER_NAME;
 
-// POST — Vercel Cron: 매일 UTC 00:00 (KST 09:00) 실행
+// POST — Vercel Cron: 매일 UTC 15:00 (KST 00:00) 실행
 // 당일 만료 또는 이미 만료된 ACTIVE 빌라 중 빌링키 보유 빌라 자동결제
 export async function POST(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     try {
       await chargeBilling({
-        billingKey: bk.billingKey,
+        billingKey: decryptBillingKey(bk.billingKey),
         customerKey: bk.customerKey,
         amount: MONTHLY_AMOUNT,
         orderId,

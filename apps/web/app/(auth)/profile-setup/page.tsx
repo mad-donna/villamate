@@ -10,7 +10,8 @@ function ProfileSetupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [token, setToken] = useState('');
+  // useState 초기화 함수로 마운트 시점의 토큰을 캡처 (useEffect 2회 실행 race 방지)
+  const [token] = useState(() => searchParams.get('token') ?? '');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -18,11 +19,9 @@ function ProfileSetupForm() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const t = searchParams.get('token') ?? '';
-    setToken(t);
-    // URL에서 token 제거
-    if (t) router.replace('/profile-setup');
-  }, [searchParams, router]);
+    // 캡처된 token이 있으면 URL에서 제거 (히스토리 오염 방지)
+    if (token) router.replace('/profile-setup');
+  }, [token, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

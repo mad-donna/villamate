@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { signToken } from '@/lib/auth';
-import { ok, err } from '@/lib/api';
+import { err } from '@/lib/api';
 
 /**
  * POST /api/backoffice/auth/login
@@ -37,10 +37,22 @@ export async function POST(req: NextRequest) {
       role: user.role,
     });
 
-    return ok({
+    const res = NextResponse.json({
+      ok: true,
       token,
       user: { id: user.id, email: user.email, name: user.name, role: user.role },
     });
+
+    // 서버 사이드 미들웨어 보호를 위한 HttpOnly 세션 쿠키
+    res.cookies.set('bo_session', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/backoffice',
+      maxAge: 60 * 60 * 8, // 8시간
+    });
+
+    return res;
   } catch {
     return err('서버 오류가 발생했습니다.', 500);
   }

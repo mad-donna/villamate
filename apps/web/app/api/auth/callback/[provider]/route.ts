@@ -112,12 +112,20 @@ export async function GET(
     needsSetup,
   });
 
-  // state 쿠키 삭제 후 /auth/social 중간 페이지로 리다이렉트
-  // 클라이언트에서 token을 localStorage에 저장 후 최종 목적지로 이동
+  // state 쿠키 삭제 후 /auth/social 중간 페이지로 리다이렉트.
+  // JWT를 URL에 노출하지 않기 위해 단기 HttpOnly 쿠키로 전달하고
+  // 클라이언트가 /api/auth/exchange-token을 호출해 토큰을 수령합니다.
   const next = needsSetup ? '/profile-setup' : isNewUser ? '/select-role' : '/home';
-  const destination = `${origin}/auth/social?token=${encodeURIComponent(token)}&next=${encodeURIComponent(next)}`;
+  const destination = `${origin}/auth/social?next=${encodeURIComponent(next)}`;
 
   const res = NextResponse.redirect(destination);
   res.cookies.delete('oauth_state');
+  res.cookies.set('pending_auth_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60, // 60초 일회성
+    path: '/',
+  });
   return res;
 }
