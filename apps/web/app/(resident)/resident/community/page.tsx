@@ -67,7 +67,7 @@ export default function ResidentCommunityPage() {
     <main className="min-h-screen bg-neutral-50 pb-24">
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-neutral-900">커뮤니티</h1>
+        <h1 className="text-xl font-bold text-neutral-900">커뮤니티</h1>
         <Button
           size="sm"
           onClick={() => router.push('/resident/community/new')}

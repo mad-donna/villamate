@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface ResidentUser {
   id: string;
@@ -33,6 +34,7 @@ export default function ResidentsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const { confirm: confirmMoveOut, dialog: confirmDialog } = useConfirm();
 
   // 호수 관리 BottomSheet 상태
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -192,9 +194,12 @@ export default function ResidentsPage() {
   }
 
   async function handleMoveOut(resident: Resident) {
-    const confirmed = window.confirm(
-      `${resident.roomNumber}호 ${resident.user.name}님을 전출 처리하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
-    );
+    const confirmed = await confirmMoveOut({
+      title: '전출 처리',
+      description: `${resident.roomNumber}호 ${resident.user.name}님을 전출 처리하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+      confirmLabel: '전출',
+      variant: 'destructive',
+    });
     if (!confirmed) return;
 
     setDeletingId(resident.id);
@@ -217,9 +222,10 @@ export default function ResidentsPage() {
 
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
+      {confirmDialog}
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-neutral-900">입주민 관리</h1>
+        <h1 className="text-xl font-bold text-neutral-900">입주민 관리</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"

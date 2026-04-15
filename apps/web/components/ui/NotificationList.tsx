@@ -44,16 +44,18 @@ export function NotificationList() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
+  const [error, setError] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
+    setError(false);
     try {
       const res = await fetch('/api/notifications');
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setNotifications(data.notifications ?? []);
     } catch {
-      // silent
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -95,6 +97,22 @@ export function NotificationList() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-neutral-400">
+        <span className="text-4xl mb-3">⚠️</span>
+        <p className="text-sm">알림을 불러오지 못했습니다.</p>
+        <button
+          type="button"
+          onClick={fetchNotifications}
+          className="mt-3 text-sm text-primary-600 font-medium hover:underline"
+        >
+          다시 시도
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* 헤더 */}
@@ -127,41 +145,43 @@ export function NotificationList() {
         {notifications.map((n) => {
           const meta = TYPE_META[n.type];
           return (
-            <li
-              key={n.id}
-              onClick={() => !n.isRead && markAsRead(n.id)}
-              className={[
-                'flex items-start gap-3 px-4 py-4 cursor-pointer transition-colors',
-                n.isRead
-                  ? 'bg-white'
-                  : 'bg-primary-50 border-l-4 border-l-primary-600',
-              ].join(' ')}
-            >
-              <span className="text-xl leading-none pt-0.5" aria-hidden="true">
-                {meta.icon}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-xs font-medium text-primary-600 bg-primary-50 rounded-full px-2 py-0.5">
-                    {meta.label}
-                  </span>
-                  {!n.isRead && (
-                    <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
-                  )}
+            <li key={n.id}>
+              <button
+                type="button"
+                onClick={() => !n.isRead && markAsRead(n.id)}
+                className={[
+                  'w-full text-left flex items-start gap-3 px-4 py-4 transition-colors',
+                  n.isRead
+                    ? 'bg-white hover:bg-neutral-50'
+                    : 'bg-primary-50 border-l-4 border-l-primary-600 hover:bg-primary-100',
+                ].join(' ')}
+              >
+                <span className="text-xl leading-none pt-0.5" aria-hidden="true">
+                  {meta.icon}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-medium text-primary-600 bg-primary-50 rounded-full px-2 py-0.5">
+                      {meta.label}
+                    </span>
+                    {!n.isRead && (
+                      <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
+                    )}
+                  </div>
+                  <p
+                    className={[
+                      'text-sm leading-snug break-words',
+                      n.isRead ? 'text-neutral-700' : 'text-neutral-900 font-semibold',
+                    ].join(' ')}
+                  >
+                    {n.title}
+                  </p>
+                  <p className="text-xs text-neutral-500 mt-1 leading-relaxed break-words">
+                    {n.body}
+                  </p>
+                  <p className="text-xs text-neutral-400 mt-1">{formatDate(n.createdAt)}</p>
                 </div>
-                <p
-                  className={[
-                    'text-sm leading-snug break-words',
-                    n.isRead ? 'text-neutral-700' : 'text-neutral-900 font-semibold',
-                  ].join(' ')}
-                >
-                  {n.title}
-                </p>
-                <p className="text-xs text-neutral-500 mt-1 leading-relaxed break-words">
-                  {n.body}
-                </p>
-                <p className="text-xs text-neutral-400 mt-1">{formatDate(n.createdAt)}</p>
-              </div>
+              </button>
             </li>
           );
         })}
