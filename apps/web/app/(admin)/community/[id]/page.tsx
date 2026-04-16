@@ -92,9 +92,13 @@ export default function AdminPostDetailPage({
     setCommentSubmitting(true);
     setCommentError('');
     try {
+      const token = localStorage.getItem('token') ?? '';
       const res = await fetch(`/api/villas/${villaId}/posts/${postId}/comments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ content: commentText.trim() }),
       });
       const data = await res.json() as { comment?: Comment; error?: string };
@@ -118,8 +122,10 @@ export default function AdminPostDetailPage({
 
     setDeleting(true);
     try {
+      const token = localStorage.getItem('token') ?? '';
       const res = await fetch(`/api/villas/${villaId}/posts/${postId}`, {
         method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         const data = await res.json() as { error?: string };
@@ -137,7 +143,11 @@ export default function AdminPostDetailPage({
     if (!post || !villaId || liking) return;
     setLiking(true);
     try {
-      const res = await fetch(`/api/villas/${villaId}/posts/${postId}/like`, { method: 'POST' });
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/posts/${postId}/like`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json() as { liked?: boolean; likeCount?: number };
       if (res.ok && data.likeCount !== undefined) {
         setPost((prev) => prev ? { ...prev, liked: data.liked!, likeCount: data.likeCount! } : prev);

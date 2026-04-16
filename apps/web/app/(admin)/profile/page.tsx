@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getUser, clearAuth, hasDualMode, setViewMode, type StoredUser } from '@/lib/client-auth';
+import { getAmountStep, setAmountStep, PRESET_STEPS } from '@/lib/amount-step';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -143,6 +144,115 @@ function ChangePasswordSheet({
   );
 }
 
+function AmountStepSheet({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<number>(10000);
+  const [custom, setCustom] = useState('');
+  const [customMode, setCustomMode] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      const saved = getAmountStep();
+      const isPreset = PRESET_STEPS.includes(saved as (typeof PRESET_STEPS)[number]);
+      if (isPreset) {
+        setSelected(saved);
+        setCustomMode(false);
+        setCustom('');
+      } else {
+        setCustomMode(true);
+        setCustom(String(saved));
+        setSelected(0);
+      }
+    }
+  }, [open]);
+
+  function handleSave() {
+    const step = customMode ? Number(custom.replace(/[^0-9]/g, '')) : selected;
+    if (!step || step <= 0) return;
+    setAmountStep(step);
+    onClose();
+  }
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-neutral-900">금액 단위 설정</h2>
+          <button
+            onClick={onClose}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-neutral-400 hover:text-neutral-600 text-xl leading-none"
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+        </div>
+
+        <p className="text-sm text-neutral-500">
+          금액 입력 시 +/− 버튼으로 조정되는 단위를 설정합니다.
+        </p>
+
+        <div className="grid grid-cols-3 gap-2">
+          {PRESET_STEPS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => { setSelected(s); setCustomMode(false); }}
+              className={[
+                'py-3 rounded-xl border text-sm font-semibold transition-colors',
+                !customMode && selected === s
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50',
+              ].join(' ')}
+            >
+              {s.toLocaleString('ko-KR')}원
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => { setCustomMode(true); setSelected(0); }}
+            className={[
+              'py-3 rounded-xl border text-sm font-semibold transition-colors',
+              customMode
+                ? 'bg-primary-600 text-white border-primary-600'
+                : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50',
+            ].join(' ')}
+          >
+            직접 입력
+          </button>
+        </div>
+
+        {customMode && (
+          <div className="relative">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={custom ? Number(custom.replace(/[^0-9]/g, '') || '0').toLocaleString('ko-KR') : ''}
+              onChange={(e) => setCustom(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="금액 단위 입력"
+              className="w-full rounded-xl border border-neutral-200 px-4 h-11 pr-10 text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">원</span>
+          </div>
+        )}
+
+        <Button className="w-full" onClick={handleSave}>
+          저장
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function SectionList({ sections }: { sections: Section[] }) {
   return (
     <div className="space-y-6">
@@ -202,6 +312,8 @@ export default function AdminProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<StoredUser | null>(null);
   const [passwordSheetOpen, setPasswordSheetOpen] = useState(false);
+  const [amountStepSheetOpen, setAmountStepSheetOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(10000);
   const [dualMode, setDualMode] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
@@ -209,6 +321,7 @@ export default function AdminProfilePage() {
   useEffect(() => {
     setUser(getUser());
     setDualMode(hasDualMode());
+    setCurrentStep(getAmountStep());
   }, []);
 
   async function handleWithdraw() {
@@ -290,6 +403,11 @@ export default function AdminProfilePage() {
           onClick: () => setPasswordSheetOpen(true),
         },
         {
+          label: '금액 단위 설정',
+          rightLabel: `${currentStep.toLocaleString('ko-KR')}원`,
+          onClick: () => setAmountStepSheetOpen(true),
+        },
+        {
           label: '알림',
           href: '/profile/notifications',
         },
@@ -366,6 +484,13 @@ export default function AdminProfilePage() {
       <ChangePasswordSheet
         open={passwordSheetOpen}
         onClose={() => setPasswordSheetOpen(false)}
+      />
+      <AmountStepSheet
+        open={amountStepSheetOpen}
+        onClose={() => {
+          setAmountStepSheetOpen(false);
+          setCurrentStep(getAmountStep());
+        }}
       />
     </main>
   );

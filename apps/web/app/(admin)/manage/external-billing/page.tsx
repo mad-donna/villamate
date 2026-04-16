@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { AmountInput } from '@/components/ui/AmountInput';
 
 interface ExternalBilling {
   id: string;
@@ -130,7 +131,7 @@ export default function ExternalBillingPage() {
 
     if (!form.targetName.trim()) { setFormError('청구 대상 이름을 입력해주세요.'); return; }
     if (!form.phoneNumber.trim()) { setFormError('연락처를 입력해주세요.'); return; }
-    if (!form.amount || Number(form.amount.replace(/,/g, '')) <= 0) { setFormError('유효한 금액을 입력해주세요.'); return; }
+    if (!form.amount || Number(form.amount) <= 0) { setFormError('유효한 금액을 입력해주세요.'); return; }
     if (!form.description.trim()) { setFormError('청구 내용을 입력해주세요.'); return; }
     if (!form.dueDate) { setFormError('납부 기한을 입력해주세요.'); return; }
 
@@ -144,7 +145,7 @@ export default function ExternalBillingPage() {
         body: JSON.stringify({
           targetName: form.targetName.trim(),
           phoneNumber: form.phoneNumber.trim(),
-          amount: Number(form.amount.replace(/,/g, '')),
+          amount: Number(form.amount),
           description: form.description.trim(),
           dueDate: form.dueDate,
         }),
@@ -355,20 +356,10 @@ export default function ExternalBillingPage() {
                 <label className="block text-sm font-medium text-neutral-700 mb-1">
                   금액 <span className="text-error-500">*</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={form.amount}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^0-9]/g, '');
-                      setForm((p) => ({ ...p, amount: raw ? Number(raw).toLocaleString('ko-KR') : '' }));
-                    }}
-                    placeholder="0"
-                    className="w-full rounded-xl border border-neutral-200 px-4 h-11 pr-10 text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">원</span>
-                </div>
+                <AmountInput
+                  value={form.amount}
+                  onChange={(raw) => setForm((p) => ({ ...p, amount: raw }))}
+                />
               </div>
 
               {/* 청구 내용 */}

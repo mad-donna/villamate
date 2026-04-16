@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
+import { AmountInput } from '@/components/ui/AmountInput';
 
 type InvoiceType = 'FIXED' | 'VARIABLE';
 
@@ -231,20 +232,11 @@ export default function NewInvoicePage() {
       {/* 고정 관리비 입력 */}
       {invoiceType === 'FIXED' && (
         <section className="mb-6">
-          <p className="text-sm font-medium text-neutral-700 mb-2">세대당 금액</p>
-          <div className="relative">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={fixedAmount ? Number(fixedAmount).toLocaleString('ko-KR') : ''}
-              onChange={(e) => setFixedAmount(toNumberStr(e.target.value))}
-              placeholder="0"
-              className="w-full rounded-xl border border-neutral-200 px-4 h-11 pr-10 text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">
-              원
-            </span>
-          </div>
+          <AmountInput
+            label="세대당 금액"
+            value={fixedAmount}
+            onChange={setFixedAmount}
+          />
           {fixedAmount && headCount !== null && (
             <p className="mt-2 text-xs text-neutral-500">
               총 {headCount}세대 × {formatAmount(Number(fixedAmount))} ={' '}
@@ -263,40 +255,33 @@ export default function NewInvoicePage() {
       {invoiceType === 'VARIABLE' && (
         <section className="mb-6">
           <p className="text-sm font-medium text-neutral-700 mb-2">항목 목록</p>
-          <ul className="space-y-2 mb-3">
+          <ul className="space-y-3 mb-3">
             {items.map((item, idx) => (
-              <li key={item.id} className="flex gap-2 items-center">
+              <li key={item.id} className="bg-neutral-50 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-neutral-500">항목 {idx + 1}</span>
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.id)}
+                      className="text-neutral-400 hover:text-error-500 text-lg font-bold min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      aria-label="항목 삭제"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={item.name}
                   onChange={(e) => updateItem(item.id, 'name', e.target.value)}
                   placeholder={`항목명 ${idx + 1}`}
-                  className="flex-1 rounded-xl border border-neutral-200 px-3 h-11 text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full rounded-xl border border-neutral-200 px-4 h-11 text-sm text-neutral-900 placeholder-neutral-400 bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
-                <div className="relative w-36">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={item.amount ? Number(item.amount).toLocaleString('ko-KR') : ''}
-                    onChange={(e) =>
-                      updateItem(item.id, 'amount', e.target.value)
-                    }
-                    placeholder="0"
-                    className="w-full rounded-xl border border-neutral-200 px-3 h-11 pr-8 text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-neutral-400">
-                    원
-                  </span>
-                </div>
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    className="text-neutral-400 hover:text-error-500 text-lg font-bold min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0"
-                  >
-                    ×
-                  </button>
-                )}
+                <AmountInput
+                  value={item.amount}
+                  onChange={(raw) => updateItem(item.id, 'amount', raw)}
+                />
               </li>
             ))}
           </ul>

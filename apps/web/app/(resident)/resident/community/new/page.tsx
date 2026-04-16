@@ -93,9 +93,13 @@ export default function ResidentNewPostPage() {
         if (!uploadRes.ok) throw new Error(uploadData.error ?? '이미지 업로드에 실패했습니다.');
         imageUrl = uploadData.url;
       }
+      const token = localStorage.getItem('token') ?? '';
       const res = await fetch(`/api/villas/${villaId}/posts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           title: title.trim(),
           content: content.trim(),

@@ -149,17 +149,24 @@ export default function ResidentsPage() {
     if (!villaId) return;
     setSavingRooms(true);
     try {
+      const token = localStorage.getItem('token') ?? '';
       const res = await fetch(`/api/villas/${villaId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ roomNumbers }),
       });
-      if (!res.ok) throw new Error('저장에 실패했습니다.');
-      showToast('호수 목록이 저장되었습니다.');
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        throw new Error(data.error ?? '저장에 실패했습니다.');
+      }
       setSheetOpen(false);
+      showToast('호수 목록이 저장되었습니다.');
       await fetchResidents();
-    } catch {
-      showToast('저장에 실패했습니다.');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '저장에 실패했습니다.');
     } finally {
       setSavingRooms(false);
     }
@@ -432,8 +439,8 @@ export default function ResidentsPage() {
             className="fixed inset-0 bg-black/40 z-70"
             onClick={() => setSheetOpen(false)}
           />
-          {/* 시트 */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-80 flex flex-col max-h-[80vh]">
+          {/* 시트 — 모바일 영역(max-w-lg) 내 중앙 정렬 */}
+          <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white rounded-t-3xl shadow-2xl z-80 flex flex-col max-h-[80vh]">
             {/* 핸들 */}
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-neutral-200" />
@@ -519,7 +526,7 @@ export default function ResidentsPage() {
 
       {/* 토스트 */}
       {toast && (
-        <div className="fixed bottom-20 left-0 right-0 mx-auto w-fit px-5 py-3 bg-neutral-800 text-white text-sm font-medium rounded-2xl shadow-lg z-60">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 w-fit px-5 py-3 bg-neutral-800 text-white text-sm font-medium rounded-2xl shadow-lg z-90">
           {toast}
         </div>
       )}
