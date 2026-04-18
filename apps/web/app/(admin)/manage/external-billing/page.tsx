@@ -313,7 +313,7 @@ export default function ExternalBillingPage() {
       {/* 신규 청구서 생성 모달 */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-end bg-black/40"
+          className="fixed inset-0 z-[60] flex items-end bg-black/40"
           onClick={(e) => { if (e.target === e.currentTarget) { setShowModal(false); resetForm(); } }}
         >
           <div className="w-full max-w-lg mx-auto bg-white rounded-t-3xl px-5 pt-5 pb-safe-bottom">

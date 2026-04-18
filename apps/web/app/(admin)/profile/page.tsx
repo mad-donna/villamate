@@ -98,7 +98,7 @@ function ChangePasswordSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40"
       onClick={(e) => e.target === e.currentTarget && handleClose()}
     >
       <div className="w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-4">
@@ -182,7 +182,7 @@ function AmountStepSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-5">

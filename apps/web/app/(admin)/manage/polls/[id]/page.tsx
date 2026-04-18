@@ -282,7 +282,7 @@ export default function AdminPollDetailPage({
       {/* 수정 바텀 시트 */}
       {editOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40"
           onClick={(e) => e.target === e.currentTarget && setEditOpen(false)}
         >
           <div className="w-full max-w-lg bg-white rounded-t-3xl p-6 space-y-4 max-h-[85dvh] overflow-y-auto">
