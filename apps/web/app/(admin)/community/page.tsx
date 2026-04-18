@@ -45,7 +45,10 @@ export default function AdminCommunityPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/posts`);
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/posts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { posts: Post[] };
       setPosts(data.posts);
