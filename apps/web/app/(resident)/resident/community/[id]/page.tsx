@@ -70,7 +70,10 @@ export default function ResidentPostDetailPage({
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`/api/villas/${villaId}/posts/${postId}`);
+        const token = localStorage.getItem('token') ?? '';
+        const res = await fetch(`/api/villas/${villaId}/posts/${postId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!res.ok) throw new Error('fetch failed');
         const data = await res.json() as { post: Post; comments: Comment[] };
         setPost(data.post);
