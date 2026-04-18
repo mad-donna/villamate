@@ -84,16 +84,20 @@ export default function ResidentNewPostPage() {
     setSubmitting(true);
     setSubmitError('');
     try {
+      const token = localStorage.getItem('token') ?? '';
       let imageUrl: string | undefined;
       if (imageFile) {
         const fd = new FormData();
         fd.append('file', imageFile);
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
         const uploadData = await uploadRes.json() as { url?: string; error?: string };
         if (!uploadRes.ok) throw new Error(uploadData.error ?? '이미지 업로드에 실패했습니다.');
         imageUrl = uploadData.url;
       }
-      const token = localStorage.getItem('token') ?? '';
       const res = await fetch(`/api/villas/${villaId}/posts`, {
         method: 'POST',
         headers: {

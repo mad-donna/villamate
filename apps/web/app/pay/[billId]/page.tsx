@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 
 interface BillingData {
@@ -50,7 +50,6 @@ function loadPortOneScript(): Promise<void> {
 
 export default function PayPage() {
   const { billId } = useParams<{ billId: string }>();
-  const searchParams = useSearchParams();
 
   const [billing, setBilling] = useState<BillingData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,11 +100,12 @@ export default function PayPage() {
 
   // 모바일 결제 후 redirect 복귀 시 imp_uid 파라미터로 자동 검증
   useEffect(() => {
-    const impUid = searchParams.get('imp_uid');
-    const impSuccess = searchParams.get('imp_success');
+    const params = new URLSearchParams(window.location.search);
+    const impUid = params.get('imp_uid');
+    const impSuccess = params.get('imp_success');
     if (impUid) {
       if (impSuccess === 'false') {
-        setPayError(searchParams.get('error_msg') ?? '결제가 취소되었습니다.');
+        setPayError(params.get('error_msg') ?? '결제가 취소되었습니다.');
         setLoading(false);
         return;
       }
@@ -113,7 +113,7 @@ export default function PayPage() {
       return;
     }
     fetchBilling();
-  }, [fetchBilling, confirmPayment, searchParams]);
+  }, [fetchBilling, confirmPayment]);
 
   async function handlePay() {
     if (!billing) return;
