@@ -2145,3 +2145,388 @@ subscription-reminder:  "0 15 * * *" — 구독 만료 D-7/D-3/D-1 관리자 알
 - Jest + ts-jest 도입 (`jest.config.ts`, `moduleNameMapper @/*`)
 - 테스트 헬퍼 패턴: `makeRequest()` + `authHeaders()` (x-user-* 헤더 인증 주입)
 - 커버리지: auth/posts/polls/tickets/ledger 5개 도메인, 32개 케이스
+
+---
+
+## 2026-04-13 업데이트 — F-43/F-77/F-04/F-05 Phase 3 선행 구현
+
+### 신규 Prisma 모델
+
+| 모델 | 목적 | 주요 필드 |
+|------|------|-----------|
+| `PushSubscription` | Web Push 구독 | userId, endpoint, p256dh, auth, villaId |
+| `TossBillingKey` | Toss 자동결제 빌링키 | villaId (unique), billingKey, customerKey, cardCompany, cardNumber |
+| `SocialAccount` | 소셜 계정 연결 | userId, provider, providerId — `@@unique([provider, providerId])` |
+
+### User.password nullable 변경
+- `User.password String?` — 소셜 전용 계정 지원
+- 이메일 로그인 라우트(`/api/auth/login`, `/api/backoffice/auth/login`, `/api/auth/password`)에 `!user.password` null 체크 추가
+- 소셜 계정 이메일 로그인 시 동일 오류 메시지 반환으로 계정 존재 여부 은닉
+
+### Web Push 아키텍처 — Lazy Init 패턴
+```ts
+// lib/webpush.ts
+function getWebPush() {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  if (!publicKey || !privateKey) return null;
+  webpush.setVapidDetails('mailto:support@villamate.app', publicKey, privateKey);
+  return webpush;
+}
+```
+- **이유**: `setVapidDetails()`를 모듈 최상위에서 호출하면 Vercel 빌드 시(env 없음) 에러 발생
+- **원칙**: 런타임 의존 초기화는 함수 내부에서 수행, null guard로 env 미설정 시 graceful degradation
+
+### OAuth 2.0 구현 아키텍처
+- **state CSRF 방어**: `crypto.randomUUID()`로 state 생성 → `HttpOnly SameSite=Lax` 쿠키 저장 → 콜백 시 검증
+- **유저 upsert 패턴**: `SocialAccount.findUnique` → 없으면 `User.create` + `SocialAccount.create` → 있으면 기존 user로 로그인
+- **신규 소셜 유저 플래그**: JWT에 `needsSetup: true` 포함 → `/profile-setup`으로 라우팅
+
+### BottomNav z-index 계층 확립 (디자인 시스템)
+```
+BottomNav    z-50   (fixed bottom-0)
+Toast        z-60   (bottom-20 이상)
+Sheet BG     z-70   (backdrop dim)
+Sheet Panel  z-80   (content)
+ImageViewer  z-[999] (fullscreen)
+```
+- **규칙**: 모달/시트 신규 구현 시 반드시 이 계층 따를 것
+- **Toast 위치**: `bottom-20` 이상으로 배치해 BottomNav 위에 표시
+
+### 신규 Vercel Cron
+| 경로 | 스케줄 | 목적 |
+|------|--------|------|
+| `/api/cron/auto-payment` | `0 0 * * *` (UTC) | 만료 빌라 Toss 자동결제 |
+
+
+---
+
+## 2026-04-14 업데이트 — Sprint 4 (F-49/50/65/72/84/85/F-14/15)
+
+### 신규 Prisma 모델
+
+| 모델 | 목적 | 주요 필드 | 제약 |
+|------|------|-----------|------|
+| `PostLike` | 게시글 좋아요 토글 | postId, userId | `@@unique([postId, userId])` — 1인 1좋아요 강제 |
+| `EnergyUsage` | 월별 에너지 사용량 | villaId, year, month, electricKwh, electricFee, waterTon, waterFee, gasM3, gasFee | `@@unique([villaId, year, month])` — upsert 패턴 |
+
+### 기존 모델 필드 추가
+
+| 모델 | 추가 필드 | 이유 |
+|------|-----------|------|
+| `Vehicle` | `visitorName String?` | QR 방문 차량 등록 시 방문자 이름 저장 |
+| `Post` | `likes PostLike[]` | 역관계 |
+| `User` | `postLikes PostLike[]` | 역관계 |
+| `Villa` | `energyUsages EnergyUsage[]` | 역관계 |
+
+### 아키텍처 변경점
+
+#### 1. 신규 라우트 (관리자)
+```
+/manage/energy              — 에너지 사용량 입력·차트 (ADMIN 전용)
+/profile/my-villas          — 멀티 빌라 목록·전환 (ADMIN 전용)
+/profile/transfer-admin     — 동대표 교체 (ADMIN 전용)
+```
+
+#### 2. 신규 라우트 (입주민)
+```
+/villa/energy               — 에너지 사용량 열람 (RESIDENT 전용)
+```
+
+#### 3. 신규 라우트 (공개 — 인증 없음)
+```
+/qr-vehicle?v=villaId&t=token   — QR 방문 차량 등록 (비로그인 접근 가능)
+```
+- `PUBLIC_PATHS` 배열에 `/qr-vehicle` 추가 필요 (middleware.ts JWT 예외 처리)
+
+#### 4. 신규 라우트 (백오피스)
+```
+/billing                    — 빌라별 청구 현황 (SUPER_ADMIN)
+/mrr                        — MRR/ARR 모니터링 (SUPER_ADMIN)
+```
+
+### QR 방문 차량 — JWT 위임 패턴
+```
+관리자 → GET /api/villas/[villaId]/vehicles/qr-token
+         → SignJWT({ villaId, purpose: 'visitor-vehicle' }, 24h 만료)
+         → QRCode.toDataURL(URL)로 QR 이미지 생성 (클라이언트 사이드)
+
+방문자 → /qr-vehicle?v=villaId&t=token 접속
+        → POST /api/villas/[villaId]/vehicles/visitor (인증 없음)
+          - JWT 검증: purpose === 'visitor-vehicle' && payload.villaId === villaId
+          - Vehicle upsert (ownerId = villa.adminId, isVisitor = true)
+```
+**원칙**: 단기 JWT를 URL에 포함시켜 비로그인 사용자에게 제한된 권한 위임.
+
+### 동대표 교체 — 원자적 트랜잭션
+```ts
+await prisma.$transaction([
+  prisma.villa.update({ where: { id }, data: { adminId: newAdminId } }),
+  prisma.user.update({ where: { id: oldAdminId }, data: { role: 'RESIDENT' } }),
+  prisma.user.update({ where: { id: newAdminId }, data: { role: 'ADMIN' } }),
+])
+```
+**원칙**: 역할 이양은 반드시 트랜잭션 — 중간 실패 시 기존 관리자 권한 보존.
+
+### 멀티 빌라 전환 — JWT 갱신 패턴
+```
+POST /api/auth/switch-villa { villaId }
+→ villa.adminId === user.sub 검증
+→ signToken({ ...기존 payload, villaId: newVillaId })
+→ 클라이언트: saveToken(newToken) + setUser({ ...user, villa: newVilla })
+→ router.push('/home')
+```
+**원칙**: 빌라 전환 = JWT의 villaId 교체. 새 토큰 발급으로 전체 권한 컨텍스트 갱신.
+
+### CSS 바 차트 패턴 (no recharts)
+```tsx
+// 각 막대 높이 = (value / maxValue) * 100%
+<div style={{ height: `${(val / maxVal) * 100}%` }} />
+```
+**원칙**: 외부 차트 라이브러리 없이 CSS height% 계산으로 구현. 번들 크기 0 추가.
+
+### 신규 npm 패키지
+| 패키지 | 용도 |
+|--------|------|
+| `qrcode` | 클라이언트 사이드 QR 코드 이미지 생성 (`QRCode.toDataURL()`) |
+
+---
+
+## 2026-04-15 아키텍처 변경 — 보안 QA 및 디자인 QA
+
+### JWT URL 노출 제거 → HttpOnly 쿠키 교환 패턴
+**변경 전**: 소셜 로그인 콜백이 `?token=JWT` URL 파라미터로 JWT를 전달 → URL 히스토리·서버 로그 노출 위험
+**변경 후**: 2단계 교환 패턴
+```
+1. /api/auth/callback/[provider] → pending_auth_token HttpOnly 쿠키 설정 (60초 maxAge)
+2. 클라이언트 /(auth)/auth/social/page.tsx → GET /api/auth/exchange-token 호출
+3. exchange-token: 쿠키 소비 + JWT를 JSON 응답으로 반환 (1회성)
+4. 클라이언트: saveToken(jwt) → localStorage 저장
+```
+**원칙**: JWT는 절대 URL에 포함하지 않는다. HttpOnly 쿠키는 JS에서 읽을 수 없으므로 XSS 내성.
+
+### 백오피스 미들웨어 보호 범위 확장
+**변경 전**: `middleware.ts` matcher = `'/api/:path*'` — API 라우트만 보호
+**변경 후**: matcher = `['/api/:path*', '/backoffice/:path*']`
+- `/backoffice/*` 페이지 요청도 서버 사이드에서 `bo_session` HttpOnly 쿠키 검증
+- 로그인 페이지(`/backoffice/login`)는 PUBLIC_PATH_PATTERNS 예외 처리
+
+### 빌링키 암호화 계층 추가 (AES-256-GCM)
+신규 파일: `lib/crypto.ts`
+```typescript
+// 저장 형식: iv(24 hex chars) + authTag(32 hex chars) + ciphertext(hex)
+export function encryptBillingKey(plaintext: string): string { ... }
+export function decryptBillingKey(ciphertext: string): string { ... }
+// BILLING_ENCRYPTION_KEY 환경변수 (64자 hex = 32바이트 키)
+```
+**흐름**:
+- 빌링키 저장: `encryptBillingKey(rawKey)` → DB upsert
+- 자동결제 실행: DB에서 읽은 후 `decryptBillingKey(stored)` → Toss API 호출
+
+### 가격 단일 소스 (`lib/pricing.ts`)
+기존에 `auto-payment` Cron과 MRR 대시보드에서 각각 하드코딩(불일치 존재)하던 가격을 단일 파일로 중앙화.
+```typescript
+export const SUBSCRIPTION_MONTHLY_PRICE = 19_900;  // KRW
+export const SUBSCRIPTION_ORDER_NAME = 'VillaMate 월간 구독';
+```
+
+### QR 검증 엔드포인트 분리
+- `GET /api/villas/[villaId]/vehicles/qr-verify` (신규): JWT 토큰 유효성만 검증, DB 기록 없음
+- `POST /api/villas/[villaId]/vehicles/visitor` (기존): 실제 방문 차량 등록
+- `middleware.ts` `PUBLIC_PATH_PATTERNS`에 `/qr-vehicle`, `/visitor` 추가 → 비인증 접근 허용
+
+### 디자인 시스템 토큰 확장
+`apps/web/app/globals.css` `@theme` 블록에 17개 토큰 추가:
+- `neutral-600`, `neutral-800`
+- `success-50/100/600/700`
+- `warning-50/100/600/700`
+- `error-50/100/600/700`
+- `primary-200/300/400`
+
+### `window.confirm()` / `window.alert()` 제거 패턴 확립
+신규 파일: `components/ui/ConfirmDialog.tsx`, `hooks/useConfirm.tsx`
+```tsx
+// 사용 패턴
+const confirm = useConfirm();
+const ok = await confirm({ title: '삭제하시겠습니까?', variant: 'destructive' });
+if (!ok) return;
+```
+브라우저 기본 모달 36개 인스턴스 → 커스텀 구현으로 전환. 스타일 일관성 + 테스트 가능성 확보.
+
+### 신규 API 엔드포인트 (2026-04-15)
+
+| 엔드포인트 | 메서드 | 설명 | 인증 |
+|-----------|--------|------|------|
+| `/api/auth/exchange-token` | GET | pending_auth_token 쿠키 → JWT 교환 | 쿠키 |
+| `/api/villas/[villaId]/vehicles/qr-verify` | GET | QR 토큰 검증 전용 | 없음 (공개) |
+| `/api/backoffice/auth/logout` | POST | bo_session 쿠키 삭제 | 없음 |
+
+### 기술 부채 추가 (2026-04-15)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 수동으로 Vercel Dashboard에 등록 필요 |
+| 기존 평문 빌링키 DB 마이그레이션 미완료 | High | 암호화 코드 배포 후 별도 마이그레이션 스크립트 필요 |
+
+---
+
+### 2026-04-16 — AmountInput UX 개선, 버그 수정 세션
+
+#### 아키텍처 변경 사항
+
+**신규 공통 컴포넌트: `AmountInput`**
+
+```
+apps/web/components/ui/AmountInput.tsx
+  ├── − / + 버튼으로 금액 조정 (단위: localStorage에서 읽은 amountStep)
+  ├── 내부에 원화 suffix 표시 (예: 10,000원)
+  └── stepOverride prop으로 단위 외부 지정 가능
+
+apps/web/lib/amount-step.ts  ← 신규 유틸리티
+  ├── AMOUNT_STEP_KEY = 'amountStep' (localStorage key)
+  ├── DEFAULT_STEP = 10000
+  ├── PRESET_STEPS = [1000, 5000, 10000, 50000, 100000]
+  ├── getAmountStep(): number
+  └── setAmountStep(step: number): void
+```
+
+**사용자 설정 저장 방식**: localStorage 선택 (DB 미사용)
+- 금액 단위 설정은 기기/브라우저 로컬 개인 설정으로 판단
+- 스키마 변경 없이 즉시 적용 가능
+
+**적용 화면:**
+- `(admin)/manage/invoices/new/page.tsx` — 세대당 금액, 변동 항목별 금액
+- `(admin)/manage/external-billing/page.tsx` — 청구 금액
+- `(admin)/profile/page.tsx` — 금액 단위 설정 시트 (AmountStepSheet)
+- `(resident)/resident/profile/page.tsx` — 동일
+
+#### 아키텍처 결정: 하단 시트 레이아웃 표준
+
+모바일 최대 폭(max-w-lg) 내에 하단 시트를 제한하는 표준 패턴 확립:
+
+```
+// 올바른 패턴 (모바일 영역 내 제한)
+fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg
+
+// 잘못된 패턴 (전체 화면 가득)
+fixed bottom-0 left-0 right-0
+```
+
+`(admin)/manage/residents/page.tsx`에서 잘못된 패턴 → 올바른 패턴으로 수정.
+
+#### 알려진 기술 부채 (2026-04-16 업데이트)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `(admin)/ledger/page.tsx` ↔ `(admin)/manage/ledger/page.tsx` 코드 중복 | Low | /ledger 스텁 페이지를 완전 구현으로 대체했으나 두 경로가 동일 구현을 유지 — 리다이렉트 또는 공통 컴포넌트 추출 필요 |
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 잔존 |
+| 기존 평문 빌링키 DB 마이그레이션 미완료 | High | 잔존 |
+
+---
+
+## 2026-04-18 아키텍처 변경 및 버그 수정
+
+### PortOne 결제 아키텍처 확립
+
+외부 청구(ExternalBilling) 공개 결제 페이지(`/pay/[billId]`)의 PortOne V1 SDK 통합 아키텍처 확립.
+
+#### 결제 흐름 (데스크탑 vs 모바일)
+
+```
+데스크탑:
+사용자 → 납부 버튼 → window.IMP.request_pay() → 팝업 → 콜백(rsp)
+→ rsp.success && rsp.imp_uid 확인 → POST /api/pay/[billId]/confirm
+
+모바일 (KG Inicis 필수):
+사용자 → 납부 버튼 → window.IMP.request_pay({ m_redirect_url }) → 리다이렉트
+→ URL 복귀 (?imp_uid=&imp_success=) → useEffect URL 파라미터 감지
+→ fetchBilling() 후 confirmPayment(impUid)
+```
+
+`m_redirect_url`은 KG Inicis 모바일 결제에서 **필수**. 누락 시 결제 후 앱으로 복귀하지 않고 무한 로딩 상태 유지.
+
+#### CSP(Content Security Policy) — PortOne 허용 도메인 목록
+
+`next.config.ts`에 아래 도메인이 추가되어야 PortOne SDK가 정상 동작:
+
+| CSP 지시어 | 추가 도메인 |
+|-----------|------------|
+| `script-src` | `https://*.iamport.kr` |
+| `style-src` | `https://*.iamport.kr` `https://*.inicis.com` |
+| `img-src` | `https://*.iamport.kr` `https://*.inicis.com` |
+| `connect-src` | `https://*.iamport.kr` `https://*.inicis.com` |
+| `frame-src` | `https://*.iamport.kr` `https://*.inicis.com` `https://*.kcp.co.kr` `https://*.nicepay.co.kr` |
+
+> 와일드카드 `*.iamport.kr`이 중요 — `cdn.iamport.kr`, `service.iamport.kr`, `api.iamport.kr` 등 여러 서브도메인이 사용됨.
+
+#### PortOne PG 코드 명세
+
+- 테스트 환경: `pg: 'html5_inicis.INIpayTest'` (MID 포함 명시 필요)
+- 운영 환경: `pg: 'html5_inicis.{실제 MID}'`
+
+#### globals.d.ts — Window.IMP 타입 확장
+
+```typescript
+// apps/web/types/globals.d.ts
+interface Window {
+  IMP: {
+    init(impCode: string): void;
+    request_pay(params: {
+      pg: string;
+      pay_method: string;
+      merchant_uid: string;
+      name: string;
+      amount: number;
+      buyer_name?: string;
+      buyer_tel?: string;
+      m_redirect_url?: string;  // ← 모바일 필수
+    }, callback?: (rsp: ImpResponse) => void): void;
+  };
+}
+```
+
+### 전체 페이지 인증 헤더 감사 (2026-04-18)
+
+클라이언트 컴포넌트의 `fetch()` 호출 전수 검사 결과, **GET 요청에도 Authorization 헤더 필요** 패턴이 누락된 파일 15개 발견 및 일괄 수정.
+
+#### 누락 패턴 분류
+
+| 패턴 | 예시 | 발생 빈도 |
+|------|------|---------|
+| 완전 누락 (bare GET) | `fetch(\`/api/villas/${id}/polls\`)` | 가장 많음 |
+| 옵션 있으나 Authorization 없음 | `fetch(url, { method: 'DELETE' })` | 차량·입주자 삭제 |
+| POST Content-Type만 있음 | `fetch(url, { headers: { 'Content-Type': 'application/json' } })` | 차량 등록 |
+
+#### 수정된 파일 목록 (2026-04-18)
+
+| 파일 | 수정한 API 호출 |
+|------|----------------|
+| `(admin)/manage/energy/page.tsx` | GET 에너지 데이터 |
+| `(admin)/manage/polls/page.tsx` | GET 투표 목록 |
+| `(admin)/manage/residents/page.tsx` | GET 빌라 정보, DELETE 입주자 전출 |
+| `(admin)/profile/vehicles/page.tsx` | GET 목록/검색/QR토큰, POST 등록, DELETE |
+| `(admin)/community/page.tsx` | GET 게시글 목록 |
+| `(admin)/community/[id]/page.tsx` | GET 게시글 상세 |
+| `(resident)/resident/community/page.tsx` | GET 게시글 목록 |
+| `(resident)/resident/community/[id]/page.tsx` | GET 게시글 상세 |
+| `(resident)/resident/profile/my-posts/page.tsx` | GET 내 게시글 |
+| `(resident)/villa/polls/[id]/page.tsx` | GET 투표 상세, POST 투표 |
+| `(resident)/villa/polls/page.tsx` | GET 투표 목록 |
+| `(resident)/villa/tickets/page.tsx` | GET 민원 목록 |
+| `(resident)/villa/vehicles/page.tsx` | GET 목록/검색, POST 등록, DELETE |
+
+#### 재발 방지 원칙
+
+미들웨어가 `/api/pay/`, `/api/auth/`, `/api/cron/` 이외 **모든 API 경로를 보호**하므로:
+- **GET 포함 모든 `fetch('/api/...')` 호출에 Authorization 헤더 필수**
+- 새 페이지 추가 시 첫 번째 동작 확인: 목록 조회 → 401이면 토큰 헤더 누락
+
+#### 알려진 기술 부채 (2026-04-18 업데이트)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `(admin)/ledger` ↔ `/manage/ledger` 코드 중복 | Low | 잔존 |
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 잔존 |
+| 기존 평문 빌링키 DB 마이그레이션 미완료 | High | 잔존 |
+| `lib/client-api.ts` 미활용 | Medium | `apiFetch/apiGet/apiPost` 헬퍼가 있으나 대부분 페이지가 raw fetch 사용 — 점진적 마이그레이션 필요 |
+

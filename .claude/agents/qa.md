@@ -526,3 +526,290 @@ Grep with pattern="<search term>" path="C:\Users\dmleh\.claude\projects\D--villa
 
 ### 체크리스트 패턴 (공개 API)
 - `isPublished: true` 필터 + `take` 상한 + 비게시 404 처리
+
+---
+
+## 2026-04-13 QA 체크리스트 — F-43/F-77/F-04/F-05
+
+### F-43 Web Push 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `POST /api/push/subscribe` | JWT 인증 필수 — `getUser()` 검증 | ✅ |
+| `sendPushToUser()` | push 실패 시 알림함 저장은 보장 (fire-and-forget) | ✅ |
+| Service Worker | HTTPS 환경에서만 동작 (Vercel 자동 HTTPS) | ✅ |
+| VAPID env 미설정 | `getWebPush()` null 반환 → 푸시 스킵 (graceful degradation) | ✅ |
+
+### F-77 Toss 자동결제 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| `POST /billing-key` | villaId 소속 ADMIN 검증 | ✅ |
+| `DELETE /billing-key` | ADMIN 소속 검증 | ✅ |
+| `auto-payment Cron` | CRON_SECRET 검증 | ✅ 확인 필요 |
+| 빌링키 저장 | DB에 billingKey 평문 저장 — 필요 시 암호화 검토 | ⚠️ 기술 부채 |
+| Toss API 실패 | 결제 실패 시 구독 만료 유지 — 재시도 없음 | ⚠️ 재시도 로직 없음 |
+
+### F-04/F-05 소셜 로그인 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| state CSRF 방어 | `HttpOnly SameSite=Lax` 쿠키 → 콜백 검증 | ✅ |
+| provider 검증 | `['kakao', 'google']` 화이트리스트 | ✅ |
+| 소셜 계정 이메일 로그인 | `!user.password` → 동일 오류 메시지 (계정 존재 여부 은닉) | ✅ |
+| `/profile-setup` 인증 | `token` 쿼리 파라미터로 API 호출 (localStorage 미저장 시점 대응) | ✅ |
+| `social-complete` API | `needsSetup: false`로 JWT 재발급 — 중복 프로필 설정 방지 필요 | ⚠️ 확인 필요 |
+
+### 남은 기술 부채 (2026-04-13 추가)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| Toss 빌링키 평문 저장 | Medium | 암호화 또는 Toss Vault 검토 |
+| Toss 자동결제 재시도 없음 | Medium | 일시적 네트워크 오류 시 당일 결제 실패 |
+| 소셜 로그인 환경변수 미설정 | High | KAKAO/GOOGLE 시크릿 Vercel 등록 필요 |
+| auto-payment Cron CRON_SECRET | Medium | 기존 Cron 패턴과 동일하게 검증 추가 확인 |
+
+---
+
+## 2026-04-14 QA 체크리스트 — Sprint 4
+
+### F-49 댓글 푸시 알림 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 댓글 POST 권한 | JWT 인증 + villaId 소속 검증 | ✅ |
+| 자기 자신 알림 | `authorId !== user.sub` 체크로 자기 댓글 알림 방지 | ✅ |
+| 푸시 실패 처리 | `.catch(() => {})` fire-and-forget — 댓글 저장 성공은 보장 | ✅ |
+
+### F-50 게시글 좋아요 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 토글 API 인증 | JWT + villaId 소속 검증 | ✅ |
+| 중복 좋아요 | `@@unique([postId, userId])` DB 레벨 강제 + Prisma P2002 catch | ✅ |
+| likeCount 정확성 | 낙관적 업데이트 없이 서버 응답 값 사용 | ✅ |
+
+### F-65 에너지 사용량 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 입력 API 권한 | ADMIN 전용 + villaId 소속 검증 | ✅ |
+| 조회 API 권한 | 입주민은 자신의 빌라만 조회 가능 | ✅ |
+| upsert 중복 | `@@unique([villaId, year, month])` 월 1회 제한 | ✅ |
+| 숫자 필드 유효성 | 음수/비숫자 입력 시 Prisma Int 타입 오류 반환 | ⚠️ 클라이언트 min=0 검증만 — 서버 검증 미구현 |
+
+### F-72 QR 방문 차량 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| QR 토큰 발급 | ADMIN 전용 + villaId 소속 검증 | ✅ |
+| 비로그인 등록 | JWT `purpose === 'visitor-vehicle'` + `villaId` 일치 이중 검증 | ✅ |
+| 토큰 만료 | 24시간 만료 — 장기 유효 QR 남용 방지 | ✅ |
+| visitorName | 선택 필드 — 미입력 허용 | ✅ |
+| 번호판 중복 | upsert 패턴으로 동일 번호판 재등록 시 업데이트 | ✅ |
+| ownerId 위임 | 방문자 차량의 ownerId = villa.adminId (프록시 소유자) | ⚠️ 향후 방문자 차량 소유권 관리 시 재검토 필요 |
+
+### F-84/85 백오피스 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| billing API | `boAuthHeaders()` SUPER_ADMIN JWT 인증 | ✅ |
+| mrr API | `boAuthHeaders()` SUPER_ADMIN JWT 인증 | ✅ |
+| 타 빌라 데이터 | villaId 필터 — 미지정 시 전체 조회 (SUPER_ADMIN 의도적 전체 조회) | ✅ |
+| `$queryRaw` SQL injection | TO_CHAR/DATE_TRUNC만 사용, 파라미터 없음 | ✅ |
+
+### F-14/15 멀티 빌라·동대표 교체 보안
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 빌라 전환 | `villa.adminId === user.sub` 검증 — 타인 빌라 탈취 방지 | ✅ |
+| 동대표 교체 대상 | HEAD 입주민 APPROVED 상태 검증 | ✅ |
+| 교체 트랜잭션 | `prisma.$transaction` 원자성 보장 | ✅ |
+| 교체 후 기존 관리자 | JWT 무효화 없이 로그아웃 유도 — 기존 토큰은 만료 전까지 유효 | ⚠️ 기술 부채: 토큰 블랙리스트 없음 |
+
+### 기술 부채 (2026-04-14 추가)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| 에너지 입력 서버 유효성 검증 부재 | Low | 클라이언트 min=0만 있음, 음수 서버 입력 가능 |
+| 방문 차량 ownerId 프록시 패턴 | Low | 방문자 차량 소유권 관리 로직 미비 |
+| 동대표 교체 후 기존 JWT 유효 | Medium | 토큰 블랙리스트 미구현 — 만료 시간(30분?)까지 이전 관리자 토큰 유효 |
+| QR 토큰 URL 노출 | Low | 24h 만료로 제한, URL 공유 시 타인도 사용 가능 — 단발성 토큰 발급 필요 시 재검토 |
+
+---
+
+## 2026-04-15 QA 세션 — 전체 보안 QA + 디자인 QA
+
+### 보안 QA 발견 및 수정 항목
+
+#### Critical
+
+| 취약점 | 위치 | 수정 내용 |
+|--------|------|-----------|
+| JWT URL 노출 | 소셜 로그인 콜백 | pending_auth_token HttpOnly 쿠키 교환 패턴으로 전환 |
+| 빌링키 평문 DB 저장 | `TossBillingKey.billingKey` | AES-256-GCM 암호화 (`lib/crypto.ts`) 도입, `encryptBillingKey/decryptBillingKey` |
+| 백오피스 페이지 무인증 접근 | `/backoffice/*` 페이지 경로 | 미들웨어 matcher 확장 + `bo_session` HttpOnly 쿠키 검증 |
+
+#### Major
+
+| 취약점 | 위치 | 수정 내용 |
+|--------|------|-----------|
+| 구독 가격 불일치 (MRR: 29,900 / Cron: 19,900) | `mrr/route.ts`, `auto-payment/route.ts` | `lib/pricing.ts` 단일 소스로 통합 |
+| 티켓 비소속 입주민 제출 | `POST /tickets` | villa 존재 검증 + APPROVED 소속 검증 추가 |
+| PostLike 레이스 컨디션 | `POST /like` | Prisma P2002 catch → 멱등 응답 |
+| 파일 업로드 MIME 클라이언트 신뢰 | `upload/route.ts` | 확장자를 MIME 매핑에서 결정, 클라이언트 filename 무시 |
+| Cron 시간대 오류 | `vercel.json` auto-payment | `"0 0 * * *"` → `"0 15 * * *"` (KST 00:00 기준) |
+
+#### Minor
+
+| 항목 | 수정 내용 |
+|------|-----------|
+| 티켓 제목/내용 길이 제한 없음 | 서버 사이드 title ≤100, description ≤2000 추가 |
+| QR 검증과 등록 엔드포인트 혼재 | `qr-verify` GET 엔드포인트 분리, DB 기록 없음 |
+| profile-setup 소셜 토큰 race condition | `useState(() => searchParams.get('token'))` 초기화 함수로 수정 |
+| 백오피스 로그아웃 쿠키 미삭제 | `POST /api/backoffice/auth/logout` 신규 추가 |
+
+### 디자인 QA 발견 및 수정 항목
+
+#### 접근성 (WCAG 2.1 AA)
+
+| 항목 | 위치 | 수정 내용 |
+|------|------|-----------|
+| `<span onClick>` 비시맨틱 | `Chip.tsx` | `<button type="button">` 변경 |
+| `<li onClick>` 비시맨틱 | `NotificationList.tsx` | `<li><button>` 중첩 구조로 변경 |
+| 터치 타깃 미달 (40px) | 여러 페이지 버튼 | `min-h-[44px]` 적용 |
+| 장식 SVG aria | 로그인·헤더 SVG | `aria-hidden="true"` 추가 |
+| formError 알림 미흡 | `vehicles/page.tsx` | `role="alert"` 추가 |
+
+#### 디자인 시스템 일관성
+
+| 항목 | 수정 내용 |
+|------|-----------|
+| 하드코딩 색상 38개 파일 | `globals.css`에 누락 토큰 17개 추가 후 시맨틱 토큰으로 교체 |
+| `window.confirm/alert` 36개 | `useConfirm` 훅 + `ConfirmDialog` 컴포넌트로 전환 |
+| Badge 한국어 변형 제거 | `Badge.tsx` 시맨틱 variant로 통합 |
+| 텍스트 계층 불일치 | 헤더 `text-2xl` → `text-xl` 축소 (모바일 기준) |
+| Suspense 폴백 누락 | `login/page.tsx`, `profile-setup/page.tsx` — `<Suspense>` 래퍼 추가 |
+| href 라우팅 버그 2개 | 관리자 홈 온보딩 CTA, 입주민 홈 커뮤니티 링크 수정 |
+| pb-16 → pb-24 | `subscription/page.tsx` — BottomNav 겹침 방지 |
+
+### 남은 기술 부채 (2026-04-15 기준)
+
+| 항목 | 위험도 | 조치 필요 |
+|------|--------|----------|
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 사용자가 Vercel Dashboard에 수동 등록 필요 |
+| 기존 평문 빌링키 마이그레이션 | High | 암호화 배포 후 one-time 마이그레이션 스크립트 실행 필요 |
+| 동대표 교체 후 JWT 블랙리스트 | Medium | 잔존 |
+| 에너지 입력 서버 유효성 검증 | Low | 잔존 |
+
+---
+
+## 2026-04-16 버그 수정 QA 세션
+
+### 발견 및 수정된 버그
+
+#### Critical — Authorization 헤더 누락 패턴 (8개 호출)
+
+| 파일 | 누락된 API 호출 | 증상 |
+|------|----------------|------|
+| `(admin)/community/new/page.tsx` | `POST /posts` | "Unauthorized" |
+| `(resident)/resident/community/new/page.tsx` | `POST /posts` | "Unauthorized" |
+| `(admin)/community/[id]/page.tsx` | `POST /comments`, `DELETE /posts`, `POST /like` | 각 기능 실패 |
+| `(resident)/resident/community/[id]/page.tsx` | `POST /comments`, `DELETE /posts`, `POST /like` | 각 기능 실패 |
+| `(admin)/manage/residents/page.tsx` | `PATCH /villas/:id` (호수 저장) | 저장 무반응 |
+
+**원인 패턴**: GET 요청에는 헤더 추가했지만 POST/PATCH/DELETE에서 누락. 새 API 호출 작성 시 인증이 필요한 메서드에 Authorization 헤더 확인 필수.
+
+**올바른 패턴**:
+```typescript
+const token = localStorage.getItem('token') ?? '';
+const res = await fetch(`/api/...`, {
+  method: 'POST',  // 또는 PATCH, DELETE
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,  // ← 반드시 포함
+  },
+  body: JSON.stringify({ ... }),
+});
+```
+
+#### High — 하단 시트 z-index 계층 버그
+
+**증상**: 세대 호수 저장 후 성공 토스트가 보이지 않음 (하단 시트 뒤에 숨김)
+
+**원인**: 
+- 하단 시트: `z-80`
+- 성공 토스트: `z-60` (시트보다 낮음)
+
+**수정**: 토스트를 `z-90`으로 상향. `setSheetOpen(false)` → 이후 `showToast()` 순서로 호출해야 토스트가 잔상 없이 표시됨.
+
+**z-index 계층 기준 (2026-04-16 확정)**:
+```
+z-50  BottomNav
+z-70  일반 오버레이 (backdrop)
+z-80  하단 시트 (BottomSheet)
+z-90  토스트 / 알림 (항상 최상위)
+```
+
+#### Medium — 스텁 페이지 안티패턴
+
+**증상**: `/ledger` 접속 시 빈 화면
+
+**원인**: `(admin)/ledger/page.tsx`가 `<h1>장부</h1>`만 반환하는 스텁으로 방치
+
+**수정**: `(admin)/manage/ledger/page.tsx`의 완전한 구현으로 교체
+
+**예방**: 새 라우트 파일 생성 시 스텁 대신 최소한 "준비 중" 안내 문구 + 뒤로가기 버튼 제공 원칙.
+
+### QA 체크리스트 추가 항목
+
+커뮤니티, 민원 등 새 기능 구현 후 반드시 확인:
+- [ ] POST/PATCH/DELETE 모든 API 호출에 `Authorization: Bearer ${token}` 포함 여부
+- [ ] 성공/오류 토스트가 하단 시트 위에 보이는지 (z-index)
+- [ ] 새 라우트 파일이 스텁이 아닌 실제 구현인지
+
+---
+
+## 2026-04-18 QA 결과 및 체크리스트 업데이트
+
+### 발견된 버그 유형 — 인증 헤더 전수 누락
+
+**증상**: 페이지 로드 시 "게시글/투표/민원/차량을 불러오는 데 실패했습니다." 오류
+**원인**: GET 요청에 Authorization 헤더 미포함 → 미들웨어 401 반환
+**영향 범위**: 13개 파일 30+개 fetch 호출
+
+> **핵심 교훈**: GET 요청도 보호된 API임. `fetch(url)` 단독 사용은 항상 인증 오류 발생.
+
+### PortOne 결제 QA 체크리스트
+
+결제 기능 구현/수정 후 반드시 아래 항목 확인:
+
+| # | 항목 | 확인 방법 |
+|---|------|----------|
+| 1 | CSP 콘솔 오류 없음 | 브라우저 DevTools Console → 빨간 줄 없음 |
+| 2 | PortOne SDK 로드 성공 | `window.IMP` 존재 확인 |
+| 3 | PG MID 일치 | PortOne 대시보드 채널 MID == `pg:` 파라미터 MID |
+| 4 | 데스크탑 팝업 결제 | PC 브라우저에서 결제창 팝업 열림 → 결제 완료 → 납부 완료 화면 |
+| 5 | 모바일 리다이렉트 결제 | 모바일 브라우저에서 결제 후 원래 페이지 복귀 → 납부 완료 화면 |
+| 6 | 결제 취소 처리 | 결제창 닫기 → 에러 메시지 표시 (무한 로딩 아님) |
+| 7 | 납부 완료 상태 중복 클릭 방지 | COMPLETED 상태 시 납부 버튼 미노출 |
+
+### QA 체크리스트 — 전체 업데이트 (2026-04-18)
+
+새 페이지/기능 구현 후 반드시 확인:
+
+**인증**
+- [ ] **GET 포함 모든** `fetch('/api/...')` 호출에 `Authorization: Bearer ${token}` 포함
+- [ ] POST/PATCH/DELETE에 Authorization 헤더 포함
+- [ ] 미인증 상태에서 해당 페이지 접근 시 로그인 리다이렉트 확인
+
+**UI/UX**
+- [ ] 하단 시트가 BottomNav(z-50) 위에 표시되는지 (z-[60] 이상)
+- [ ] 성공/오류 토스트가 하단 시트(z-80) 위에 표시되는지 (z-90)
+- [ ] 하단 고정 버튼이 BottomNav에 가려지지 않는지 (`bottom-14` 또는 `pb-24`)
+
+**코드 품질**
+- [ ] 새 라우트 파일이 스텁이 아닌 실제 구현
+- [ ] 이미지 업로드 시 Supabase `posts` 버킷 존재 확인
+- [ ] `window.confirm/alert` 사용 금지 (→ `useConfirm` + `ConfirmDialog` 사용)
+

@@ -2183,3 +2183,286 @@ Toast 알림이 BottomNav에 가려지는 문제 등 레이어 충돌 버그를 
 2. Toss 자동결제 Rate Limit 없는 공개 Cron — CRON_SECRET 검증 추가 권장
 3. 소셜 계정 연결 해제 UI 미구현 — 현재 DB 직접 삭제만 가능
 4. Web Push iOS Safari 지원 — Safari 16.4+ 이상에서만 지원, 하위 버전 graceful degradation 처리됨
+
+---
+
+## 15. MVP 구현 현황 (2026-04-14 기준) — Sprint 4 완료
+
+### 이 세션에서 구현된 기능 (8개)
+
+#### F-49 댓글 푸시 알림
+댓글 등록 시 원글 작성자에게 DB 알림 + Web Push 발송. 자기 자신 댓글은 제외. 푸시 실패가 댓글 저장에 영향 없도록 fire-and-forget 패턴 적용.
+
+#### F-50 게시글 좋아요
+`PostLike` 모델 신규 추가 (`@@unique([postId, userId])`). 좋아요 토글 API — 이미 좋아요한 경우 취소, 아닌 경우 추가. 관리자·입주민 커뮤니티 상세 페이지에 하트 버튼 추가.
+
+#### F-65 에너지 사용량 시각화
+`EnergyUsage` 모델 신규 추가 (`@@unique([villaId, year, month])`). 전기/수도/가스 월별 데이터 upsert. 관리자 — 연도별 탭, CSS 바차트, 월 선택 입력 폼. 입주민 — 최신 월 요약 카드, 에너지원별 탭, 연간 합계.
+
+#### F-72 QR 방문 차량 등록
+JWT 위임 패턴: 관리자가 QR 토큰 발급(24h 만료) → QR 코드 생성 → 방문자가 스캔 → 비로그인으로 `/qr-vehicle` 페이지 접속 → 차량 등록. `Vehicle.visitorName` 필드 추가. `qrcode` npm 패키지 도입.
+
+#### F-84 백오피스 청구 현황
+빌라별 청구서·납부율 집계. 월 필터, 납부율 프로그레스 바(녹색 ≥80% / 노란 ≥50% / 빨간 <50%), 수납 집계 카드.
+
+#### F-85 백오피스 MRR 모니터링
+MRR = ACTIVE 빌라 × 29,900원, ARR = MRR × 12. 12개월 추이 바차트 (`$queryRaw` + PostgreSQL TO_CHAR). 만료 임박 빌라 목록 (D-N 뱃지).
+
+#### F-14 멀티 빌라 관리
+동대표가 2개 이상 빌라 보유 시 `/profile/my-villas`에서 전환. `POST /api/auth/switch-villa` — JWT의 villaId 교체 후 새 토큰 발급. 홈 화면 "빌라 전환" 칩 버튼 (빌라 2개 이상일 때만 표시).
+
+#### F-15 동대표 교체
+세대주(HEAD) 목록에서 신규 동대표 선택 → `prisma.$transaction`으로 원자적 역할 이양 → 기존 동대표 자동 로그아웃.
+
+### 신규 Prisma 모델 (2026-04-14)
+
+| 모델 | 목적 |
+|------|------|
+| `PostLike` | 게시글 좋아요 (userId + postId 복합 유니크) |
+| `EnergyUsage` | 월별 에너지 사용량 (villaId + year + month 복합 유니크) |
+
+### 변경된 모델
+
+| 모델 | 변경 |
+|------|------|
+| `Vehicle` | `visitorName String?` 필드 추가 |
+
+### 기술 스택 변경
+
+| 항목 | 변경 전 | 변경 후 |
+|------|---------|---------|
+| QR 생성 | 외부 URL API | `qrcode` npm 클라이언트 사이드 |
+
+### 기술 부채 현황 (누적)
+1. 동대표 교체 후 기존 JWT 즉시 무효화 없음 (블랙리스트 미구현)
+2. 에너지 입력 서버 유효성 검증 부재 (클라이언트 min=0만)
+3. QR 토큰 URL 공유 시 24h 내 타인 사용 가능 (단발성 토큰 아님)
+4. Toss 빌링키 평문 DB 저장
+5. 소셜 계정 연결 해제 UI 미구현
+
+### 현재 Phase 완료 현황 (2026-04-14)
+
+| Phase | 상태 | 비고 |
+|-------|------|------|
+| Phase 1 — 핵심 루프 | ✅ 전체 완료 | |
+| Phase 2 — 인게이지먼트 루프 | ✅ 전체 완료 | |
+| Phase 3 — 성장 인프라 (구현 가능 항목) | ✅ 완료 | F-32/37/61, NF-11/12는 외부 의존성으로 보류 |
+
+---
+
+## 보안 QA 및 디자인 QA 완료 (2026-04-15 기준)
+
+### 보안 QA — 주요 수정 사항
+
+#### JWT URL 노출 → HttpOnly 쿠키 교환 패턴
+소셜 로그인 콜백에서 JWT를 URL(`?token=...`)에 포함하던 방식을 제거.
+- 콜백 핸들러가 `pending_auth_token` HttpOnly 쿠키(60초 만료)를 설정
+- 클라이언트가 `/api/auth/exchange-token`을 호출해 JWT를 수령
+- URL 히스토리·서버 로그에 토큰이 남지 않음
+
+#### 백오피스 페이지 경로 보호
+기존에는 API 라우트만 보호되던 미들웨어를 확장해 `/backoffice/*` 페이지 경로도 `bo_session` HttpOnly 쿠키로 서버 사이드 보호.
+- `/api/backoffice/auth/logout` — `bo_session` 쿠키 삭제 전담 엔드포인트 신규 추가
+- `middleware.ts` matcher: `/api/:path*` + `/backoffice/:path*` 통합
+
+#### 빌링키 암호화 저장 (AES-256-GCM)
+Toss Payments 빌링키를 DB에 평문 저장하던 보안 취약점 수정.
+- `lib/crypto.ts` 신규 — AES-256-GCM, 12바이트 IV + 16바이트 AuthTag
+- 저장 형식: `iv(24 hex) + authTag(32 hex) + ciphertext(hex)`
+- `BILLING_ENCRYPTION_KEY` 환경변수(64자 hex) 필요
+- 빌링키 저장 시 `encryptBillingKey()`, 결제 시 `decryptBillingKey()` 호출
+
+#### 구독 가격 단일 소스 (`lib/pricing.ts`)
+`SUBSCRIPTION_MONTHLY_PRICE = 19_900`과 `SUBSCRIPTION_ORDER_NAME`을 하나의 파일로 중앙화.
+기존에 auto-payment Cron(19,900)과 MRR 대시보드(29,900 하드코딩) 사이에 금액 불일치가 있던 문제 해결.
+
+#### QR 검증 전용 엔드포인트 분리
+`GET /api/villas/[villaId]/vehicles/qr-verify` 신규 추가 — JWT 토큰 검증만 수행하고 DB 기록 없음.
+`/qr-vehicle` 공개 페이지와 `/visitor` 등록 엔드포인트를 미들웨어 예외(PUBLIC_PATH_PATTERNS)에 추가.
+
+#### 파일 업로드 MIME 검증 강화
+클라이언트 제공 Content-Type 대신 파일 매직 바이트 기반으로 확장자 결정.
+
+#### 티켓(민원) 입력 제한 추가
+- 제목 100자, 내용 2000자 서버 사이드 길이 제한
+- APPROVED 입주민만 티켓 제출 가능 (빌라 소속 검증 추가)
+
+#### PostLike 레이스 컨디션 처리
+`POST /like`에 Prisma P2002 유니크 충돌 catch → 이미 좋아요 처리로 멱등 응답.
+
+#### Vercel Cron KST 스케줄 수정
+`auto-payment` cron이 UTC 00:00으로 설정되어 있던 것을 `0 15 * * *`(KST 00:00)으로 수정.
+
+---
+
+### 신규 파일 (2026-04-15)
+
+| 파일 | 설명 |
+|------|------|
+| `lib/pricing.ts` | 구독 가격 단일 소스 (`SUBSCRIPTION_MONTHLY_PRICE`, `SUBSCRIPTION_ORDER_NAME`) |
+| `lib/crypto.ts` | AES-256-GCM 빌링키 암호화/복호화 (`encryptBillingKey`, `decryptBillingKey`) |
+| `app/api/auth/exchange-token/route.ts` | pending_auth_token HttpOnly 쿠키 → JWT 교환 (1회성) |
+| `app/api/villas/[villaId]/vehicles/qr-verify/route.ts` | QR 토큰 검증 전용 (DB 기록 없음) |
+| `app/api/backoffice/auth/logout/route.ts` | bo_session 쿠키 삭제 |
+| `components/ui/ConfirmDialog.tsx` | 커스텀 확인 다이얼로그 (destructive 변형 포함) |
+| `hooks/useConfirm.tsx` | Promise 기반 confirm 훅 (`window.confirm` 대체) |
+
+---
+
+### 디자인 QA — 주요 수정 사항
+
+#### 디자인 토큰 17개 신규 추가 (`globals.css`)
+`neutral-600`, `neutral-800`, `success-50/100/600/700`, `warning-50/100/600/700`, `error-50/100/600/700`, `primary-200/300/400` 등 참조하는 파일은 많지만 정의가 없던 토큰 일괄 추가.
+
+#### `window.confirm()` / `window.alert()` 제거
+브라우저 기본 확인창 36개 인스턴스 → `useConfirm` 훅 + `ConfirmDialog` 컴포넌트로 교체.
+
+#### 접근성 개선
+- `Chip.tsx`: `<span onClick>` → `<button type="button" onClick>`
+- `NotificationList.tsx`: `<li onClick>` → `<li><button>`로 키보드 접근 가능하게 변경
+- 터치 타깃: `min-h-[40px]` → `min-h-[44px]` (WCAG 2.1 AA 기준 준수)
+- SVG 장식 요소에 `aria-hidden="true"` 추가
+
+#### 하드코딩 색상 → 시맨틱 토큰 교체
+- `Badge.tsx`: 고정 색상 → `primary/success/warning/error` 시맨틱 토큰
+- `WidgetCard.tsx`: `blue-600/red-500/orange-500/green-500` → 토큰 기반
+- `Button.tsx`: `hover:bg-red-600` → `hover:bg-error-600`
+- `app/(admin)/profile/vehicles/page.tsx`: `hover:red-500` → `hover:error-500`
+
+#### 텍스트 계층 정리
+여러 페이지 헤더 `text-2xl` → `text-xl`로 축소. 모바일 뷰포트 기준 타이포그래피 위계 일관성 확보.
+
+#### 내비게이션 href 버그 수정
+- 관리자 홈: 온보딩 CTA 링크 수정
+- 입주민 홈: 라우팅 404 원인 href 수정
+
+#### Suspense 폴백 추가
+`useSearchParams()` 사용 페이지(login, profile-setup)에 `<Suspense>` 래퍼 추가 — Next.js 15 빌드 오류 방지.
+
+### 기술 부채 현황 (2026-04-15 업데이트)
+
+| # | 항목 | 위험도 | 상태 |
+|---|------|--------|------|
+| 1 | 동대표 교체 후 기존 JWT 즉시 무효화 없음 | Medium | 잔존 |
+| 2 | 에너지 입력 서버 유효성 검증 부재 | Low | 잔존 |
+| 3 | QR 토큰 URL 단발성 미처리 | Low | 잔존 |
+| 4 | `BILLING_ENCRYPTION_KEY` Vercel 환경변수 미설정 | **Critical** | **미완료 — 수동 등록 필요** |
+| 5 | 기존 평문 빌링키 DB 마이그레이션 미완료 | High | 수동 마이그레이션 필요 |
+| 6 | 소셜 계정 연결 해제 UI 미구현 | Low | 잔존 |
+
+---
+
+## 2026-04-16 업데이트 — Sprint 6 UX 개선 및 버그 수정
+
+### 실제 기술 스택 최신 현황 (2026-04-16 기준)
+
+> 이전 세션의 React Native 기반 기록은 초기 MVP 단계입니다. 2026-04-03 이후 **Next.js App Router 기반 웹앱으로 전면 전환**했습니다.
+
+| 구분 | 현재 실제 구현 |
+|------|--------------|
+| **Frontend** | Next.js 15 (App Router) + TypeScript |
+| **UI 프레임워크** | Tailwind CSS v4 (`@import "tailwindcss"`, `@theme` 블록) |
+| **Backend** | Next.js Route Handlers (App Router 내장) |
+| **ORM** | Prisma (Supabase PostgreSQL) |
+| **인증** | JWT (HttpOnly 쿠키 교환 패턴) + bcrypt |
+| **소셜 로그인** | 카카오 / 구글 OAuth 2.0 |
+| **결제** | PortOne (PG 인앱) + Toss Payments (빌링키 자동결제) |
+| **파일 스토리지** | Supabase Storage (posts 버킷) |
+| **푸시 알림** | Web Push API (VAPID) |
+| **배포** | Vercel (monorepo: `apps/web/`) |
+| **스케줄러** | Vercel Cron Jobs (`vercel.json`) |
+| **보안** | AES-256-GCM 빌링키 암호화, CSP 헤더, DOMPurify XSS 방어 |
+
+### 신규 UI 패턴 추가 (2026-04-16)
+
+#### AmountInput 컴포넌트
+금액 입력이 필요한 모든 화면에서 `<AmountInput>` 사용:
+- − / + 버튼으로 단위 조정
+- 단위는 localStorage `amountStep` 키로 개인화 (기본 10,000원)
+- 관리자·입주민 프로필에서 단위 변경 가능 (프리셋 5종: 1천/5천/1만/5만/10만)
+
+#### 하단 시트 레이아웃 표준 확립
+모바일 영역(max-w-lg) 내 제한 패턴: `fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg`
+
+#### z-index 계층 확정
+| 레이어 | z-index |
+|--------|---------|
+| BottomNav | z-50 |
+| 오버레이 backdrop | z-70 |
+| 하단 시트 (BottomSheet) | z-80 |
+| 토스트 / 알림 | z-90 |
+
+### 버그 수정 요약
+
+| 버그 | 원인 | 수정 |
+|------|------|------|
+| 커뮤니티 글쓰기 "Unauthorized" | POST /posts Authorization 헤더 누락 | 4개 파일 8개 API 호출에 헤더 추가 |
+| 세대 호수 저장 무반응 | PATCH Authorization 헤더 누락 + 토스트 z-index 낮음 | 헤더 추가, 토스트 z-90 상향 |
+| 하단 시트 PC 전체 폭 | `left-0 right-0` 패턴 사용 | `left-1/2 -translate-x-1/2 max-w-lg` 수정 |
+| /ledger 빈 화면 | 스텁 페이지 방치 | 완전 구현 페이지로 대체 |
+
+### 기술 부채 현황 (2026-04-16 업데이트)
+
+| # | 항목 | 위험도 | 상태 |
+|---|------|--------|------|
+| 1 | `BILLING_ENCRYPTION_KEY` Vercel 환경변수 미설정 | **Critical** | **미완료 — 수동 등록 필요** |
+| 2 | 기존 평문 빌링키 DB 마이그레이션 미완료 | High | 수동 마이그레이션 필요 |
+| 3 | `/ledger` ↔ `/manage/ledger` 코드 중복 | Low | 리다이렉트 또는 공통 컴포넌트 추출 필요 |
+| 4 | 동대표 교체 후 기존 JWT 즉시 무효화 없음 | Medium | 잔존 |
+| 5 | 소셜 계정 연결 해제 UI 미구현 | Low | 잔존 |
+
+---
+
+## 2026-04-18 변경 내역 (Sprint 7)
+
+### 1. 아키텍처 변경점
+
+**PortOne 모바일 결제 리다이렉트 패턴 확립**
+
+KG Inicis는 모바일에서 팝업 대신 리다이렉트 방식으로 동작. `m_redirect_url` 필드를 `IMP.request_pay()` 파라미터에 추가하고, 페이지 마운트 시 URL 파라미터(`imp_uid`, `imp_success`)를 감지해 자동 결제 검증을 수행하는 패턴 확립.
+
+**CSP 헤더 PortOne 도메인 확장**
+
+`next.config.ts`의 Content-Security-Policy에 PortOne 관련 도메인 추가:
+- `script-src`, `style-src`, `img-src`, `connect-src`: `https://*.iamport.kr`, `https://*.inicis.com`
+- `frame-src`: `https://*.iamport.kr`, `https://*.inicis.com`, `https://*.kcp.co.kr`, `https://*.nicepay.co.kr`
+
+### 2. API 변경
+
+없음 (API 라우트 신규 추가/변경 없음)
+
+### 3. 데이터 모델 변경
+
+없음 (Prisma 스키마 변경 없음)
+
+### 4. 기술 부채
+
+**신규 발견 및 수정**
+
+- **API 인증 헤더 전수 누락 (Critical → 수정 완료)**: 클라이언트 페이지 13개에서 GET/POST/DELETE 요청에 Authorization 헤더 미포함. 미들웨어가 모든 `/api/` 경로를 보호하므로 GET도 반드시 헤더 필요. 전수 수정 완료.
+
+**신규 부채 추가**
+
+| 항목 | 위험도 | 설명 |
+|------|--------|------|
+| `lib/client-api.ts` 헬퍼 미활용 | Medium | `apiFetch/apiGet/apiPost` 등 토큰 자동 주입 헬퍼가 존재하나 대부분 페이지가 raw fetch 사용. 이번처럼 누락 발생 원인. 점진적 헬퍼 전환 권장 |
+| Supabase `posts` 버킷 미생성 | High | 이미지 업로드 기능이 구현되어 있으나 Supabase Storage에 버킷이 없으면 동작 불가. 운영자가 수동으로 Public 버킷 생성 필요 |
+| PortOne 운영 MID 미전환 | High | 현재 테스트 MID(`INIpayTest`) 사용 중. 실제 운영 전 PortOne 채널 MID로 교체 필요 |
+
+### 버그 수정 요약
+
+| 버그 | 원인 | 수정 파일 수 |
+|------|------|------------|
+| 커뮤니티 목록 로딩 실패 | GET /posts Authorization 헤더 누락 | 2 |
+| 커뮤니티 게시글 상세 실패 | GET /posts/:id Authorization 헤더 누락 | 2 |
+| 투표 목록/상세 로딩 실패 | GET /polls Authorization 헤더 누락 | 3 |
+| 민원 목록 로딩 실패 | GET /tickets Authorization 헤더 누락 | 1 |
+| 차량 목록/등록/삭제 실패 | GET/POST/DELETE /vehicles 인증 누락 | 2 |
+| 에너지 데이터 로딩 실패 | GET /energy Authorization 헤더 누락 | 1 |
+| 내 게시글 목록 실패 | GET /posts/my Authorization 헤더 누락 | 1 |
+| 입주자 정보/전출 실패 | GET/DELETE /residents 인증 누락 | 1 |
+| PortOne SDK 로드 실패 | CSP script-src 미허용 | next.config.ts |
+| 결제 버튼 무한 로딩 | 모바일 m_redirect_url 누락 + useSearchParams Suspense 이슈 | pay/page.tsx |
+| "등록된 PG 설정 없음" | PG 코드에 MID 미명시 | pay/page.tsx |
+| 하단 시트 BottomNav 겹침 | z-index z-50 미만 | 4개 파일 |
+

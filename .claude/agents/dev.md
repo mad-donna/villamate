@@ -1715,3 +1715,326 @@ if (!VALID_CATEGORIES.includes(body.category as ...)) return err('올바르지 �
 - XSS: `dompurify`, `@types/dompurify`
 - 스타일: `@tailwindcss/typography` (@plugin 방식, globals.css에 선언)
 - 테스트: `jest`, `@types/jest`, `ts-jest`, `jest-environment-node`
+
+---
+
+## 2026-04-13 업데이트 — F-43/F-77/F-04/F-05 Phase 3 선행 구현
+
+### 구현된 기능
+
+**F-43 Web Push**
+- `lib/webpush.ts` — `getWebPush()` lazy init 패턴 (빌드 타임 env 오류 방지)
+- `apps/web/public/sw.js` — Service Worker push/notificationclick 이벤트
+- `apps/web/app/api/push/subscribe/route.ts` — POST upsert / DELETE
+- `apps/web/app/(resident)/resident/profile/notifications/page.tsx` — PushBanner 컴포넌트
+- `lib/notify.ts` — `sendPushToUser()` 비동기 병행 발송 추가
+
+**F-77 Toss Payments 빌링키 자동결제**
+- `lib/toss.ts` — `issueBillingKey()`, `chargeBilling()`
+- `apps/web/app/api/villas/[villaId]/subscription/billing-key/route.ts` — GET/POST/DELETE
+- `apps/web/app/api/cron/auto-payment/route.ts` — 만료 빌라 자동결제 Cron
+- `apps/web/app/(admin)/profile/subscription/page.tsx` — 카드 등록/해제 UI
+- `apps/web/vercel.json` — auto-payment cron 등록
+
+**F-04/F-05 소셜 로그인**
+- `lib/oauth.ts` — `generateState()`, `getKakaoAuthUrl()`, `getGoogleAuthUrl()`, `getOAuthProfile()`
+- `apps/web/app/api/auth/oauth/[provider]/route.ts` — state 쿠키 + OAuth redirect
+- `apps/web/app/api/auth/callback/[provider]/route.ts` — state 검증, 유저 upsert, JWT 발급
+- `apps/web/app/api/auth/social-complete/route.ts` — PATCH 프로필 보완
+- `apps/web/app/api/auth/me/route.ts` — GET 현재 유저 조회
+- `apps/web/app/(auth)/auth/social/page.tsx` — 토큰 localStorage 저장 중간 페이지
+- `apps/web/app/(auth)/profile-setup/page.tsx` — 소셜 신규 유저 프로필 입력
+- `apps/web/app/(auth)/login/page.tsx` — 카카오/구글 버튼 추가
+
+### 발생한 오류 및 수정
+
+| 오류 | 원인 | 수정 |
+|------|------|------|
+| `"No key set vapidDetails.publicKey"` | `webpush.setVapidDetails()` 모듈 최상위 호출 → 빌드 시 env 없음 | `getWebPush()` lazy init 패턴 적용 |
+| `requestBillingAuth not on TossPaymentsWidgets` | `widgets().requestBillingAuth()` 미존재 | `payment({ customerKey }).requestBillingAuth()` 사용 |
+| `'카드' not assignable to 'CARD'` | Toss SDK 열거형 불일치 | `method: 'CARD'` 대문자 사용 |
+| `variant 'outline' not valid` | Button 컴포넌트에 없는 variant | `variant="secondary"`로 수정 |
+| `string | null not assignable to string` (bcrypt) | `User.password nullable` 변경 후 null 체크 누락 | `!dbUser.password` null 체크 추가 |
+
+### 환경변수 추가
+```
+NEXT_PUBLIC_VAPID_PUBLIC_KEY  # Web Push 공개 키
+VAPID_PRIVATE_KEY             # Web Push 비공개 키
+NEXT_PUBLIC_TOSS_CLIENT_KEY   # Toss Payments (빌드 시 번들 포함 → 추가 후 재배포 필요)
+TOSS_SECRET_KEY               # Toss Payments 서버 키
+KAKAO_CLIENT_ID / KAKAO_CLIENT_SECRET
+GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+```
+
+### NEXT_PUBLIC_ 변수 주의사항
+`NEXT_PUBLIC_*` 접두사 변수는 빌드 타임에 번들에 포함됨. 환경변수 추가 후 반드시 Vercel 재배포 필요. 기존 배포에는 반영되지 않음.
+
+
+---
+
+## 2026-04-14 업데이트 — Sprint 4 (F-49/50/65/72/84/85/F-14/15)
+
+### 구현된 기능 (8개)
+
+**F-49 댓글 푸시 알림**
+- `app/api/villas/[villaId]/posts/[postId]/comments/route.ts` — `prisma.comment.create` 후 원글 작성자 조회, `authorId !== user.sub`이면 DB 알림 생성 + `sendPushToUser().catch(() => {})` 비동기 발송
+- **패턴**: 댓글 응답은 즉시 반환, 알림 발송 실패는 무시 (fire-and-forget)
+
+**F-50 게시글 좋아요**
+- `app/api/villas/[villaId]/posts/[postId]/like/route.ts` (신규) — POST 토글: `postLike.findUnique({ where: { postId_userId: ... } })` → 존재하면 delete, 없으면 create, `{ liked, likeCount }` 반환
+- `app/api/villas/[villaId]/posts/[postId]/route.ts` — `_count: { select: { likes: true } }` 추가, `Promise.all([comments, myLike])` 병렬 조회
+- `app/api/villas/[villaId]/posts/route.ts` — `likes: true` to `_count` 추가
+- 관리자·입주민 상세 페이지 — `liking` state, `handleLike()` async, 하트 SVG (좋아요 시 빨간 채움, 미좋아요 시 아웃라인)
+
+**F-65 에너지 사용량**
+- `app/api/villas/[villaId]/energy/route.ts` (신규) — GET: `year` 쿼리 파람 기반 조회; POST: `prisma.energyUsage.upsert({ where: { villaId_year_month: ... } })`
+- `app/(admin)/manage/energy/page.tsx` (신규) — 연도 탭 (3년), 전기/수도 CSS 바차트, 월별 입력 폼 (6필드), 기존 데이터 자동 채우기
+- `app/(resident)/villa/energy/page.tsx` (신규) — 최신 월 요약 카드, 탭 전환 (전기/수도/가스), CSS 바차트 + 호버 툴팁, 연간 합계 섹션
+
+**F-84 백오피스 청구 현황**
+- `app/api/backoffice/billing/route.ts` (신규) — GET: `month`(YYYY-MM) + `villaId` + `page` 필터, Invoice include payments, `paidAmount/paidCount/paidRate` 계산
+- `app/(backoffice)/billing/page.tsx` (신규) — 최근 6개월 드롭다운, 요약 카드 3개, 납부율 프로그레스 바 (녹색 ≥80%, 노란 ≥50%, 빨간 <50%), load more 페이지네이션
+
+**F-85 백오피스 MRR**
+- `app/api/backoffice/mrr/route.ts` (신규) — MRR = ACTIVE 빌라수 × 29,900원, ARR = MRR × 12, 12개월 추이 `prisma.$queryRaw` (TO_CHAR DATE_TRUNC), 만료 임박 D-30 이내 상위 10개
+- `app/(backoffice)/mrr/page.tsx` (신규) — MRR/ARR/구독중/만료 카드, 바차트 (호버 툴팁), 만료 임박 테이블 (D-N 뱃지)
+- `app/(backoffice)/layout.tsx` — billing + mrr 사이드바 메뉴 추가
+
+**F-72 QR 방문 차량**
+- `app/api/villas/[villaId]/vehicles/qr-token/route.ts` (신규) — GET, ADMIN 전용, `jose SignJWT({ villaId, purpose: 'visitor-vehicle' }, 24h 만료)`
+- `app/api/villas/[villaId]/vehicles/visitor/route.ts` (신규) — POST, 인증 없음, JWT 검증 (purpose + villaId), Vehicle upsert (`isVisitor: true, ownerId: villa.adminId, visitorName`)
+- `app/qr-vehicle/page.tsx` (신규) — Suspense 래핑, `?v=villaId&t=token` URL 파라미터, 등록 폼, 성공/오류 상태
+- `app/(admin)/profile/vehicles/page.tsx` (전면 재작성) — QR 버튼 → `/vehicles/qr-token` 호출 → `QRCode.toDataURL()` → 모달 내 QR 이미지 표시, 방문/일반 차량 섹션 분리, 차량 등록 바텀시트
+
+**F-15 동대표 교체**
+- `app/api/villas/[villaId]/transfer-admin/route.ts` (신규) — POST `{ newAdminId }`, HEAD 입주민 검증, `prisma.$transaction([villa.update, oldAdmin→RESIDENT, newAdmin→ADMIN])`, 알림 발송
+- `app/(admin)/profile/transfer-admin/page.tsx` (신규) — HEAD 입주민 라디오 선택, 경고 배너, 이름 확인 다이얼로그, 성공 시 `clearAuth()` + `/login` 리다이렉트
+
+**F-14 멀티 빌라 관리**
+- `app/api/me/villas/route.ts` (신규) — GET, ADMIN 전용, `prisma.villa.findMany({ where: { adminId: user.sub } })` + 입주민 수 집계
+- `app/api/auth/switch-villa/route.ts` (신규) — POST `{ villaId }`, `villa.adminId === user.sub` 검증, `signToken` 새 JWT 발급
+- `app/(admin)/profile/my-villas/page.tsx` (신규) — 현재 빌라 border 하이라이트, 전환 버튼 → `saveToken + setUser` + `/home` 리다이렉트, "+ 새 빌라" → `/onboarding`
+- `app/(admin)/home/page.tsx` — `multiVillaCount` state, `/api/me/villas` 병렬 fetch, count > 1일 때 "빌라 전환" 칩 버튼 표시
+
+### 발생한 오류 및 수정
+
+| 오류 | 원인 | 수정 |
+|------|------|------|
+| `prisma db push` "already in sync" 후 스키마 적용 안 됨 | visitorName 필드 추가 후 확인 | `db push` 재실행으로 해결 |
+| Edit 도구 "Found 2 matches" | 스키마 파일 내 동일 문자열 중복 | 더 많은 컨텍스트 포함으로 unique 확보 |
+
+### 환경변수 추가 없음
+이번 세션은 신규 환경변수 없음. qrcode 패키지는 클라이언트 사이드 동작으로 env 불필요.
+
+---
+
+## 2026-04-15 개발 진행사항 — 보안 QA + 디자인 QA 수정
+
+### 신규 파일
+
+| 파일 | 설명 |
+|------|------|
+| `lib/pricing.ts` | 구독 가격 단일 소스 — `SUBSCRIPTION_MONTHLY_PRICE = 19_900`, `SUBSCRIPTION_ORDER_NAME` |
+| `lib/crypto.ts` | AES-256-GCM 암호화 — `encryptBillingKey(plaintext)`, `decryptBillingKey(ciphertext)` |
+| `app/api/auth/exchange-token/route.ts` | `pending_auth_token` HttpOnly 쿠키 소비 → JWT 반환 (GET, 1회성) |
+| `app/api/villas/[villaId]/vehicles/qr-verify/route.ts` | QR JWT 토큰 검증 전용 (GET, 공개, DB 기록 없음) |
+| `app/api/backoffice/auth/logout/route.ts` | `bo_session` 쿠키 삭제 (POST) |
+| `components/ui/ConfirmDialog.tsx` | 커스텀 확인 다이얼로그 — `variant: 'default' | 'destructive'`, overlay + rounded-2xl |
+| `hooks/useConfirm.tsx` | Promise 기반 confirm 훅 — `const ok = await confirm({ title, message, variant })` |
+
+### 수정된 주요 파일
+
+**보안 관련**
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `middleware.ts` | `PUBLIC_PATH_PATTERNS` 배열 추가, matcher에 `/backoffice/:path*` 포함, `/qr-vehicle`·`/visitor` 공개 경로 추가 |
+| `app/api/auth/callback/[provider]/route.ts` | JWT를 URL 대신 `pending_auth_token` HttpOnly 쿠키로 설정 (maxAge: 60s) |
+| `app/(auth)/auth/social/page.tsx` | `GET /api/auth/exchange-token` 호출 후 JWT 수령 |
+| `app/api/backoffice/auth/login/route.ts` | `bo_session` HttpOnly 쿠키 설정 (maxAge: 8h, path: '/backoffice') |
+| `app/(backoffice)/layout.tsx` | 로그아웃 시 `POST /api/backoffice/auth/logout` 호출 후 localStorage 클리어 |
+| `app/api/villas/[villaId]/tickets/route.ts` | POST: villa 존재 확인 + APPROVED 소속 검증, title ≤100/description ≤2000 제한 |
+| `app/api/villas/[villaId]/posts/[postId]/like/route.ts` | Prisma P2002 catch → 멱등 200 응답 |
+| `app/api/backoffice/mrr/route.ts` | `freeTrialCount` 필터 수정(`FREE_TRIAL`), 가격을 `SUBSCRIPTION_MONTHLY_PRICE`로 통일 |
+| `app/api/cron/auto-payment/route.ts` | `decryptBillingKey()` 호출 추가, 가격을 `SUBSCRIPTION_MONTHLY_PRICE`로 통일 |
+| `vercel.json` | auto-payment cron `"0 0 * * *"` → `"0 15 * * *"` (KST 00:00) |
+| `app/api/upload/route.ts` | 확장자를 MIME 맵에서 결정, 클라이언트 filename 무시 |
+| `app/(auth)/profile-setup/page.tsx` | `useState(() => searchParams.get('token') ?? '')` 초기화 함수 패턴 |
+| `app/api/villas/[villaId]/subscription/billing-key/route.ts` | `encryptBillingKey()` 호출 후 DB upsert |
+
+**디자인 관련**
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `app/globals.css` | 누락 토큰 17개 추가 (`neutral-600/800`, `success/warning/error-50/100/600/700`, `primary-200/300/400`) |
+| `components/ui/Button.tsx` | `lg` size `h-13` → `h-12`, `hover:bg-red-600` → `hover:bg-error-600` |
+| `components/ui/Badge.tsx` | 한국어 변형 제거, 하드코딩 색상 → 시맨틱 토큰 |
+| `components/ui/Chip.tsx` | `<span onClick>` → `<button type="button" onClick>` |
+| `components/ui/WidgetCard.tsx` | `blue-600/red-500/orange-500/green-500` → `primary/error/warning/success` 토큰 |
+| `components/ui/NotificationList.tsx` | `<li onClick>` → `<li><button>`, 에러 상태 추가 |
+| `app/(admin)/home/page.tsx` | href 수정, 온보딩 CTA Button 컴포넌트 사용 |
+| `app/(resident)/resident/home/page.tsx` | href 수정, error/empty 상태 분리 |
+| `app/(admin)/profile/subscription/page.tsx` | hex 색상 → 토큰, `pb-16` → `pb-24` |
+| `app/(auth)/login/page.tsx` | `<Suspense>` 래퍼 추가, SVG `aria-hidden="true"` |
+| `app/(admin)/profile/vehicles/page.tsx` | `hover:red-500` → `hover:error-500`, `formError`에 `role="alert"` |
+| `app/(admin)/profile/page.tsx` | `min-h-[40px]` → `min-h-[44px]` |
+| `app/(resident)/villa/tickets/page.tsx` | PENDING Badge variant `'neutral'` → `'warning'` |
+
+### 환경변수 추가 (2026-04-15)
+
+| 변수명 | 설명 | 위치 |
+|--------|------|------|
+| `BILLING_ENCRYPTION_KEY` | AES-256-GCM 키 (64자 hex = 32바이트) | Vercel 프로덕션 환경변수 — **미등록 상태 (수동 등록 필요)** |
+
+### 주의사항
+- `BILLING_ENCRYPTION_KEY` 없이 배포되면 빌링키 저장/결제 시 런타임 오류 발생
+- 기존 DB의 평문 빌링키는 `decryptBillingKey()` 호출 시 오류 → 수동 마이그레이션 필요
+
+---
+
+## 2026-04-16 업데이트 — AmountInput UX 개선, 버그 수정
+
+### 신규 파일
+
+| 파일 | 설명 |
+|------|------|
+| `apps/web/lib/amount-step.ts` | localStorage 기반 금액 단위 저장/조회 유틸. `getAmountStep()` / `setAmountStep()` / `PRESET_STEPS` export |
+| `apps/web/components/ui/AmountInput.tsx` | − / + 버튼 포함 금액 입력 컴포넌트. `value`(raw 숫자 string), `onChange`, `stepOverride`, `min` props 지원 |
+
+### 수정된 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `(admin)/manage/invoices/new/page.tsx` | 세대당 금액 및 변동 항목 금액을 `<AmountInput>`으로 교체. 변동 항목 레이아웃을 수평 행 → 카드 레이아웃으로 변경 |
+| `(admin)/manage/external-billing/page.tsx` | 청구 금액 `<input>` → `<AmountInput>`. 검증 및 API 전송 시 쉼표 제거 불필요 (raw 숫자 string 처리) |
+| `(admin)/profile/page.tsx` | `AmountStepSheet` 컴포넌트 추가 (프리셋 5개 + 직접 입력). 프로필 설정 목록에 '금액 단위 설정' 항목 추가 |
+| `(resident)/resident/profile/page.tsx` | 동일: `AmountStepSheet` + '금액 단위 설정' 항목 |
+| `(admin)/manage/residents/page.tsx` | 호수 관리 하단 시트 레이아웃 수정(`left-0 right-0` → `left-1/2 -translate-x-1/2 max-w-lg`). PATCH 요청 Authorization 헤더 추가. 토스트 z-index `z-60` → `z-90` |
+| `(admin)/community/new/page.tsx` | POST /posts Authorization 헤더 추가 |
+| `(resident)/resident/community/new/page.tsx` | POST /posts Authorization 헤더 추가 |
+| `(admin)/community/[id]/page.tsx` | POST /comments, DELETE /posts, POST /like Authorization 헤더 추가 |
+| `(resident)/resident/community/[id]/page.tsx` | POST /comments, DELETE /posts, POST /like Authorization 헤더 추가 |
+| `(admin)/ledger/page.tsx` | 스텁 페이지 → `(admin)/manage/ledger/page.tsx`와 동일한 완전 구현으로 교체 |
+
+### 코딩 패턴 추가
+
+**금액 단위 localStorage 읽기 (AmountInput 내부)**:
+```typescript
+const [step, setStep] = useState(10000);
+useEffect(() => { setStep(stepOverride ?? getAmountStep()); }, [stepOverride]);
+```
+- SSR 안전: `getAmountStep()` 내부에서 `typeof window === 'undefined'` 분기
+- 컴포넌트 마운트 후 한 번만 읽음 (세션 중 변경 반영 불필요)
+
+**변동 청구서 항목 카드 레이아웃 패턴**:
+```tsx
+<li key={item.id} className="bg-neutral-50 rounded-2xl p-4 space-y-3">
+  <div className="flex items-center justify-between">
+    <span className="text-xs font-medium text-neutral-500">항목 {idx + 1}</span>
+    {items.length > 1 && <button onClick={() => removeItem(item.id)}>×</button>}
+  </div>
+  <input type="text" value={item.name} ... />
+  <AmountInput value={item.amount} onChange={(raw) => updateItem(item.id, 'amount', raw)} />
+</li>
+```
+
+### 기술 부채 추가 (2026-04-16)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `/ledger` ↔ `/manage/ledger` 코드 중복 | Low | 두 경로 동일 구현 — 리다이렉트 또는 공통 컴포넌트 추출 필요 |
+
+---
+
+## 2026-04-18 수정 내용
+
+### PortOne 결제 페이지 수정 (`app/pay/[billId]/page.tsx`)
+
+#### 수정 1 — 모바일 결제 m_redirect_url 추가
+
+KG Inicis 모바일 결제는 팝업 대신 리다이렉트 방식으로 동작. `m_redirect_url` 없으면 결제 후 앱 복귀 불가.
+
+```typescript
+window.IMP.request_pay(
+  {
+    pg: 'html5_inicis.INIpayTest',
+    // ...
+    m_redirect_url: `${window.location.origin}/pay/${billId}`,  // ← 추가
+  },
+  async (rsp) => { /* 데스크탑 콜백 */ }
+);
+```
+
+#### 수정 2 — 모바일 리다이렉트 복귀 처리
+
+```typescript
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const impUid = params.get('imp_uid');
+  const impSuccess = params.get('imp_success');
+  if (impUid) {
+    if (impSuccess === 'false') {
+      setPayError(params.get('error_msg') ?? '결제가 취소되었습니다.');
+      setLoading(false);
+      return;
+    }
+    fetchBilling().then(() => confirmPayment(impUid));
+    return;
+  }
+  fetchBilling();
+}, [fetchBilling, confirmPayment]);
+```
+
+#### 수정 3 — useSearchParams → window.location.search
+
+`useSearchParams()`는 Next.js 15에서 Suspense 래퍼 없이 사용하면 빌드 시 경고 + 초기 렌더 지연 발생. `window.location.search` (useEffect 내부)로 교체.
+
+#### 수정 4 — PG MID 명시
+
+```typescript
+// 수정 전
+pg: 'html5_inicis'
+// 수정 후
+pg: 'html5_inicis.INIpayTest'  // 테스트 MID 포함 명시
+```
+
+PortOne 채널 설정과 `pg` 코드의 MID가 일치해야 함. 불일치 시 "등록된 PG 설정 정보를 찾을 수 없습니다." 오류.
+
+### CSP 설정 확장 (`next.config.ts`)
+
+PortOne(iamport) SDK 로드 및 결제창 동작에 필요한 도메인 추가:
+
+```typescript
+"script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.iamport.kr",
+"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.iamport.kr https://*.inicis.com",
+"img-src 'self' data: blob: https://*.supabase.co https://*.iamport.kr https://*.inicis.com",
+"connect-src 'self' https://*.supabase.co https://*.supabase.com https://*.iamport.kr https://*.inicis.com",
+"frame-src https://*.iamport.kr https://*.inicis.com https://*.kcp.co.kr https://*.nicepay.co.kr",
+```
+
+> 반드시 와일드카드 `*.iamport.kr` 사용 — 하위 도메인 여러 개 사용됨 (cdn / service / api 등)
+
+### 전체 페이지 인증 헤더 일괄 수정
+
+미들웨어가 모든 `/api/` 경로를 보호하므로 **GET 요청 포함 모든 fetch에 Authorization 헤더 필수**.
+아래 패턴을 일괄 적용:
+
+```typescript
+// 기존 (오류)
+const res = await fetch(`/api/villas/${villaId}/polls`);
+
+// 수정 후 (정상)
+const token = localStorage.getItem('token') ?? '';
+const res = await fetch(`/api/villas/${villaId}/polls`, {
+  headers: { Authorization: `Bearer ${token}` },
+});
+```
+
+수정된 파일: 에너지, 투표(목록/상세/참여), 입주자 관리, 민원, 차량(GET/POST/DELETE), 커뮤니티(목록/상세), 내 게시글 — 총 13개 파일 30+개 호출.
+
+### 기술 부채 신규 추가 (2026-04-18)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `lib/client-api.ts` 헬퍼 미활용 | Medium | `apiFetch/apiGet/apiPost/apiPatch/apiDelete`가 이미 토큰 자동 주입을 지원하나, 대부분 페이지가 raw `fetch` 직접 사용. 점진적으로 헬퍼로 마이그레이션하면 이런 누락 방지 가능 |
+

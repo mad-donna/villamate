@@ -486,3 +486,248 @@ border-t border-neutral-100              ← 콘텐츠와 구분선
 - `px-2 py-1 rounded text-sm font-medium text-neutral-600 hover:bg-neutral-100`
 - active 상태: `bg-neutral-200`
 - 구분선: `w-px h-5 bg-neutral-200 mx-1`
+
+---
+
+## 2026-04-13 업데이트 — BottomNav 겹침 규칙 + 소셜 로그인 UI
+
+### BottomNav z-index 계층 규칙 (확정)
+
+Toast 알림이 BottomNav에 가려지는 버그를 수정하면서 전체 앱의 레이어 계층 규칙을 수립했다.
+
+| 레이어 | z-index | Tailwind 클래스 | 비고 |
+|--------|---------|-----------------|------|
+| BottomNav | 50 | `z-50` | 고정값 — 변경 금지 |
+| Toast 알림 | 60 | `z-60` | 반드시 `bottom-20` 이상에 배치 |
+| Sheet/모달 Overlay | 70 | `z-70` | 배경 딤 레이어 |
+| Sheet/모달 Panel | 80 | `z-80` | 콘텐츠 레이어 |
+| 전체화면 ImageViewer | 999 | `z-[999]` | 최상위 (다른 모든 UI 위) |
+
+**적용 규칙:**
+- Toast: `className="fixed bottom-20 left-1/2 -translate-x-1/2 z-60 ..."` 패턴 사용
+- 바텀시트 신규 구현 시: overlay `z-70` + panel `z-80` 반드시 적용
+- BottomNav(`z-50`)보다 낮은 `z-index`로 Toast 배치 금지
+
+### 소셜 로그인 버튼 디자인 (로그인 페이지)
+
+카카오·구글 소셜 로그인 버튼이 로그인 폼 하단에 추가되었다.
+
+**카카오 버튼:**
+```
+bg-[#FEE500] text-[#191919] font-semibold text-sm
+h-12 rounded-xl w-full
+카카오 SVG 아이콘(18×18) + "카카오로 시작하기"
+```
+
+**구글 버튼:**
+```
+bg-white border border-neutral-200 text-neutral-800 font-semibold text-sm
+h-12 rounded-xl w-full hover:bg-neutral-50
+구글 SVG 아이콘(18×18) + "Google로 시작하기"
+```
+
+**구분선 패턴 (이메일/소셜 사이):**
+```
+flex-1 h-px bg-neutral-200  ← 선
+text-xs text-neutral-400    ← "또는" 텍스트
+flex-1 h-px bg-neutral-200  ← 선
+```
+
+### 구독 카드 등록 페이지 (관리자 프로필 → 구독)
+
+Toss Payments 위젯을 앱 레이아웃 내에 임베드하는 패턴:
+- 카드 미등록 상태: 회색 카드 아이콘 + "등록된 카드가 없습니다" + primary 버튼
+- 카드 등록 완료: 카드사 + 마스킹 번호(`**** **** **** 1234`) + 빨간색 "카드 해제" 버튼
+- Toss 위젯: `id="toss-billing-widget"` div에 마운트, 앱 내 iframe 형태
+
+### 알림 설정 페이지 (입주민 프로필 → 알림 설정)
+
+Web Push 구독 토글 배너(`PushBanner`):
+- 미구독: 파란색 배너 `bg-primary-50 border border-primary-100` + "푸시 알림 활성화" 안내
+- 구독 완료: 초록색 배너 `bg-success-50` + 체크 아이콘 + "푸시 알림이 활성화되었습니다"
+- 위치: 알림 목록 상단 고정
+
+---
+
+## 2026-04-14 디자인 업데이트 — Sprint 4
+
+### 에너지 사용량 차트 (CSS 바 차트 패턴)
+
+외부 차트 라이브러리 없이 CSS height% 방식으로 구현. 프로젝트 전체 차트 통일 패턴.
+
+**관리자 입력 화면 (`/manage/energy`)**
+```
+연도 탭 (3년): 현재 연도 기준, primary underline 활성 탭
+전기 차트: 노란색 (bg-yellow-400) 막대
+수도 차트: 파란색 (bg-blue-400) 막대
+하단: 월별 수치 테이블 (kWh/원, 톤/원)
+하단: 월 선택 폼 — 선택 시 기존 데이터 자동 채우기
+```
+
+**입주민 열람 화면 (`/villa/energy`)**
+```
+최신 월 요약 카드: 3열 (전기/수도/가스) 수평 나열, 단위 표시
+탭 전환: 전기/수도/가스 3탭
+CSS 바 차트 + 호버 툴팁 (value + 요금)
+연간 합계 섹션 (하단 요약)
+```
+
+### QR 방문 차량 모달 디자인
+
+**관리자 QR 표시 모달 (`/profile/vehicles`)**
+```
+모달: fixed inset-0 z-70 bg-black/50 backdrop — 바텀시트 계층 시스템 준수
+QR 이미지: 중앙 배치, 흰 배경 패딩, rounded-2xl 카드
+안내 문구: "24시간 유효" 서브텍스트
+닫기 버튼: min-w-[44px] 터치 타깃 준수
+```
+
+**방문자 등록 페이지 (`/qr-vehicle`)**
+```
+전체 화면 흰 배경, 중앙 정렬 카드
+상단: 빌라명 표시 (빌라 확인 UX)
+폼: 번호판 (필수) + 방문자 이름 (선택) + 차량 모델 (선택) + 출차 예정 (선택)
+성공 상태: 초록 체크 아이콘 + "등록 완료" + 안내 메시지
+오류 상태: 빨간 아이콘 + 에러 메시지
+```
+
+### 백오피스 청구·MRR 화면
+
+**청구 현황 (`/billing`)**
+```
+필터: 최근 6개월 드롭다운 + 빌라명 검색 (선택)
+요약 카드 3개 (가로 배열): 총 청구서 수 / 총 수납액 / 평균 납부율
+납부율 표시 컬러 규칙:
+  ≥ 80% → green-500 프로그레스 바 + text-green-700
+  ≥ 50% → yellow-500
+  < 50%  → red-500
+테이블: 빌라명 / 청구서 수 / 납부 금액 / 납부율 바
+```
+
+**MRR 대시보드 (`/mrr`)**
+```
+상단 지표 카드 4개: MRR / ARR / 구독중 / 만료
+12개월 바차트: CSS height%, 호버 시 해당 월 MRR 툴팁
+만료 임박 테이블:
+  D-N 뱃지: N ≤ 7 → red-100 text-red-700 / 나머지 → orange-100
+```
+
+### 내 빌라 목록 (`/profile/my-villas`)
+
+```
+현재 빌라: border-2 border-primary-400 하이라이트
+"현재" 뱃지: text-[10px] bg-primary-50 rounded-full
+전환 버튼: bg-primary-600 text-white rounded-xl — 현재 빌라에는 미표시
+상단 우측: "+ 새 빌라" 링크 → /onboarding
+```
+
+### 동대표 교체 (`/profile/transfer-admin`)
+
+```
+입주민 목록: radio-style 선택 (border-primary-500 하이라이트)
+경고 배너: bg-red-50 border border-red-200 — "이 작업은 되돌릴 수 없습니다"
+확인 다이얼로그: confirm() — 선택한 이름 포함
+```
+
+---
+
+## 2026-04-15 디자인 QA 세션
+
+### 디자인 시스템 토큰 확장
+
+`apps/web/app/globals.css` `@theme` 블록에 17개 토큰 추가. 기존 코드베이스에서 참조하고 있었으나 정의가 없어 빌드 경고·런타임 오류를 유발하던 토큰들.
+
+| 카테고리 | 추가된 토큰 |
+|---------|-----------|
+| Neutral | `neutral-600`, `neutral-800` |
+| Success | `success-50`, `success-100`, `success-600`, `success-700` |
+| Warning | `warning-50`, `warning-100`, `warning-600`, `warning-700` |
+| Error | `error-50`, `error-100`, `error-600`, `error-700` |
+| Primary | `primary-200`, `primary-300`, `primary-400` |
+
+### 커스텀 Confirm 다이얼로그
+
+브라우저 기본 `window.confirm()` / `window.alert()`을 대체하는 디자인 시스템 컴포넌트 도입.
+
+**ConfirmDialog 스펙:**
+```
+컨테이너: rounded-2xl, max-w-sm, shadow-xl
+오버레이: bg-black/40, fixed inset-0 z-90
+버튼:
+  - 취소: bg-neutral-100, text-neutral-700
+  - 확인 (default): bg-primary-600, text-white
+  - 확인 (destructive): bg-error-600, text-white
+```
+
+**useConfirm 훅 인터페이스:**
+```tsx
+const confirm = useConfirm();
+const ok = await confirm({
+  title: '삭제하시겠습니까?',
+  message: '이 작업은 되돌릴 수 없습니다.',  // 선택
+  confirmText: '삭제',                        // 선택, 기본: '확인'
+  variant: 'destructive'                      // 선택, 기본: 'default'
+});
+```
+
+### 접근성 개선
+
+| 문제 | 파일 | 수정 내용 |
+|------|------|-----------|
+| 클릭 이벤트를 가진 비시맨틱 요소 | `Chip.tsx` | `<span onClick>` → `<button type="button">` |
+| 클릭 이벤트를 가진 비시맨틱 요소 | `NotificationList.tsx` | `<li onClick>` → `<li><button>` 중첩 |
+| 터치 타깃 44px 미달 | `profile/page.tsx` 등 | `min-h-[40px]` → `min-h-[44px]` (WCAG 2.1 AA) |
+| 장식용 SVG에 의미 없는 포커스 | 로그인 페이지, 헤더 아이콘 | `aria-hidden="true"` 추가 |
+| 에러 메시지 스크린리더 미전달 | `vehicles/page.tsx` | 에러 `<p>`에 `role="alert"` 추가 |
+
+### 색상 시맨틱 토큰화
+
+하드코딩 색상 → 시맨틱 디자인 토큰 교체 목록:
+
+| 파일 | 변경 |
+|------|------|
+| `components/ui/Badge.tsx` | `blue-100/700`, `green-100/700` 등 → `primary/success/warning/error` 변형 |
+| `components/ui/Button.tsx` | `hover:bg-red-600` → `hover:bg-error-600` |
+| `components/ui/WidgetCard.tsx` | `blue-600`, `red-500`, `orange-500`, `green-500` → 시맨틱 토큰 |
+| `app/(admin)/profile/vehicles/page.tsx` | `hover:text-red-500` → `hover:text-error-500` |
+| `app/(admin)/profile/subscription/page.tsx` | hex `#2563EB`, `#1d4ed8` → `primary-600/700` |
+| `app/(resident)/villa/tickets/page.tsx` | PENDING 배지 `'neutral'` → `'warning'` |
+
+### 타이포그래피 통일
+
+모바일 뷰포트(375px)에서 `text-2xl` 헤더가 지나치게 크게 보이는 문제 수정.
+영향 파일: 여러 페이지의 `<h1>` 태그 → `text-xl font-bold` 통일.
+
+### Suspense 폴백 패턴
+
+`useSearchParams()`를 사용하는 페이지에 Next.js 15 빌드 요구사항에 맞게 `<Suspense>` 래퍼 추가.
+
+```tsx
+// 패턴
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-neutral-50" />}>
+      <PageForm />
+    </Suspense>
+  );
+}
+```
+적용 파일: `login/page.tsx`, `profile-setup/page.tsx`
+
+---
+
+## 2026-04-18 디자이너 참고 사항
+
+### 결제 페이지 (`/pay/[billId]`) UI 안정화
+
+외부 청구 수신자가 링크를 통해 접근하는 공개 결제 페이지. 디자인 변경 없음, 기능 버그만 수정.
+결제 상태별 화면은 3단계:
+1. **로딩 중** — 스피너
+2. **납부 대기 (PENDING)** — 청구서 상세 + 납부 버튼 (하단 고정)
+3. **납부 완료 (COMPLETED)** — 체크마크 + 완료 메시지
+
+### PortOne 결제창 디자인 제약
+
+KG Inicis 결제창은 서드파티 팝업/리다이렉트 페이지이므로 VillaMate 디자인 시스템 적용 불가.
+모바일에서 리다이렉트 방식으로 동작 시 결제창은 별도 페이지로 이동 → 복귀 후 납부 완료 화면 표시.
+

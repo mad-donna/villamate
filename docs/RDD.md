@@ -163,8 +163,8 @@ app/
 | F-11 | 6자리 초대 코드 자동 생성 | 1 | ✅ | 충돌 시 재시도 로직 포함 |
 | F-12 | 세대 호수 사전 지정 (관리자 등록 → 입주민 선택) | 1 | ✅ | onboarding 칩 UI |
 | F-13 | 세대 호수 관리 (등록 후 수정) | 1 | ✅ | residents 페이지 BottomSheet |
-| F-14 | 멀티 빌라 관리 (동대표 2개 이상 빌라 전환 UI) | 3 | ⬜ | DB 1:N은 초기부터 설계 |
-| F-15 | 동대표 교체 / 권한 위임 | 3 | ⬜ | |
+| F-14 | 멀티 빌라 관리 (동대표 2개 이상 빌라 전환 UI) | 3 | ✅ | 2026-04-14 완료. GET /api/me/villas, POST /api/auth/switch-villa, /profile/my-villas 페이지 |
+| F-15 | 동대표 교체 / 권한 위임 | 3 | ✅ | 2026-04-14 완료. prisma.$transaction 역할 이양 (ADMIN→RESIDENT, 신규 ADMIN), 기존 동대표 자동 로그아웃 |
 
 ### 4-3. 입주민 가입 및 관리
 
@@ -223,8 +223,8 @@ app/
 | F-46 | 댓글 작성·조회 | 2 | ✅ | 2026-04-10 완료 |
 | F-47 | 내가 쓴 글 조회 | 2 | ✅ | 2026-04-10 완료 |
 | F-48 | 게시글 이미지 첨부 | 2 | ✅ | 2026-04-10 완료. Supabase Storage `posts` 버킷 |
-| F-49 | 댓글 푸시 알림 | 3 | ⬜ | |
-| F-50 | 게시글 좋아요 | 3 | ⬜ | |
+| F-49 | 댓글 푸시 알림 | 3 | ✅ | 2026-04-14 완료. 댓글 POST 후 원글 작성자 DB 알림 + sendPushToUser 비동기 발송 (fire-and-forget) |
+| F-50 | 게시글 좋아요 | 3 | ✅ | 2026-04-14 완료. PostLike 모델 @@unique([postId,userId]), 토글 API, 관리자·입주민 하트 UI |
 
 ### 4-8. 민원 시스템 (Ticket)
 
@@ -254,7 +254,7 @@ app/
 | F-62 | 공용 지출 장부 조회 (입주민 투명성) | 2 | ✅ | 2026-04-11 완료. 월별 필터 + summary |
 | F-63 | 수입·지출 내역 등록 (동대표) | 2 | ✅ | 2026-04-11 완료 |
 | F-64 | 영수증 첨부 (Supabase Storage) | 2 | ✅ | 2026-04-11 완료 |
-| F-65 | 에너지 사용량 시각화 (전기/수도 월별 그래프) | 3 | ⬜ | |
+| F-65 | 에너지 사용량 시각화 (전기/수도 월별 그래프) | 3 | ✅ | 2026-04-14 완료. EnergyUsage 모델 @@unique([villaId,year,month]), 관리자 입력·차트, 입주민 탭 차트·연간 합계 |
 
 ### 4-11. 건물 이력 및 계약 관리
 
@@ -271,7 +271,7 @@ app/
 |---|---------|-------|------|------|
 | F-70 | 차량 등록 (일반/방문, 모델명, 출차 예정) | 2 | ✅ | 2026-04-11 완료 |
 | F-71 | 번호판 검색 → 호수·이름·방문여부 표시 | 2 | ✅ | 2026-04-11 완료. ?plate= 부분 일치 검색 |
-| F-72 | QR 스캔 방문 차량 임시 등록 | 3 | ⬜ | 모바일 카메라 웹 API |
+| F-72 | QR 스캔 방문 차량 임시 등록 | 3 | ✅ | 2026-04-14 완료. JWT QR 토큰 발급, /qr-vehicle 비로그인 공개 페이지, Vehicle.visitorName 필드 추가 |
 
 ### 4-13. SaaS 구독 모델
 
@@ -293,8 +293,8 @@ app/
 | F-81 | 시스템 공지사항 CRUD | 2 | ✅ | 2026-04-12 완료 |
 | F-82 | FAQ CRUD | 2 | ✅ | 2026-04-12 완료. order 오름차순 정렬 |
 | F-83 | 관리자 가이드 라이브러리 CRUD (Tiptap 편집기) | 2 | ✅ | 2026-04-12 완료. DOMPurify XSS 방어, 카테고리 6종 |
-| F-84 | 빌라별 청구서/납부 현황 조회 | 3 | ⬜ | |
-| F-85 | 구독 현황 및 MRR 모니터링 | 3 | ⬜ | |
+| F-84 | 빌라별 청구서/납부 현황 조회 | 3 | ✅ | 2026-04-14 완료. /backoffice/billing — 월 필터, 납부율 프로그레스 바, 수납 집계 카드 |
+| F-85 | 구독 현황 및 MRR 모니터링 | 3 | ✅ | 2026-04-14 완료. /backoffice/mrr — MRR/ARR 지표, 12개월 바차트, 만료 임박 빌라 목록 |
 
 ### 4-15. 사용자 프로필 및 설정
 
@@ -326,6 +326,12 @@ app/
 | NF-12 | 전자투표 본인인증 + 타임스탬프 (법적 증거) | 3 | ⬜ | |
 | NF-13 | NestJS 도메인별 모듈 분리 (auth / villa / invoice / poll / ...) | 1 | ⬜ | 이전 monolith 재발 방지 |
 | NF-14 | 테스트 — NestJS e2e (Jest + supertest) 핵심 도메인 커버 | 2 | ✅ | 2026-04-12 완료. Jest + ts-jest, 5개 도메인 32개 케이스 |
+| NF-15 | 빌링키 암호화 저장 (AES-256-GCM) | 3 | ✅ | 2026-04-15 완료. `lib/crypto.ts` — `encryptBillingKey/decryptBillingKey`, `BILLING_ENCRYPTION_KEY` env 필요 |
+| NF-16 | JWT URL 노출 방지 (HttpOnly 쿠키 교환 패턴) | 3 | ✅ | 2026-04-15 완료. 소셜 로그인 콜백 → `pending_auth_token` HttpOnly 쿠키 → `/api/auth/exchange-token` 1회성 교환 |
+| NF-17 | 백오피스 페이지 경로 서버 사이드 보호 | 3 | ✅ | 2026-04-15 완료. `middleware.ts` matcher 확장, `bo_session` HttpOnly 쿠키 검증 |
+| NF-18 | 브라우저 기본 모달 제거 (접근성 + 디자인 일관성) | 3 | ✅ | 2026-04-15 완료. `window.confirm/alert` 36개 → `useConfirm` 훅 + `ConfirmDialog` 컴포넌트 |
+| NF-19 | 디자인 토큰 완전성 — 시맨틱 토큰 누락 없음 | 3 | ✅ | 2026-04-15 완료. `globals.css`에 17개 토큰 추가 (`neutral/success/warning/error/primary` 확장) |
+| NF-20 | WCAG 2.1 AA 접근성 — 터치 타깃 44px, 시맨틱 인터랙티브 요소 | 3 | ✅ | 2026-04-15 완료. Chip/NotificationList `<button>` 교체, `min-h-[44px]` 적용, `aria-hidden` 추가 |
 
 ---
 
@@ -444,6 +450,10 @@ app/
 | 2026-04-10 | F-46(커뮤니티 댓글), F-47(내 게시글), F-48(게시글 이미지 첨부), F-54(투표 생성), F-55(투표 참여), F-56(1세대 1표), F-57(투표 결과 시각화) 완료. Supabase Storage `posts` 버킷 연동. `/api/upload` 라우트 구현. 1세대 1표 Prisma P2002 이중 검증 패턴 확립. |
 | 2026-04-12 | Sprint 3 완료 — F-80(KPI 대시보드), F-81(시스템 공지사항 CRUD), F-82(FAQ CRUD), F-83(가이드 CRUD), F-87(가이드 목록), F-88(가이드 열람), F-89(공지 조회, F-90 포함), F-90(고객센터·FAQ), NF-05(XSS 방어 완성), NF-10(DB 인덱스 9개), NF-14(Jest 테스트 32개). SystemNotice/Faq/Guide 신규 Prisma 모델 추가. CSP 헤더 전역 적용. Tiptap + DOMPurify 도입. |
 | 2026-04-13 | Phase 3 선행 — F-04(카카오·구글 소셜 로그인), F-05(소셜 프로필 보완), F-43(Web Push VAPID), F-77(Toss Payments 빌링키 자동결제) 완료. SocialAccount/PushSubscription/TossBillingKey Prisma 모델 추가. User.password nullable(String?) 변경. auto-payment Cron 등록. BottomNav z-index 계층(z-50/60/70/80) 확립. |
+| 2026-04-14 | Sprint 4(Phase 3 선행) 전체 완료 — F-49(댓글 푸시 알림), F-50(게시글 좋아요), F-65(에너지 사용량), F-72(QR 방문 차량), F-84(백오피스 청구 현황), F-85(백오피스 MRR), F-14(멀티 빌라 관리), F-15(동대표 교체). PostLike/EnergyUsage Prisma 모델 추가. Vehicle.visitorName 필드 추가. qrcode npm 패키지 도입. 백오피스 사이드바에 billing/mrr 메뉴 추가. |
+| 2026-04-15 | Sprint 5 완료 — 보안 QA(NF-15~17: 빌링키 암호화, JWT HttpOnly, 백오피스 미들웨어) + 디자인 QA(NF-18~20: ConfirmDialog, 디자인 토큰 17개, WCAG 접근성). 하드코딩 색상 38개 → 시맨틱 토큰 교체. window.confirm/alert 36개 → useConfirm 전환. |
+| 2026-04-16 | Sprint 6 버그 수정 — AmountInput 공통 컴포넌트 신규 추가(`lib/amount-step.ts` + `components/ui/AmountInput.tsx`). 커뮤니티/입주민 API Authorization 헤더 누락 8건 수정. 세대 호수 하단 시트 레이아웃 및 z-index 수정. /ledger 스텁 페이지 → 완전 구현. Vercel 배포 완료. |
+| 2026-04-18 | Sprint 7 버그 수정 — PortOne 외부 결제 안정화(CSP 도메인 추가, m_redirect_url 모바일 리다이렉트, PG MID 명시, useSearchParams 제거). 전체 클라이언트 페이지 GET/POST/DELETE API 인증 헤더 누락 13개 파일 일괄 수정. 하단 시트 BottomNav 겹침 z-index 수정. |
 
 ---
 
