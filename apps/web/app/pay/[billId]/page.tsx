@@ -148,7 +148,7 @@ export default function PayPage() {
         },
         async (rsp) => {
           // 데스크탑 팝업 방식 콜백 (모바일 redirect는 useEffect에서 처리)
-          if (!rsp.success) {
+          if (!rsp.success || !rsp.imp_uid) {
             setPayError(rsp.error_msg ?? '결제가 취소되었습니다.');
             setPaying(false);
             return;

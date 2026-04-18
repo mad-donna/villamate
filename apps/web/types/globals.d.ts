@@ -18,6 +18,7 @@ declare global {
           amount: number;
           buyer_name: string;
           buyer_tel: string;
+          m_redirect_url?: string;
         },
         callback: (rsp: PortOneResponse) => void,
       ) => void;
