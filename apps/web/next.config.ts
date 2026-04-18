@@ -18,7 +18,7 @@ const securityHeaders = [
       // Supabase API + PortOne(iamport) 연결 허용
       "connect-src 'self' https://*.supabase.co https://*.supabase.com https://*.iamport.kr https://*.inicis.com",
       // PortOne 결제창 팝업/iframe 허용
-      "frame-src https://cdn.iamport.kr https://*.inicis.com https://*.kcp.co.kr https://*.nicepay.co.kr",
+      "frame-src https://*.iamport.kr https://*.inicis.com https://*.kcp.co.kr https://*.nicepay.co.kr",
       "frame-ancestors 'none'",
     ].join('; '),
   },
