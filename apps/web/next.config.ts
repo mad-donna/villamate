@@ -16,7 +16,7 @@ const securityHeaders = [
       // Supabase Storage 이미지 허용
       "img-src 'self' data: blob: https://*.supabase.co",
       // Supabase API + PortOne(iamport) 연결 허용
-      "connect-src 'self' https://*.supabase.co https://*.supabase.com https://api.iamport.kr https://*.inicis.com",
+      "connect-src 'self' https://*.supabase.co https://*.supabase.com https://*.iamport.kr https://*.inicis.com",
       // PortOne 결제창 팝업/iframe 허용
       "frame-src https://cdn.iamport.kr https://*.inicis.com https://*.kcp.co.kr https://*.nicepay.co.kr",
       "frame-ancestors 'none'",
