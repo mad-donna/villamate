@@ -137,7 +137,7 @@ export default function PayPage() {
 
       window.IMP.request_pay(
         {
-          pg: 'html5_inicis',
+          pg: 'html5_inicis.INIpayTest',
           pay_method: 'card',
           merchant_uid: `ext_${billId}_${Date.now()}`,
           name: billing.description,
