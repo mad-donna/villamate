@@ -10,13 +10,15 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       // Next.js 인라인 스크립트 허용 (프로덕션 nonce 적용 시 'unsafe-inline' 제거)
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.iamport.kr",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       // Supabase Storage 이미지 허용
       "img-src 'self' data: blob: https://*.supabase.co",
-      // Supabase API 연결 허용
-      "connect-src 'self' https://*.supabase.co https://*.supabase.com",
+      // Supabase API + PortOne(iamport) 연결 허용
+      "connect-src 'self' https://*.supabase.co https://*.supabase.com https://api.iamport.kr https://*.inicis.com",
+      // PortOne 결제창 팝업/iframe 허용
+      "frame-src https://cdn.iamport.kr https://*.inicis.com https://*.kcp.co.kr https://*.nicepay.co.kr",
       "frame-ancestors 'none'",
     ].join('; '),
   },
