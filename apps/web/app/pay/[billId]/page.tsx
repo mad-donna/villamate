@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 
 interface BillingData {
@@ -50,6 +50,7 @@ function loadPortOneScript(): Promise<void> {
 
 export default function PayPage() {
   const { billId } = useParams<{ billId: string }>();
+  const searchParams = useSearchParams();
 
   const [billing, setBilling] = useState<BillingData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +58,27 @@ export default function PayPage() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+
+  const confirmPayment = useCallback(async (impUid: string) => {
+    setPaying(true);
+    try {
+      const confirmRes = await fetch(`/api/pay/${billId}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imp_uid: impUid }),
+      });
+      const confirmData = await confirmRes.json();
+      if (!confirmRes.ok) {
+        setPayError(confirmData.error ?? '결제 검증 중 오류가 발생했습니다.');
+        return;
+      }
+      setCompleted(true);
+    } catch {
+      setPayError('결제 검증 중 서버 오류가 발생했습니다. 고객센터에 문의해주세요.');
+    } finally {
+      setPaying(false);
+    }
+  }, [billId]);
 
   const fetchBilling = useCallback(async () => {
     try {
@@ -77,9 +99,21 @@ export default function PayPage() {
     }
   }, [billId]);
 
+  // 모바일 결제 후 redirect 복귀 시 imp_uid 파라미터로 자동 검증
   useEffect(() => {
+    const impUid = searchParams.get('imp_uid');
+    const impSuccess = searchParams.get('imp_success');
+    if (impUid) {
+      if (impSuccess === 'false') {
+        setPayError(searchParams.get('error_msg') ?? '결제가 취소되었습니다.');
+        setLoading(false);
+        return;
+      }
+      fetchBilling().then(() => confirmPayment(impUid));
+      return;
+    }
     fetchBilling();
-  }, [fetchBilling]);
+  }, [fetchBilling, confirmPayment, searchParams]);
 
   async function handlePay() {
     if (!billing) return;
@@ -92,10 +126,14 @@ export default function PayPage() {
       const impCode = process.env.NEXT_PUBLIC_PORTONE_IMP_CODE;
       if (!impCode) {
         setPayError('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.');
+        setPaying(false);
         return;
       }
 
       window.IMP.init(impCode);
+
+      // m_redirect_url: 모바일에서 결제 후 현재 페이지로 복귀 (redirect 방식)
+      const redirectUrl = `${window.location.origin}/pay/${billId}`;
 
       window.IMP.request_pay(
         {
@@ -106,34 +144,16 @@ export default function PayPage() {
           amount: Number(billing.amount),
           buyer_name: billing.targetName,
           buyer_tel: billing.phoneNumber,
+          m_redirect_url: redirectUrl,
         },
         async (rsp) => {
+          // 데스크탑 팝업 방식 콜백 (모바일 redirect는 useEffect에서 처리)
           if (!rsp.success) {
             setPayError(rsp.error_msg ?? '결제가 취소되었습니다.');
             setPaying(false);
             return;
           }
-
-          // 서버에 결제 검증 요청
-          try {
-            const confirmRes = await fetch(`/api/pay/${billId}/confirm`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imp_uid: rsp.imp_uid }),
-            });
-            const confirmData = await confirmRes.json();
-
-            if (!confirmRes.ok) {
-              setPayError(confirmData.error ?? '결제 검증 중 오류가 발생했습니다.');
-              return;
-            }
-
-            setCompleted(true);
-          } catch {
-            setPayError('결제 검증 중 서버 오류가 발생했습니다. 고객센터에 문의해주세요.');
-          } finally {
-            setPaying(false);
-          }
+          await confirmPayment(rsp.imp_uid);
         },
       );
     } catch (e) {
