@@ -60,7 +60,10 @@ export default function TicketsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/tickets`);
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/tickets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { tickets: Ticket[] };
       setTickets(data.tickets);

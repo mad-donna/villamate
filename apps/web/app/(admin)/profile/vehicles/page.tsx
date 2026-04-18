@@ -55,7 +55,10 @@ export default function AdminVehiclesPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/vehicles`);
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/vehicles`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { vehicles?: Vehicle[] };
       setVehicles(data.vehicles ?? []);
@@ -72,7 +75,10 @@ export default function AdminVehiclesPage() {
     if (!searchPlate.trim() || searching) return;
     setSearching(true);
     try {
-      const res = await fetch(`/api/villas/${villaId}/vehicles?plate=${encodeURIComponent(searchPlate)}`);
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/vehicles?plate=${encodeURIComponent(searchPlate)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json() as { vehicles?: Vehicle[] };
       setSearchResults(data.vehicles ?? []);
     } finally {
@@ -82,7 +88,11 @@ export default function AdminVehiclesPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('차량을 삭제하시겠습니까?')) return;
-    await fetch(`/api/villas/${villaId}/vehicles/${id}`, { method: 'DELETE' });
+    const token = localStorage.getItem('token') ?? '';
+    await fetch(`/api/villas/${villaId}/vehicles/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
     fetchVehicles();
   }
 
@@ -92,9 +102,10 @@ export default function AdminVehiclesPage() {
     setSubmitting(true);
     setFormError('');
     try {
+      const token = localStorage.getItem('token') ?? '';
       const res = await fetch(`/api/villas/${villaId}/vehicles`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           plateNumber: formPlate.trim(),
           modelName: formModel.trim() || undefined,
@@ -119,7 +130,10 @@ export default function AdminVehiclesPage() {
     setQrLoading(true);
     setShowQr(true);
     try {
-      const res = await fetch(`/api/villas/${villaId}/vehicles/qr-token`);
+      const authToken = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/vehicles/qr-token`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
       const data = await res.json() as { token?: string; error?: string };
       if (!res.ok || !data.token) throw new Error(data.error ?? 'QR 생성 실패');
 

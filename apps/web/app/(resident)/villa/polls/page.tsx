@@ -44,7 +44,10 @@ export default function ResidentPollsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/polls`);
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/polls`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { polls: Poll[]; totalHouseholds: number };
       setTotalHouseholds(data.totalHouseholds);

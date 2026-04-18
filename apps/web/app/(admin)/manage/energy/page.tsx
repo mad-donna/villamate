@@ -57,7 +57,10 @@ export default function AdminEnergyPage() {
   async function fetchUsages() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/villas/${villaId}/energy?year=${year}`);
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/energy?year=${year}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json() as { usages?: EnergyUsage[] };
       setUsages(data.usages ?? []);
     } finally {

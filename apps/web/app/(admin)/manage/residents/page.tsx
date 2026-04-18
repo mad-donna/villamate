@@ -57,7 +57,10 @@ export default function ResidentsPage() {
     if (!villaId) return;
     async function fetchRooms() {
       try {
-        const res = await fetch(`/api/villas/${villaId}`);
+        const token = localStorage.getItem('token') ?? '';
+        const res = await fetch(`/api/villas/${villaId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!res.ok) return;
         const data = await res.json() as { roomNumbers?: string[] };
         setRoomNumbers(data.roomNumbers ?? []);
@@ -211,8 +214,10 @@ export default function ResidentsPage() {
 
     setDeletingId(resident.id);
     try {
+      const token = localStorage.getItem('token') ?? '';
       const res = await fetch(`/api/villas/${villaId}/residents/${resident.id}`, {
         method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         const data = await res.json() as { error?: string };

@@ -38,7 +38,10 @@ export default function MyPostsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/posts/my`);
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/posts/my`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { posts: Post[] };
       setPosts(data.posts);
