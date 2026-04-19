@@ -76,9 +76,11 @@ export default function ResidentsPage() {
     setLoading(true);
     try {
       // APPROVED 목록과 PENDING 목록을 병렬로 조회
+      const token = localStorage.getItem('token') ?? '';
+      const headers = { Authorization: `Bearer ${token}` };
       const [approvedRes, pendingRes] = await Promise.all([
-        fetch(`/api/villas/${villaId}/residents`),
-        fetch(`/api/villas/${villaId}/residents?status=PENDING`),
+        fetch(`/api/villas/${villaId}/residents`, { headers }),
+        fetch(`/api/villas/${villaId}/residents?status=PENDING`, { headers }),
       ]);
 
       if (!approvedRes.ok) throw new Error('fetch failed');
