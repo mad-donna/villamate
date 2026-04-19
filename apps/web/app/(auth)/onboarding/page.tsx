@@ -1,7 +1,6 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import Script from 'next/script';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
@@ -29,16 +28,26 @@ export default function OnboardingPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function handleAddressSearch() {
-    if (!window.daum?.Postcode) return;
-    new window.daum.Postcode({
-      oncomplete(data) {
+  function openPostcode() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    new (window as any).daum.Postcode({
+      oncomplete(data: { roadAddress: string; jibunAddress: string; buildingName: string }) {
         setAddress(data.roadAddress || data.jibunAddress);
-        if (data.buildingName) {
-          setVillaName(data.buildingName);
-        }
+        if (data.buildingName) setVillaName(data.buildingName);
       },
     }).open();
+  }
+
+  function handleAddressSearch() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).daum?.Postcode) {
+      openPostcode();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+    script.onload = openPostcode;
+    document.head.appendChild(script);
   }
 
   function addRoom() {
@@ -164,11 +173,6 @@ export default function OnboardingPage() {
     (!isAlsoResident || adminRoomNumber.trim());
 
   return (
-    <>
-    <Script
-      src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"
-      strategy="afterInteractive"
-    />
     <div className="min-h-screen bg-neutral-50 flex flex-col px-4 pt-12 pb-8">
       <div className="w-full max-w-sm mx-auto flex-1 flex flex-col">
         <div className="mb-8">
@@ -369,6 +373,5 @@ export default function OnboardingPage() {
         </form>
       </div>
     </div>
-    </>
   );
 }
