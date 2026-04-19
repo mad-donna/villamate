@@ -115,11 +115,11 @@ export default function InvoiceListPage() {
                 : Number(inv.totalAmount);
 
             return (
-              <li key={inv.id}>
+              <li key={inv.id} className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow">
                 <button
                   type="button"
                   onClick={() => router.push(`/manage/invoices/${inv.id}`)}
-                  className="w-full text-left bg-white rounded-2xl shadow-sm p-5 hover:shadow-md transition-shadow"
+                  className="w-full text-left p-5"
                 >
                   {/* 상단 행 */}
                   <div className="flex items-center justify-between mb-1">
@@ -154,6 +154,20 @@ export default function InvoiceListPage() {
                     {new Date(inv.createdAt).toLocaleDateString('ko-KR')}
                   </p>
                 </button>
+
+                {/* 복사 버튼 */}
+                <div className="px-5 pb-3 border-t border-neutral-100 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/manage/invoices/new?copy=${inv.id}`)}
+                    className="text-xs text-neutral-400 hover:text-primary-600 flex items-center gap-1 min-h-[28px] transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    복사해서 발행
+                  </button>
+                </div>
               </li>
             );
           })}

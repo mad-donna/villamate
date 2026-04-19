@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { AmountInput } from '@/components/ui/AmountInput';
 
@@ -34,7 +34,6 @@ function getVillaId(): string | null {
   }
 }
 
-// 현재 연월 기준 YYYY-MM 반환
 function currentYM(): string {
   const now = new Date();
   const y = now.getFullYear();
@@ -50,16 +49,17 @@ function addMonths(ym: string, delta: number): string {
   return `${ny}-${nm}`;
 }
 
-// 천단위 쉼표 입력 처리
 function toNumberStr(raw: string): string {
   return raw.replace(/[^0-9]/g, '');
 }
 
-export default function NewInvoicePage() {
+function NewInvoicePageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const copyId = searchParams.get('copy');
 
   const [invoiceType, setInvoiceType] = useState<InvoiceType>('FIXED');
-  const [billingMonth, setBillingMonth] = useState(currentYM());
+  const [billingMonth, setBillingMonth] = useState(addMonths(currentYM(), 1));
   const [memo, setMemo] = useState('');
   const [fixedAmount, setFixedAmount] = useState('');
   const [items, setItems] = useState<VariableItem[]>([
@@ -67,11 +67,47 @@ export default function NewInvoicePage() {
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyLoading, setCopyLoading] = useState(false);
 
   // HEAD 세대 수 (표시용 — 실제 값은 서버에서 계산)
   const [headCount] = useState<number | null>(null);
 
-  // 변동 항목 추가
+  // 복사 대상 청구서 로드
+  useEffect(() => {
+    if (!copyId) return;
+    const villaId = getVillaId();
+    if (!villaId) return;
+
+    setCopyLoading(true);
+    fetch(`/api/villas/${villaId}/invoices/${copyId}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const inv = data.invoice;
+        if (!inv) return;
+        setInvoiceType(inv.type);
+        setMemo(inv.memo ?? '');
+        if (inv.type === 'FIXED') {
+          const perUnit =
+            (inv.payments?.length ?? 0) > 0
+              ? Math.floor(Number(inv.totalAmount) / (inv.payments?.length ?? 1))
+              : Number(inv.totalAmount);
+          setFixedAmount(String(perUnit));
+        } else if (inv.type === 'VARIABLE' && Array.isArray(inv.items) && inv.items.length > 0) {
+          setItems(
+            inv.items.map((it: { name: string; amount: number }, idx: number) => ({
+              id: idx + 1,
+              name: it.name,
+              amount: String(it.amount),
+            })),
+          );
+        }
+      })
+      .catch(() => {/* silently ignore */})
+      .finally(() => setCopyLoading(false));
+  }, [copyId]);
+
   const addItem = useCallback(() => {
     setItems((prev) => [
       ...prev,
@@ -79,12 +115,10 @@ export default function NewInvoicePage() {
     ]);
   }, []);
 
-  // 변동 항목 삭제
   const removeItem = useCallback((id: number) => {
     setItems((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
-  // 변동 항목 수정
   const updateItem = useCallback(
     (id: number, field: 'name' | 'amount', value: string) => {
       setItems((prev) =>
@@ -98,13 +132,11 @@ export default function NewInvoicePage() {
     [],
   );
 
-  // 변동 합계
   const variableTotal = items.reduce(
     (sum, item) => sum + (Number(item.amount) || 0),
     0,
   );
 
-  // 발행하기
   async function handleSubmit() {
     const villaId = getVillaId();
     if (!villaId) {
@@ -167,9 +199,27 @@ export default function NewInvoicePage() {
     }
   }
 
+  if (copyLoading) {
+    return (
+      <main className="px-4 pt-6 pb-32">
+        <h1 className="text-xl font-bold text-neutral-900 mb-6">새 청구서 발행</h1>
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="px-4 pt-6 pb-32">
-      <h1 className="text-xl font-bold text-neutral-900 mb-6">새 청구서 발행</h1>
+      <div className="flex items-center gap-3 mb-6">
+        <h1 className="text-xl font-bold text-neutral-900">새 청구서 발행</h1>
+        {copyId && (
+          <span className="text-xs text-primary-600 bg-primary-50 rounded-full px-2.5 py-1 font-medium">
+            복사됨
+          </span>
+        )}
+      </div>
 
       {/* 청구 유형 탭 */}
       <section className="mb-6">
@@ -237,12 +287,6 @@ export default function NewInvoicePage() {
             value={fixedAmount}
             onChange={setFixedAmount}
           />
-          {fixedAmount && headCount !== null && (
-            <p className="mt-2 text-xs text-neutral-500">
-              총 {headCount}세대 × {formatAmount(Number(fixedAmount))} ={' '}
-              {formatAmount(Number(fixedAmount) * headCount)}
-            </p>
-          )}
           {fixedAmount && headCount === null && (
             <p className="mt-2 text-xs text-neutral-500">
               세대당 {formatAmount(Number(fixedAmount))} × 전체 세대 수
@@ -293,7 +337,6 @@ export default function NewInvoicePage() {
             + 항목 추가
           </button>
 
-          {/* 미리보기 */}
           {variableTotal > 0 && (
             <div className="mt-3 bg-neutral-50 rounded-xl p-3">
               <p className="text-xs text-neutral-500">
@@ -307,7 +350,6 @@ export default function NewInvoicePage() {
         </section>
       )}
 
-      {/* 에러 메시지 */}
       {error && (
         <p className="text-sm text-error-500 bg-red-50 rounded-xl px-4 py-3 mb-4">
           {error}
@@ -326,5 +368,19 @@ export default function NewInvoicePage() {
         </Button>
       </div>
     </main>
+  );
+}
+
+export default function NewInvoicePage() {
+  return (
+    <Suspense fallback={
+      <main className="px-4 pt-6 pb-32">
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </main>
+    }>
+      <NewInvoicePageContent />
+    </Suspense>
   );
 }

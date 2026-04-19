@@ -194,6 +194,18 @@ export default function ExternalBillingPage() {
     }
   }
 
+  function handleCopyBilling(b: ExternalBilling) {
+    setForm({
+      targetName: b.targetName,
+      phoneNumber: b.phoneNumber,
+      amount: String(Math.round(Number(b.amount))),
+      description: b.description,
+      dueDate: '',
+    });
+    setFormError(null);
+    setShowModal(true);
+  }
+
   async function handleCopyLink(billId: string) {
     const payUrl = `${window.location.origin}/pay/${billId}`;
     try {
@@ -304,6 +316,20 @@ export default function ExternalBillingPage() {
                     )}
                   </button>
                 )}
+              </div>
+
+              {/* 복사해서 발행 */}
+              <div className="mt-2 pt-2 border-t border-neutral-100">
+                <button
+                  type="button"
+                  onClick={() => handleCopyBilling(b)}
+                  className="text-xs text-neutral-400 hover:text-primary-600 flex items-center gap-1 min-h-[28px] transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  복사해서 발행
+                </button>
               </div>
             </li>
           ))}

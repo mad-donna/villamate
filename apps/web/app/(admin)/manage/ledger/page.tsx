@@ -148,6 +148,19 @@ export default function AdminLedgerPage() {
     setShowForm(true);
   }
 
+  function handleCopyTx(tx: LedgerTransaction) {
+    setFormType(tx.type);
+    setFormAmount(String(tx.amount));
+    setFormDescription(tx.description);
+    setFormDate(todayIso());
+    setFormError('');
+    setReceiptUrl(null);
+    setReceiptPreview(null);
+    setUploadError('');
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   function handleCancelForm() {
     setShowForm(false);
     resetForm();
@@ -596,6 +609,19 @@ export default function AdminLedgerPage() {
                     {formatAmount(tx.amount)}
                   </span>
                 </div>
+              </div>
+              {/* 복사 버튼 */}
+              <div className="mt-2 pt-2 border-t border-neutral-50 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleCopyTx(tx)}
+                  className="text-xs text-neutral-400 hover:text-primary-600 flex items-center gap-1 min-h-[28px] transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  복사
+                </button>
               </div>
             </div>
           ))
