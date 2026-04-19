@@ -75,6 +75,7 @@ export async function GET(
         transactionDate: t.transactionDate,
         receiptUrl: t.receiptUrl,
         createdAt: t.createdAt,
+        isAuto: t.createdBy === 'system',
       })),
       summary: {
         totalIncome,

@@ -14,6 +14,7 @@ interface LedgerTransaction {
   transactionDate: string;
   receiptUrl: string | null;
   createdAt: string;
+  isAuto: boolean;
 }
 
 interface Summary {
@@ -595,9 +596,16 @@ export default function AdminLedgerPage() {
                   </div>
                 </div>
                 <div className="flex flex-col items-end shrink-0 gap-1">
-                  <Badge variant={tx.type === 'INCOME' ? 'success' : 'error'}>
-                    {tx.type === 'INCOME' ? '수입' : '지출'}
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    {tx.isAuto && (
+                      <span className="text-xs text-primary-600 bg-primary-50 rounded-full px-1.5 py-0.5 font-medium">
+                        자동
+                      </span>
+                    )}
+                    <Badge variant={tx.type === 'INCOME' ? 'success' : 'error'}>
+                      {tx.type === 'INCOME' ? '수입' : '지출'}
+                    </Badge>
+                  </div>
                   <span
                     className={
                       tx.type === 'INCOME'

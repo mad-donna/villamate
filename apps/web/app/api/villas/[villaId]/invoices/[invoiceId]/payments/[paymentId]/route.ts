@@ -36,10 +36,14 @@ export async function PATCH(
     // 납부 내역 존재 확인
     const existing = await prisma.invoicePayment.findUnique({
       where: { id: paymentId },
-      select: { id: true, invoiceId: true },
+      include: {
+        invoice: { select: { billingMonth: true } },
+      },
     });
     if (!existing) return err('납부 내역을 찾을 수 없습니다.', 404);
     if (existing.invoiceId !== invoiceId) return err('권한이 없습니다.', 403);
+
+    const wasPaid = existing.status === 'PAID';
 
     const payment = await prisma.invoicePayment.update({
       where: { id: paymentId },
@@ -48,6 +52,20 @@ export async function PATCH(
         paidAt: status === 'PAID' ? new Date() : null,
       },
     });
+
+    // 납부 완료 전환 시 장부 자동 기록
+    if (status === 'PAID' && !wasPaid) {
+      await prisma.ledgerTransaction.create({
+        data: {
+          villaId,
+          type: 'INCOME',
+          amount: Number(existing.amount),
+          description: `${existing.invoice.billingMonth} 관리비 수납 - ${existing.roomNumber}호`,
+          transactionDate: new Date(),
+          createdBy: 'system',
+        },
+      });
+    }
 
     return ok({ payment });
   } catch {

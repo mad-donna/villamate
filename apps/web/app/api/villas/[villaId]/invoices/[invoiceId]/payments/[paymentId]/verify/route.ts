@@ -96,12 +96,8 @@ export async function POST(
     // 납부 내역 조회 — invoiceId와 paymentId가 일치하고 본인 세대 것인지 확인
     const payment = await prisma.invoicePayment.findUnique({
       where: { id: paymentId },
-      select: {
-        id: true,
-        invoiceId: true,
-        roomNumber: true,
-        amount: true,
-        status: true,
+      include: {
+        invoice: { select: { billingMonth: true } },
       },
     });
 
@@ -160,6 +156,18 @@ export async function POST(
         paidAt: new Date(),
         impUid: imp_uid.trim(),
         pgProvider: portOnePayment.pg_provider,
+      },
+    });
+
+    // 장부 자동 기록
+    await prisma.ledgerTransaction.create({
+      data: {
+        villaId,
+        type: 'INCOME',
+        amount: Number(payment.amount),
+        description: `${payment.invoice.billingMonth} 관리비 수납 - ${payment.roomNumber}호`,
+        transactionDate: new Date(),
+        createdBy: 'system',
       },
     });
 

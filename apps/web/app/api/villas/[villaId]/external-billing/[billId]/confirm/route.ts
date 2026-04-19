@@ -34,6 +34,18 @@ export async function PATCH(
       data: { status: 'COMPLETED' },
     });
 
+    // 장부 자동 기록
+    await prisma.ledgerTransaction.create({
+      data: {
+        villaId,
+        type: 'INCOME',
+        amount: Number(billing.amount),
+        description: `외부청구 수납 - ${billing.targetName} (${billing.description})`,
+        transactionDate: new Date(),
+        createdBy: 'system',
+      },
+    });
+
     return ok({ billing: updated });
   } catch {
     return err('서버 오류가 발생했습니다.', 500);
