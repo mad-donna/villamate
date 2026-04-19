@@ -10,7 +10,7 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       // Next.js 인라인 스크립트 허용 (프로덕션 nonce 적용 시 'unsafe-inline' 제거)
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.iamport.kr",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.iamport.kr https://t1.daumcdn.net",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.iamport.kr https://*.inicis.com",
       "font-src 'self' https://fonts.gstatic.com",
       // Supabase Storage + PortOne 결제창 이미지 허용
