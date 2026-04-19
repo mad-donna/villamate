@@ -82,6 +82,7 @@ export default function JoinPage() {
           subscriptionStatus?: string;
         };
         roomNumber?: string;
+        autoApproved?: boolean;
       };
 
       if (!res.ok) {
@@ -115,6 +116,11 @@ export default function JoinPage() {
               roomNumber: data.roomNumber ?? inviteRoomNumber.trim(),
             },
           } as StoredUser);
+          // 자신의 빌라에 가입한 경우(즉시 승인) → 관리자 홈으로 이동
+          if (data.autoApproved) {
+            router.push('/home');
+            return;
+          }
         } else {
           saveUser({ ...user, villa: villaData } as StoredUser);
         }

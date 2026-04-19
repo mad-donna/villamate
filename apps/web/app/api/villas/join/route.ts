@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
 
-// POST: 초대 코드로 빌라 가입 (RESIDENT용)
+// POST: 초대 코드로 빌라 가입 (RESIDENT용, ADMIN 자신의 빌라 입주 포함)
 export async function POST(req: NextRequest) {
   try {
     const user = await getUser(req);
@@ -28,13 +28,12 @@ export async function POST(req: NextRequest) {
     // 초대 코드로 빌라 조회
     const villa = await prisma.villa.findUnique({
       where: { inviteCode: inviteCode.trim().toUpperCase() },
-      select: { id: true, name: true, address: true },
     });
     if (!villa) {
       return err('유효하지 않은 초대 코드입니다.', 404);
     }
 
-    // 해당 villaId + roomNumber에 이미 입주민 있는지 확인
+    // 해당 villaId + roomNumber에 이미 다른 입주민 있는지 확인
     const roomTaken = await prisma.residentRecord.findFirst({
       where: { villaId: villa.id, roomNumber: normalizedRoom, userId: { not: user.sub } },
     });
@@ -56,13 +55,17 @@ export async function POST(req: NextRequest) {
     });
     const residentType = existingHead ? 'MEMBER' : 'HEAD';
 
-    // ResidentRecord 생성
+    // 관리자가 자신의 빌라에 가입하는 경우 즉시 승인
+    const isOwnVilla = villa.adminId === user.sub;
+    const status = isOwnVilla ? 'APPROVED' : 'PENDING';
+
     await prisma.residentRecord.create({
       data: {
         userId: user.sub,
         villaId: villa.id,
         roomNumber: normalizedRoom,
         residentType,
+        status,
       },
     });
 
@@ -71,8 +74,12 @@ export async function POST(req: NextRequest) {
         id: villa.id,
         name: villa.name,
         address: villa.address,
+        inviteCode: villa.inviteCode,
+        subscriptionStatus: villa.subscriptionStatus,
       },
+      roomNumber: normalizedRoom,
       residentType,
+      autoApproved: isOwnVilla,
     });
   } catch {
     return err('서버 오류가 발생했습니다.', 500);

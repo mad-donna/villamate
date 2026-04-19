@@ -18,15 +18,12 @@ export async function POST(req: NextRequest) {
       return err('이메일과 비밀번호를 입력해주세요.', 400);
     }
 
-    // 사용자 조회
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // 사용자 없음과 비밀번호 불일치를 동일 메시지로 처리 (보안)
     if (!user) {
       return err(INVALID_CREDENTIALS_MSG, 401);
     }
 
-    // 소셜 전용 계정(password null)은 이메일 로그인 불가
     if (!user.password) {
       return err(INVALID_CREDENTIALS_MSG, 401);
     }
@@ -35,25 +32,69 @@ export async function POST(req: NextRequest) {
       return err(INVALID_CREDENTIALS_MSG, 401);
     }
 
-    // 역할별 villaId 조회
     let villaId: string | undefined;
+    let villaData: {
+      id: string;
+      name: string;
+      address: string;
+      inviteCode: string;
+      subscriptionStatus: string;
+    } | undefined;
+    let residentVillaData: {
+      id: string;
+      name: string;
+      address: string;
+      inviteCode: string;
+      subscriptionStatus: string;
+      roomNumber: string;
+    } | undefined;
 
     if (user.role === 'ADMIN') {
       const villa = await prisma.villa.findFirst({
         where: { adminId: user.id },
-        select: { id: true },
       });
-      villaId = villa?.id;
+      if (villa) {
+        villaId = villa.id;
+        villaData = {
+          id: villa.id,
+          name: villa.name,
+          address: villa.address,
+          inviteCode: villa.inviteCode,
+          subscriptionStatus: villa.subscriptionStatus,
+        };
+
+        // 관리자가 자신의 빌라에 입주민으로도 등록된 경우 (같은 빌라 듀얼 모드)
+        const residentRecord = await prisma.residentRecord.findFirst({
+          where: { userId: user.id, villaId: villa.id, status: 'APPROVED' },
+        });
+        if (residentRecord) {
+          residentVillaData = {
+            id: villa.id,
+            name: villa.name,
+            address: villa.address,
+            inviteCode: villa.inviteCode,
+            subscriptionStatus: villa.subscriptionStatus,
+            roomNumber: residentRecord.roomNumber,
+          };
+        }
+      }
     } else if (user.role === 'RESIDENT') {
       const record = await prisma.residentRecord.findFirst({
-        where: { userId: user.id },
-        select: { villaId: true },
+        where: { userId: user.id, status: 'APPROVED' },
+        include: { villa: true },
       });
-      villaId = record?.villaId;
+      if (record) {
+        villaId = record.villaId;
+        villaData = {
+          id: record.villa.id,
+          name: record.villa.name,
+          address: record.villa.address,
+          inviteCode: record.villa.inviteCode,
+          subscriptionStatus: record.villa.subscriptionStatus,
+        };
+      }
     }
-    // SUPER_ADMIN: villaId 없음
 
-    // JWT 발급
     const token = await signToken({
       sub: user.id,
       email: user.email,
@@ -72,6 +113,8 @@ export async function POST(req: NextRequest) {
         phone: safeUser.phone,
         role: safeUser.role,
         villaId,
+        ...(villaData ? { villa: villaData } : {}),
+        ...(residentVillaData ? { residentVilla: residentVillaData } : {}),
       },
     });
   } catch {

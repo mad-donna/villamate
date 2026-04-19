@@ -24,6 +24,8 @@ export default function OnboardingPage() {
   const [rooms, setRooms] = useState<string[]>([]);
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [isAlsoResident, setIsAlsoResident] = useState(false);
+  const [adminRoomNumber, setAdminRoomNumber] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [postcodeReady, setPostcodeReady] = useState(false);
@@ -43,7 +45,6 @@ export default function OnboardingPage() {
   function addRoom() {
     const trimmed = roomInput.trim();
     if (!trimmed) return;
-    // 중복 제거
     if (rooms.includes(trimmed)) {
       setRoomInput('');
       return;
@@ -69,6 +70,11 @@ export default function OnboardingPage() {
 
     if (!villaName.trim() || !address.trim() || !totalUnits) {
       setError('빌라 이름, 주소, 세대수는 필수 항목입니다.');
+      return;
+    }
+
+    if (isAlsoResident && !adminRoomNumber.trim()) {
+      setError('입주 호수를 입력해주세요.');
       return;
     }
 
@@ -99,24 +105,51 @@ export default function OnboardingPage() {
         return;
       }
 
-      // 새 토큰이 발급된 경우 저장 (역할이 ADMIN으로 승격)
       if (data.token) {
         saveToken(data.token);
       }
 
-      // 등록된 villa 정보를 localStorage user에 저장
+      const villaInfo = {
+        id: data.id,
+        name: data.name,
+        address: data.address,
+        inviteCode: data.inviteCode,
+        subscriptionStatus: data.subscriptionStatus ?? 'FREE_TRIAL',
+      };
+
+      let residentVillaData: StoredUser['residentVilla'] | undefined;
+
+      // 관리자가 자신의 빌라에 입주민으로도 등록하는 경우
+      if (isAlsoResident && adminRoomNumber.trim()) {
+        const normalizedRoom = adminRoomNumber.trim().replace(/호$/, '');
+        const joinRes = await fetch(`/api/villas/${data.id}/residents/join`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(data.token
+              ? { Authorization: `Bearer ${data.token}` }
+              : token
+              ? { Authorization: `Bearer ${token}` }
+              : {}),
+          },
+          body: JSON.stringify({ roomNumber: normalizedRoom }),
+        });
+
+        if (joinRes.ok) {
+          residentVillaData = {
+            ...villaInfo,
+            roomNumber: normalizedRoom,
+          };
+        }
+      }
+
       const user = getUser();
       if (user) {
         saveUser({
           ...user,
           role: 'ADMIN',
-          villa: {
-            id: data.id,
-            name: data.name,
-            address: data.address,
-            inviteCode: data.inviteCode,
-            subscriptionStatus: data.subscriptionStatus ?? 'FREE_TRIAL',
-          },
+          villa: villaInfo,
+          ...(residentVillaData ? { residentVilla: residentVillaData } : {}),
         } as StoredUser);
       }
 
@@ -128,7 +161,8 @@ export default function OnboardingPage() {
     }
   }
 
-  const canSubmit = villaName.trim() && address.trim() && totalUnits && !loading;
+  const canSubmit = villaName.trim() && address.trim() && totalUnits && !loading &&
+    (!isAlsoResident || adminRoomNumber.trim());
 
   return (
     <>
@@ -139,7 +173,6 @@ export default function OnboardingPage() {
     />
     <div className="min-h-screen bg-neutral-50 flex flex-col px-4 pt-12 pb-8">
       <div className="w-full max-w-sm mx-auto flex-1 flex flex-col">
-        {/* 타이틀 */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-neutral-900">
             빌라를 등록해주세요
@@ -149,7 +182,6 @@ export default function OnboardingPage() {
           </p>
         </div>
 
-        {/* 폼 */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Input
             label="빌라 이름"
@@ -217,7 +249,6 @@ export default function OnboardingPage() {
               </button>
             </div>
 
-            {/* 호수 칩 목록 */}
             {rooms.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-1">
                 {rooms.map((room) => (
@@ -250,6 +281,47 @@ export default function OnboardingPage() {
                   </span>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* 구분선 */}
+          <div className="h-px bg-neutral-200 my-1" />
+
+          {/* 관리자도 입주민 여부 */}
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div
+                role="checkbox"
+                aria-checked={isAlsoResident}
+                tabIndex={0}
+                onClick={() => setIsAlsoResident((v) => !v)}
+                onKeyDown={(e) => e.key === ' ' && setIsAlsoResident((v) => !v)}
+                className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors flex-shrink-0 ${
+                  isAlsoResident
+                    ? 'bg-primary-500 border-primary-500'
+                    : 'bg-white border-neutral-300'
+                }`}
+              >
+                {isAlsoResident && (
+                  <svg viewBox="0 0 12 10" fill="none" className="w-3 h-2.5" aria-hidden="true">
+                    <path d="M1 5l3.5 3.5L11 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-neutral-800">저도 이 빌라의 입주민입니다</p>
+                <p className="text-xs text-neutral-500">관리자와 입주민 모드를 함께 사용할 수 있습니다</p>
+              </div>
+            </label>
+
+            {isAlsoResident && (
+              <Input
+                label="내 거주 호수"
+                placeholder="예: 101"
+                value={adminRoomNumber}
+                onChange={(e) => setAdminRoomNumber(e.target.value)}
+                required
+              />
             )}
           </div>
 

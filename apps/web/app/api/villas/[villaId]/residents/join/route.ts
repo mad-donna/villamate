@@ -28,7 +28,7 @@ export async function POST(
     // 빌라 존재 여부 확인
     const villa = await prisma.villa.findUnique({
       where: { id: villaId },
-      select: { id: true, name: true, adminId: true },
+      select: { id: true, name: true, address: true, inviteCode: true, subscriptionStatus: true, adminId: true },
     });
 
     if (!villa) {
@@ -54,24 +54,43 @@ export async function POST(
       select: { name: true },
     });
 
-    // PENDING 상태의 ResidentRecord 생성
+    // 관리자가 자신의 빌라에 입주 신청하는 경우 즉시 승인
+    const isOwnVilla = villa.adminId === user.sub;
+    const status = isOwnVilla ? 'APPROVED' : 'PENDING';
+
     await prisma.residentRecord.create({
       data: {
         userId: user.sub,
         villaId,
         roomNumber,
-        status: 'PENDING',
+        status,
       },
     });
 
-    // 빌라 admin에게 알림 발송
-    await createNotification({
-      userId: villa.adminId,
-      villaId,
-      type: 'SYSTEM',
-      title: '입주 신청이 도착했습니다',
-      body: `${roomNumber}호 ${applicant?.name ?? ''}님이 입주 신청했습니다.`,
-    });
+    if (!isOwnVilla) {
+      // 빌라 admin에게 알림 발송
+      await createNotification({
+        userId: villa.adminId,
+        villaId,
+        type: 'SYSTEM',
+        title: '입주 신청이 도착했습니다',
+        body: `${roomNumber}호 ${applicant?.name ?? ''}님이 입주 신청했습니다.`,
+      });
+    }
+
+    if (isOwnVilla) {
+      return ok({
+        message: '입주민으로 등록되었습니다.',
+        villa: {
+          id: villa.id,
+          name: villa.name,
+          address: villa.address,
+          inviteCode: villa.inviteCode,
+          subscriptionStatus: villa.subscriptionStatus,
+        },
+        roomNumber,
+      }, 201);
+    }
 
     return ok({ message: '입주 신청이 완료되었습니다. 관리자 승인을 기다려주세요.' }, 201);
   } catch {
