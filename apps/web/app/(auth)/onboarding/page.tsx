@@ -28,14 +28,13 @@ export default function OnboardingPage() {
   const [adminRoomNumber, setAdminRoomNumber] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [postcodeReady, setPostcodeReady] = useState(false);
 
   function handleAddressSearch() {
-    if (!postcodeReady || !window.daum?.Postcode) return;
+    if (!window.daum?.Postcode) return;
     new window.daum.Postcode({
       oncomplete(data) {
         setAddress(data.roadAddress || data.jibunAddress);
-        if (!villaName.trim() && data.buildingName) {
+        if (data.buildingName) {
           setVillaName(data.buildingName);
         }
       },
@@ -168,8 +167,7 @@ export default function OnboardingPage() {
     <>
     <Script
       src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"
-      strategy="lazyOnload"
-      onLoad={() => setPostcodeReady(true)}
+      strategy="afterInteractive"
     />
     <div className="min-h-screen bg-neutral-50 flex flex-col px-4 pt-12 pb-8">
       <div className="w-full max-w-sm mx-auto flex-1 flex flex-col">
@@ -183,14 +181,6 @@ export default function OnboardingPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <Input
-            label="빌라 이름"
-            placeholder="예: 행복빌라"
-            value={villaName}
-            onChange={(e) => setVillaName(e.target.value)}
-            required
-          />
-
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-neutral-700">
               주소 <span className="text-error-500">*</span>
@@ -207,13 +197,21 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={handleAddressSearch}
-                disabled={!postcodeReady}
-                className="h-12 px-4 rounded-xl text-sm font-semibold bg-primary-50 text-primary-600 border border-primary-200 hover:bg-primary-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 whitespace-nowrap"
+                className="h-12 px-4 rounded-xl text-sm font-semibold bg-primary-50 text-primary-600 border border-primary-200 hover:bg-primary-100 transition-colors flex-shrink-0 whitespace-nowrap"
               >
                 주소 검색
               </button>
             </div>
+            <p className="text-xs text-neutral-400">주소 검색 버튼을 눌러 정확한 주소를 입력하세요</p>
           </div>
+
+          <Input
+            label="빌라 이름"
+            placeholder="예: 행복빌라 (주소 검색 시 자동 입력)"
+            value={villaName}
+            onChange={(e) => setVillaName(e.target.value)}
+            required
+          />
 
           <Input
             label="총 세대수"
