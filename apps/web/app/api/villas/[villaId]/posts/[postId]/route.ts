@@ -64,6 +64,7 @@ export async function GET(
         isNotice: post.isNotice,
         imageUrl: post.imageUrl,
         createdAt: post.createdAt,
+        updatedAt: post.updatedAt,
         author: post.author,
         likeCount: post._count.likes,
         liked: !!myLike,
@@ -75,6 +76,60 @@ export async function GET(
         author: c.author,
       })),
     });
+  } catch {
+    return err('서버 오류가 발생했습니다.', 500);
+  }
+}
+
+// PATCH: 게시글 수정 (작성자 본인만)
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ villaId: string; postId: string }> },
+) {
+  try {
+    const user = await getUser(req);
+    if (!user) return err('인증이 필요합니다.', 401);
+
+    const { villaId, postId } = await params;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, villaId: true, authorId: true },
+    });
+
+    if (!post || post.villaId !== villaId) {
+      return err('게시글을 찾을 수 없습니다.', 404);
+    }
+
+    if (post.authorId !== user.sub) {
+      return err('수정 권한이 없습니다.', 403);
+    }
+
+    const body = await req.json() as {
+      title?: string;
+      content?: string;
+      category?: string;
+      isNotice?: boolean;
+      imageUrl?: string | null;
+    };
+    const { title, content, category, isNotice, imageUrl } = body;
+
+    if (!title?.trim() || !content?.trim()) {
+      return err('제목과 내용을 입력해주세요.', 400);
+    }
+
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: {
+        title: title.trim(),
+        content: content.trim(),
+        ...(category !== undefined ? { category: category as 'GENERAL' | 'ISSUE' | 'NOTICE' } : {}),
+        ...(isNotice !== undefined ? { isNotice } : {}),
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
+      },
+    });
+
+    return ok({ post: updated });
   } catch {
     return err('서버 오류가 발생했습니다.', 500);
   }

@@ -18,6 +18,7 @@ interface Post {
   isNotice: boolean;
   imageUrl: string | null;
   createdAt: string;
+  updatedAt: string;
   author: Author;
   likeCount: number;
   liked: boolean;
@@ -113,8 +114,12 @@ export default function ResidentPostDetailPage({
     }
   }
 
-  // 입주민은 본인 게시글만 삭제 가능
+  // 입주민은 본인 게시글만 삭제/수정 가능
   const canDelete = post && post.author.id === userId;
+  const canEdit = post && post.author.id === userId;
+  const isEdited = post
+    ? new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() > 5000
+    : false;
 
   async function handleDelete() {
     if (!post || !villaId) return;
@@ -172,17 +177,28 @@ export default function ResidentPostDetailPage({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        {canDelete && (
-          <Button
-            variant="ghost"
-            size="sm"
-            loading={deleting}
-            onClick={handleDelete}
-            className="text-error-500 hover:bg-red-50"
-          >
-            삭제
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/resident/community/${postId}/edit`)}
+            >
+              수정
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={deleting}
+              onClick={handleDelete}
+              className="text-error-500 hover:bg-red-50"
+            >
+              삭제
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -208,9 +224,16 @@ export default function ResidentPostDetailPage({
               )}
               <h2 className="text-lg font-bold text-neutral-900">{post.title}</h2>
             </div>
-            <p className="text-sm text-neutral-500">
-              {post.author.name} · {formatDate(post.createdAt)}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm text-neutral-500">
+                {post.author.name} · {formatDate(post.createdAt)}
+              </p>
+              {isEdited && (
+                <span className="text-xs text-neutral-400 bg-neutral-100 rounded-full px-2 py-0.5">
+                  수정됨
+                </span>
+              )}
+            </div>
           </div>
 
           {/* 본문 */}
