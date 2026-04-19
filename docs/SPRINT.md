@@ -162,6 +162,30 @@ Sprint 3 계획 기능 전체 완료. Sprint 4(Phase 3 장기 항목)으로 전�
 | - | 토스트 z-index 상향 (z-60 → z-90) — 하단 시트 위 표시 보장 | 2026-04-16 |
 | - | `/ledger` 스텁 페이지 → 완전 구현 (관리자 장부 화면) | 2026-04-16 |
 
+## ✅ Sprint 8 완료 항목 — 편의 기능 + 자동화 + 듀얼 모드 확장 (2026-04-19)
+
+| # | 항목 | 완료일 |
+|---|------|--------|
+| - | 커뮤니티 게시글 수정 기능 (PATCH /posts/[postId], 작성자 전용, admin/resident 수정 페이지) | 2026-04-19 |
+| - | 커뮤니티 게시글 "수정됨" 배지 (updatedAt - createdAt > 5s 조건) | 2026-04-19 |
+| - | 청구서 복사 (`?copy=` URL 파라미터, Suspense 래퍼, billingMonth +1개월 자동 설정) | 2026-04-19 |
+| - | 외부 청구서 복사 (handleCopyBilling — 양식 pre-fill + dueDate 초기화) | 2026-04-19 |
+| - | 장부 항목 복사 (handleCopyTx — 날짜 오늘로 초기화) | 2026-04-19 |
+| - | 장부 자동 기록 — 관리비 납부 PAID 전환 시 LedgerTransaction 자동 생성 | 2026-04-19 |
+| - | 장부 자동 기록 — PortOne 결제 검증 통과 시 LedgerTransaction 자동 생성 | 2026-04-19 |
+| - | 장부 자동 기록 — 외부 청구 COMPLETED 처리 시 LedgerTransaction 자동 생성 | 2026-04-19 |
+| - | 장부 "자동" 배지 (createdBy === 'system' 파생 필드, 파란색 뱃지) | 2026-04-19 |
+| F-23 | 듀얼 모드 확장 — 관리자가 자신의 빌라에 입주민 등록 가능 (같은 빌라) | 2026-04-19 |
+| - | 온보딩 "저도 이 빌라의 입주민입니다" 체크박스 + 호수 입력 추가 | 2026-04-19 |
+| - | join API 관리자 자신의 빌라 가입 시 즉시 APPROVED 처리 | 2026-04-19 |
+| - | 로그인 API full villa object 반환 + 동일 빌라 ResidentRecord → residentVilla 자동 설정 | 2026-04-19 |
+| - | 입주민 관리 목록 Authorization 헤더 누락 수정 | 2026-04-19 |
+| - | 온보딩 주소 검색 동적 스크립트 로딩 (버튼 항상 활성화) + 주소 필드 위로 이동 | 2026-04-19 |
+| - | CSP script-src `t1.daumcdn.net` 추가 (Daum Postcode 스크립트 로드 허용) | 2026-04-19 |
+| - | CSP frame-src `*.daum.net`, `*.daumcdn.net`, `*.kakao.com` 추가 (Postcode 팝업 허용) | 2026-04-19 |
+
+---
+
 ## ✅ Sprint 7 완료 항목 — 결제 안정화 + 인증 헤더 전수 수정 (2026-04-18)
 
 | # | 항목 | 완료일 |

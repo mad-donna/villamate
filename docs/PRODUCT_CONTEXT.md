@@ -2466,3 +2466,78 @@ KG Inicis는 모바일에서 팝업 대신 리다이렉트 방식으로 동작. 
 | "등록된 PG 설정 없음" | PG 코드에 MID 미명시 | pay/page.tsx |
 | 하단 시트 BottomNav 겹침 | z-index z-50 미만 | 4개 파일 |
 
+
+---
+
+## 2026-04-19 변경 내역 (Sprint 8)
+
+### 1. 아키텍처 변경점
+
+**로그인 API Full Villa Object 반환**
+
+`POST /api/auth/login` 응답에 `villa`, `residentVilla` 전체 오브젝트 포함. 기존에는 `villaId`만 반환하여 재로그인 시 villa 정보 유실 버그 존재. 변경 후 재로그인해도 villa 정보 유지.
+
+**듀얼 모드 — 같은 빌라 관리자+입주민 지원**
+
+기존 듀얼 모드는 "관리 빌라 ≠ 거주 빌라" 케이스만 지원. 이제 관리자가 자신의 빌라에도 입주민으로 등록 가능. join API에서 `adminId === userId`이면 즉시 APPROVED.
+
+**CSP 확장 — Daum/Kakao 우편번호**
+
+`next.config.ts`에 Daum Postcode 관련 도메인 추가:
+- `script-src`: `https://t1.daumcdn.net`
+- `frame-src`: `https://*.daum.net`, `https://*.daumcdn.net`, `https://*.kakao.com`
+
+Daum Postcode 서비스가 카카오로 이전되어 실제 팝업 iframe이 `postcode.map.kakao.com`에서 열림.
+
+**장부 자동 기록 패턴**
+
+Prisma 스키마 변경 없이 `LedgerTransaction.createdBy = 'system'`으로 자동 기록 식별. 세 가지 트리거: 관리비 납부 완료(PATCH/verify), 외부 청구 수납 완료(confirm).
+
+### 2. API 변경
+
+| 엔드포인트 | 변경 내용 |
+|-----------|----------|
+| `POST /api/auth/login` | `villa`, `residentVilla` 전체 오브젝트 반환. ADMIN의 동일 빌라 ResidentRecord 감지 → `residentVilla` 자동 설정 |
+| `POST /api/villas/join` | `isOwnVilla` 시 즉시 APPROVED 처리. `autoApproved`, `roomNumber`, full `villa` 오브젝트 반환 |
+| `POST /api/villas/[villaId]/residents/join` | `isOwnVilla` 시 즉시 APPROVED 처리. 자동 승인 시 villa 정보 응답에 포함 |
+| `GET /api/villas/[villaId]/ledger` | `isAuto: createdBy === 'system'` 파생 필드 추가 |
+| `PATCH .../payments/[paymentId]` | PAID 전환 시 LedgerTransaction 자동 생성 (중복 방지 `wasPaid` 체크 포함) |
+| `POST .../payments/[paymentId]/verify` | PortOne 검증 통과 시 LedgerTransaction 자동 생성 |
+| `PATCH .../external-billing/[billId]/confirm` | COMPLETED 처리 시 LedgerTransaction 자동 생성 |
+| `PATCH /api/villas/[villaId]/posts/[postId]` | 신규 추가. 게시글 수정 (작성자 전용). `title/content/category/isNotice/imageUrl` 수정 가능 |
+| `GET /api/villas/[villaId]/posts/[postId]` | `updatedAt` 필드 응답에 추가 |
+
+### 3. 데이터 모델 변경
+
+없음 (Prisma 스키마 변경 없음)
+
+- `LedgerTransaction.isAuto`: DB 컬럼 없음. `createdBy === 'system'` 계산 필드로 API 응답에서 파생.
+- `ResidentRecord.status = 'APPROVED'`: 기존 enum 값 활용, 관리자 자신의 빌라 가입 시 자동 설정.
+
+### 4. 기술 부채
+
+**신규 추가**
+
+| 항목 | 위험도 | 설명 |
+|------|--------|------|
+| 로그인 API 추가 DB 쿼리 | Low | ADMIN 로그인 시 villa 쿼리 + ResidentRecord 쿼리 추가. 현재 p99 < 500ms이나 트래픽 증가 시 캐싱 고려 |
+| Daum Postcode 동적 로딩 지연 | Low | 첫 클릭 시 외부 스크립트 로딩. 느린 네트워크에서 지연 가능 |
+
+**잔존 부채 (변동 없음)**
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 잔존 |
+| 기존 평문 빌링키 DB 마이그레이션 | High | 잔존 |
+| `lib/client-api.ts` 헬퍼 미활용 | Medium | raw fetch 직접 사용 패턴 잔존 |
+| 동대표 교체 후 기존 JWT 유효 | Medium | 잔존 |
+| PortOne 운영 MID 미전환 | High | 잔존 |
+
+### 버그 수정 요약
+
+| 버그 | 원인 | 수정 |
+|------|------|------|
+| 입주민 관리 목록 로딩 실패 | Authorization 헤더 누락 | `manage/residents/page.tsx` |
+| 주소 검색 버튼 비활성화 | `lazyOnload` 전략 + `postcodeReady` 의존성 | 동적 스크립트 로딩으로 교체 |
+| 주소 검색 팝업 미동작 (CSP) | `script-src` t1.daumcdn.net 미허용 | `next.config.ts` 추가 |
+| 주소 검색 팝업 차단 (CSP) | `frame-src` kakao.com 미허용 | `next.config.ts` 추가 |

@@ -813,3 +813,70 @@ z-90  토스트 / 알림 (항상 최상위)
 - [ ] 이미지 업로드 시 Supabase `posts` 버킷 존재 확인
 - [ ] `window.confirm/alert` 사용 금지 (→ `useConfirm` + `ConfirmDialog` 사용)
 
+
+---
+
+## 2026-04-19 QA 체크리스트 업데이트 (Sprint 8)
+
+### 신규 기능 QA 결과
+
+#### 커뮤니티 게시글 수정 (PATCH /posts/[postId])
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| PATCH 권한 | `post.authorId !== user.sub` → 403 | ✅ |
+| 빌라 소속 확인 | `assertVillaAccess` 공통 함수 사용 | ✅ |
+| 수정됨 배지 | `updatedAt - createdAt > 5000ms` 조건 | ✅ |
+| isNotice 수정 | ADMIN 전용 — villaId 소속 검증 포함 | ✅ |
+
+#### 장부 자동 기록 (Auto Ledger)
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 납부 PATCH 중복 방지 | `wasPaid` 체크 후 조건부 생성 | ✅ |
+| PortOne verify 중복 방지 | `payment.status === 'PAID'` 체크가 이미 존재 (함수 상단 guard) | ✅ |
+| 외부 청구 중복 방지 | `billing.status === 'COMPLETED'` 체크 후 400 반환 | ✅ |
+| amount 타입 | `Number(billing.amount)` — Prisma Decimal → number 변환 | ✅ |
+
+#### 듀얼 모드 — 같은 빌라 관리자+입주민
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| 로그인 시 residentVilla 자동 설정 | `status: 'APPROVED'` 조건 필수 | ✅ |
+| 자동 승인 조건 | `villa.adminId === user.sub` 서버에서 검증 | ✅ |
+| 온보딩 ResidentRecord 생성 | 빌라 생성 후 새 토큰으로 join API 호출 | ✅ |
+| 기존 PENDING 신청 중복 | join API에서 `PENDING/APPROVED` 중복 체크 → 409 | ✅ |
+
+#### Daum Postcode CSP 수정
+
+| 위치 | 위험 | 상태 |
+|------|------|------|
+| script-src | `t1.daumcdn.net` 추가 | ✅ |
+| frame-src | `*.daum.net`, `*.daumcdn.net`, `*.kakao.com` 추가 | ✅ |
+| 동적 스크립트 삽입 | CSP script-src 허용 후 정상 동작 확인 | ✅ |
+
+### QA 체크리스트 추가 항목 (2026-04-19)
+
+게시글 수정 기능 구현 후 반드시 확인:
+- [ ] 수정 페이지에서 기존 내용 pre-fill 정상 여부
+- [ ] 수정 후 게시글 상세에서 "수정됨" 배지 표시 여부
+- [ ] 작성자 외 사용자가 수정 페이지 접근 시 403 처리
+
+자동 장부 기록 관련 확인:
+- [ ] 관리비 PAID 전환 후 장부에 "자동" 배지 항목 생성 여부
+- [ ] 동일 납부 건 중복 장부 기록 방지 여부 (`wasPaid` guard)
+- [ ] 외부 청구 COMPLETED 처리 후 장부 자동 기록 여부
+
+듀얼 모드 확인:
+- [ ] 온보딩 시 입주민 체크 후 프로필 → "입주민 모드 전환" 버튼 표시 여부
+- [ ] 로그아웃 후 재로그인 시 듀얼 모드 유지 여부
+
+### 남은 기술 부채 (2026-04-19 기준)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 잔존 |
+| 기존 평문 빌링키 DB 마이그레이션 | High | 잔존 |
+| `lib/client-api.ts` 헬퍼 미활용 | Medium | 잔존 |
+| 동대표 교체 후 JWT 블랙리스트 없음 | Medium | 잔존 |
+| 로그인 API 추가 DB 쿼리 | Low | ADMIN 로그인 시 최대 2쿼리 추가 |

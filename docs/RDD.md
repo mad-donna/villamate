@@ -177,7 +177,7 @@ app/
 | F-20 | 초대 코드 복사 | 1 | ✅ | `navigator.clipboard`, 2초 토스트 |
 | F-21 | 입주민 검색 및 필터 | 2 | ✅ | |
 | F-22 | 세대주(HEAD) vs 세입자(MEMBER) 자동 판별 | 1 | ✅ | 선입주자 여부 분기 |
-| F-23 | 듀얼 모드 (ADMIN ↔ RESIDENT 화면 전환) | 2 | ✅ | 동대표 계정으로 입주민 화면 체험 |
+| F-23 | 듀얼 모드 (ADMIN ↔ RESIDENT 화면 전환) | 2 | ✅ | 동대표 계정으로 입주민 화면 체험. 2026-04-19 확장: 같은 빌라 관리자+입주민 동시 등록 지원, 온보딩 체크박스, join 자동 승인 |
 
 ### 4-4. 관리비 청구 및 납부
 
@@ -454,6 +454,7 @@ app/
 | 2026-04-15 | Sprint 5 완료 — 보안 QA(NF-15~17: 빌링키 암호화, JWT HttpOnly, 백오피스 미들웨어) + 디자인 QA(NF-18~20: ConfirmDialog, 디자인 토큰 17개, WCAG 접근성). 하드코딩 색상 38개 → 시맨틱 토큰 교체. window.confirm/alert 36개 → useConfirm 전환. |
 | 2026-04-16 | Sprint 6 버그 수정 — AmountInput 공통 컴포넌트 신규 추가(`lib/amount-step.ts` + `components/ui/AmountInput.tsx`). 커뮤니티/입주민 API Authorization 헤더 누락 8건 수정. 세대 호수 하단 시트 레이아웃 및 z-index 수정. /ledger 스텁 페이지 → 완전 구현. Vercel 배포 완료. |
 | 2026-04-18 | Sprint 7 버그 수정 — PortOne 외부 결제 안정화(CSP 도메인 추가, m_redirect_url 모바일 리다이렉트, PG MID 명시, useSearchParams 제거). 전체 클라이언트 페이지 GET/POST/DELETE API 인증 헤더 누락 13개 파일 일괄 수정. 하단 시트 BottomNav 겹침 z-index 수정. |
+| 2026-04-19 | Sprint 8 — 커뮤니티 게시글 수정(PATCH /posts/[postId], "수정됨" 배지). 청구서/외부청구서/장부 복사 기능. 장부 자동 기록(관리비 납부/외부청구 완료 시 LedgerTransaction 자동 생성, createdBy:'system'). 듀얼 모드 같은 빌라 지원(F-23 확장, 온보딩 체크박스, join 자동 승인, 로그인 API full villa object 반환). Daum Postcode CSP 수정(t1.daumcdn.net, kakao.com). 온보딩 주소 검색 동적 로딩 + 필드 순서 개선. |
 
 ---
 

@@ -2530,3 +2530,53 @@ interface Window {
 | 기존 평문 빌링키 DB 마이그레이션 미완료 | High | 잔존 |
 | `lib/client-api.ts` 미활용 | Medium | `apiFetch/apiGet/apiPost` 헬퍼가 있으나 대부분 페이지가 raw fetch 사용 — 점진적 마이그레이션 필요 |
 
+
+---
+
+## 2026-04-19 아키텍처 변경점 (Sprint 8)
+
+### 1. 로그인 API — Full Villa Object 반환 패턴으로 전환
+
+**변경 전**: 로그인 API(`POST /api/auth/login`)가 `villaId` 문자열만 반환. villa 오브젝트는 온보딩/join 페이지에서 별도로 localStorage에 저장.
+
+**변경 후**: 로그인 시 villa 전체 오브젝트 반환.
+- ADMIN: `villa` 오브젝트 포함 (id/name/address/inviteCode/subscriptionStatus)
+- RESIDENT: `villa` 오브젝트 포함 (approved ResidentRecord의 빌라 정보)
+- ADMIN이 자신의 빌라에 APPROVED ResidentRecord가 있으면 `residentVilla` 자동 설정
+
+**영향**: 재로그인 시 villa 정보 유실 버그 해소. 로그아웃 후 재로그인해도 듀얼 모드 유지.
+
+### 2. 듀얼 모드(ADMIN ↔ RESIDENT) — 같은 빌라 지원으로 확장
+
+**변경 전**: 듀얼 모드는 "관리 중인 빌라 ≠ 거주 중인 빌라" 조건만 처리.
+
+**변경 후**: 관리자가 자신이 관리하는 빌라에 입주민으로도 등록 가능.
+- `villa.id === residentVilla.id`인 경우도 `hasDualMode()` 동작
+- join API에서 `villa.adminId === user.sub`이면 즉시 APPROVED 처리 (승인 단계 생략)
+- 온보딩 시 "저도 이 빌라의 입주민입니다" 체크박스로 가입과 동시에 입주민 등록
+
+### 3. CSP 확장 — Daum/Kakao 우편번호 API 허용
+
+`next.config.ts` Content-Security-Policy 업데이트:
+- `script-src`: `https://t1.daumcdn.net` 추가
+- `frame-src`: `https://*.daum.net`, `https://*.daumcdn.net`, `https://*.kakao.com` 추가
+
+Daum Postcode 서비스가 카카오로 이전되어 실제 iframe은 `postcode.map.kakao.com`에서 로드됨.
+
+### 4. 장부 자동 기록 패턴 확립
+
+별도 Prisma 스키마 변경 없이 `LedgerTransaction.createdBy` 필드에 `'system'` 값을 사용해 자동 기록 식별.
+
+**트리거 지점**:
+- `PATCH /invoices/[id]/payments/[id]` → 상태 PAID 전환 시
+- `POST /invoices/[id]/payments/[id]/verify` → PortOne 결제 검증 통과 시
+- `PATCH /external-billing/[id]/confirm` → 외부 청구 COMPLETED 처리 시
+
+모든 자동 기록은 `createdBy: 'system'`으로 저장. 프론트엔드에서 `isAuto = (createdBy === 'system')` 계산 필드로 파생.
+
+### 알려진 기술 부채 (2026-04-19 추가)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| 로그인 API 응답 증가 | Low | villa 오브젝트 조회 쿼리 1~2개 추가. 트래픽 많을 경우 캐싱 고려 |
+| Daum Postcode 동적 로딩 | Low | 버튼 첫 클릭 시 외부 스크립트 다운로드 발생 — 느린 네트워크에서 지연 가능 |

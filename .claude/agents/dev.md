@@ -2038,3 +2038,114 @@ const res = await fetch(`/api/villas/${villaId}/polls`, {
 |------|--------|------|
 | `lib/client-api.ts` 헬퍼 미활용 | Medium | `apiFetch/apiGet/apiPost/apiPatch/apiDelete`가 이미 토큰 자동 주입을 지원하나, 대부분 페이지가 raw `fetch` 직접 사용. 점진적으로 헬퍼로 마이그레이션하면 이런 누락 방지 가능 |
 
+
+---
+
+## 2026-04-19 개발 패턴 및 변경사항 (Sprint 8)
+
+### 커뮤니티 게시글 수정 기능
+
+**PATCH `/api/villas/[villaId]/posts/[postId]`** 신규 추가
+- 작성자 본인만 수정 가능 (`post.authorId !== user.sub` → 403)
+- 수정 가능 필드: `title`, `content`, `category`, `isNotice`, `imageUrl`
+- `updatedAt` 필드를 GET 응답에 포함 추가
+
+**"수정됨" 배지 표시 조건**
+```typescript
+const isEdited = new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() > 5000;
+```
+5초 초과 차이가 있을 때 "수정됨" 배지 표시 (저장 즉시 발생하는 미세 차이 방지).
+
+**수정 페이지 라우트**
+- 관리자: `/community/[id]/edit`
+- 입주민: `/resident/community/[id]/edit`
+
+### 복사 기능 패턴 (청구서 / 외부청구 / 장부)
+
+#### 청구서 복사
+URL 파라미터 `?copy={invoiceId}` 방식. `new/page.tsx`에서 마운트 시 해당 청구서 조회 후 폼 pre-fill.
+`useSearchParams()` 사용으로 Next.js 15 Suspense 래퍼 필수:
+```tsx
+export default function NewInvoicePage() {
+  return (
+    <Suspense fallback={<div>로딩 중...</div>}>
+      <NewInvoicePageContent />
+    </Suspense>
+  );
+}
+```
+복사 시 billingMonth는 현재 월 +1(다음 달)로 자동 설정.
+
+#### 외부 청구서 복사
+인라인 상태 pre-fill 방식. `handleCopyBilling(b)` → form 상태 설정 + dueDate 초기화 + 모달 오픈.
+
+#### 장부 복사
+`handleCopyTx(tx)` → formType/formAmount/formDescription 설정 + 날짜는 오늘로 초기화 + 폼 오픈.
+
+### 장부 자동 기록 (Auto Ledger)
+
+납부 완료 / 외부 청구 완료 이벤트에서 `LedgerTransaction` 자동 생성:
+
+```typescript
+await prisma.ledgerTransaction.create({
+  data: {
+    villaId,
+    type: 'INCOME',
+    amount: Number(payment.amount),
+    description: `${billingMonth} 관리비 수납 - ${roomNumber}호`,
+    transactionDate: new Date(),
+    createdBy: 'system',  // ← 자동 기록 식별자
+  },
+});
+```
+
+**중복 방지**: `invoicePayment.PATCH`에서 `wasPaid = existing.status === 'PAID'` 체크 후 조건부 생성.
+
+**프론트엔드**: `isAuto: t.createdBy === 'system'` 파생 필드 → 파란 "자동" 배지 표시.
+
+### 관리자 + 입주민 듀얼 모드 (같은 빌라) 구현
+
+**로그인 API 변경** (`app/api/auth/login/route.ts`):
+```typescript
+// ADMIN 로그인 시 자신의 빌라 ResidentRecord 확인
+const residentRecord = await prisma.residentRecord.findFirst({
+  where: { userId: user.id, villaId: villa.id, status: 'APPROVED' },
+});
+if (residentRecord) {
+  residentVillaData = { ...villaInfo, roomNumber: residentRecord.roomNumber };
+}
+```
+
+**join API 자동 승인** (`app/api/villas/join/route.ts`, `/residents/join/route.ts`):
+```typescript
+const isOwnVilla = villa.adminId === user.sub;
+const status = isOwnVilla ? 'APPROVED' : 'PENDING';
+```
+
+**온보딩 페이지** (`app/(auth)/onboarding/page.tsx`):
+- "저도 이 빌라의 입주민입니다" 체크박스 + 호수 입력 추가
+- 빌라 생성 후 `/api/villas/[id]/residents/join` 추가 호출
+- 성공 시 `residentVilla` localStorage 저장
+
+### Daum Postcode 동적 로딩 패턴
+
+Script 컴포넌트 의존 없이 버튼 클릭 시 스크립트 동적 삽입:
+```typescript
+function handleAddressSearch() {
+  if ((window as any).daum?.Postcode) {
+    openPostcode();
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+  script.onload = openPostcode;
+  document.head.appendChild(script);
+}
+```
+이미 로드된 경우 바로 실행, 최초 클릭 시만 네트워크 요청 발생.
+
+### 기술 부채 신규 추가 (2026-04-19)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| 로그인 시 villa 쿼리 증가 | Low | ADMIN 최대 2쿼리(villa + residentRecord) 추가. 현재 문제없으나 고트래픽 시 캐싱 고려 |
