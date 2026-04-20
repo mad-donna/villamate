@@ -34,72 +34,65 @@ export async function GET(
     // F-71: 번호판 검색
     if (plate) {
       const vehicles = await prisma.vehicle.findMany({
-        where: {
-          villaId,
-          plateNumber: { contains: plate },
-        },
-        include: {
-          owner: { select: { id: true, name: true } },
-        },
+        where: { villaId, plateNumber: { contains: plate } },
+        include: { owner: { select: { id: true, name: true } } },
         orderBy: { createdAt: 'desc' },
       });
 
-      const results = await Promise.all(
-        vehicles.map(async (v) => {
-          const resident = await prisma.residentRecord.findFirst({
-            where: { villaId, userId: v.ownerId, status: 'APPROVED' },
-            select: { roomNumber: true },
-          });
-          return {
-            id: v.id,
-            plateNumber: v.plateNumber,
-            modelName: v.modelName,
-            isVisitor: v.isVisitor,
-            expectedDeparture: v.expectedDeparture,
-            ownerName: v.owner.name,
-            roomNumber: resident?.roomNumber ?? null,
-            createdAt: v.createdAt,
-          };
-        }),
-      );
+      const ownerIds = [...new Set(vehicles.map((v) => v.ownerId))];
+      const residents = ownerIds.length > 0
+        ? await prisma.residentRecord.findMany({
+            where: { villaId, userId: { in: ownerIds }, status: 'APPROVED' },
+            select: { userId: true, roomNumber: true },
+          })
+        : [];
+      const roomMap = new Map(residents.map((r) => [r.userId, r.roomNumber]));
 
-      return ok({ vehicles: results });
-    }
-
-    // F-70: 전체 차량 목록 (관리자 = 전체, 입주민 = 본인 등록 차량만)
-    const whereClause = isAdmin
-      ? { villaId }
-      : { villaId, ownerId: user.sub };
-
-    const vehicles = await prisma.vehicle.findMany({
-      where: whereClause,
-      include: {
-        owner: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const results = await Promise.all(
-      vehicles.map(async (v) => {
-        const resident = await prisma.residentRecord.findFirst({
-          where: { villaId, userId: v.ownerId, status: 'APPROVED' },
-          select: { roomNumber: true },
-        });
-        return {
+      return ok({
+        vehicles: vehicles.map((v) => ({
           id: v.id,
           plateNumber: v.plateNumber,
           modelName: v.modelName,
           isVisitor: v.isVisitor,
           expectedDeparture: v.expectedDeparture,
           ownerName: v.owner.name,
-          roomNumber: resident?.roomNumber ?? null,
+          roomNumber: roomMap.get(v.ownerId) ?? null,
           createdAt: v.createdAt,
-          isOwner: v.ownerId === user.sub,
-        };
-      }),
-    );
+        })),
+      });
+    }
 
-    return ok({ vehicles: results });
+    // F-70: 전체 차량 목록 (관리자 = 전체, 입주민 = 본인 등록 차량만)
+    const whereClause = isAdmin ? { villaId } : { villaId, ownerId: user.sub };
+
+    const vehicles = await prisma.vehicle.findMany({
+      where: whereClause,
+      include: { owner: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const ownerIds = [...new Set(vehicles.map((v) => v.ownerId))];
+    const residents = ownerIds.length > 0
+      ? await prisma.residentRecord.findMany({
+          where: { villaId, userId: { in: ownerIds }, status: 'APPROVED' },
+          select: { userId: true, roomNumber: true },
+        })
+      : [];
+    const roomMap = new Map(residents.map((r) => [r.userId, r.roomNumber]));
+
+    return ok({
+      vehicles: vehicles.map((v) => ({
+        id: v.id,
+        plateNumber: v.plateNumber,
+        modelName: v.modelName,
+        isVisitor: v.isVisitor,
+        expectedDeparture: v.expectedDeparture,
+        ownerName: v.owner.name,
+        roomNumber: roomMap.get(v.ownerId) ?? null,
+        createdAt: v.createdAt,
+        isOwner: v.ownerId === user.sub,
+      })),
+    });
   } catch {
     return err('서버 오류가 발생했습니다.', 500);
   }

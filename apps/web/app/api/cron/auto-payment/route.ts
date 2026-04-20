@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
       id: true,
       name: true,
       adminId: true,
+      subscriptionExpiry: true,
       tossBillingKey: {
         select: { billingKey: true, customerKey: true },
       },
@@ -59,19 +60,30 @@ export async function POST(req: NextRequest) {
         orderName: ORDER_NAME,
       });
 
-      // 구독 30일 연장
-      const currentExpiry = await prisma.villa
-        .findUnique({ where: { id: villa.id }, select: { subscriptionExpiry: true } })
-        .then((v) => v?.subscriptionExpiry ?? new Date());
-
+      // 구독 30일 연장 — 결제 성공 후 DB 갱신
+      const currentExpiry = villa.subscriptionExpiry ?? new Date();
       const baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
       const newExpiry = new Date(baseDate);
       newExpiry.setDate(newExpiry.getDate() + 30);
 
-      await prisma.villa.update({
-        where: { id: villa.id },
-        data: { subscriptionStatus: 'ACTIVE', subscriptionExpiry: newExpiry },
-      });
+      try {
+        await prisma.villa.update({
+          where: { id: villa.id },
+          data: { subscriptionStatus: 'ACTIVE', subscriptionExpiry: newExpiry },
+        });
+      } catch (updateErr) {
+        // 결제는 완료됐으나 DB 갱신 실패 — 관리자에게 수동 확인 요청
+        console.error(`[auto-payment] 결제 성공 후 구독 갱신 실패 villaId=${villa.id}`, updateErr);
+        await createNotification({
+          userId: villa.adminId,
+          villaId: villa.id,
+          type: 'SYSTEM',
+          title: '[긴급] 결제 완료 후 구독 갱신 오류',
+          body: `${villa.name} 결제는 완료되었으나 구독 갱신에 실패했습니다. 관리자에게 문의해주세요. (orderId: ${orderId})`,
+        }).catch(() => {});
+        failed++;
+        continue;
+      }
 
       await createNotification({
         userId: villa.adminId,

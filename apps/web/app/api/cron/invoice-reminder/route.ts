@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   const threeDayTargets = await prisma.invoicePayment.findMany({
     where: {
       status: 'PENDING',
+      amount: { gt: 0 },
       invoice: { createdAt: { gte: sixDaysAgo, lte: threeDaysAgo } },
     },
     include: {
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
   const sevenDayTargets = await prisma.invoicePayment.findMany({
     where: {
       status: 'PENDING',
+      amount: { gt: 0 },
       invoice: { createdAt: { gte: thirteenDaysAgo, lte: sevenDaysAgo } },
     },
     include: {
