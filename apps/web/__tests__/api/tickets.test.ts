@@ -10,6 +10,7 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     villa: { findUnique: jest.fn() },
     ticket: { findMany: jest.fn(), create: jest.fn() },
+    residentRecord: { findFirst: jest.fn() },
   },
 }));
 
@@ -77,7 +78,11 @@ describe('GET /api/villas/[villaId]/tickets', () => {
 });
 
 describe('POST /api/villas/[villaId]/tickets', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (prisma.villa.findUnique as jest.Mock).mockResolvedValue(mockVilla);
+    (prisma.residentRecord.findFirst as jest.Mock).mockResolvedValue({ id: 'rr-1' });
+  });
 
   test('제목 누락 시 400', async () => {
     const res = await POST(
@@ -101,6 +106,20 @@ describe('POST /api/villas/[villaId]/tickets', () => {
       { params },
     );
     expect(res.status).toBe(400);
+  });
+
+  test('미승인 입주민은 403', async () => {
+    (prisma.residentRecord.findFirst as jest.Mock).mockResolvedValue(null);
+
+    const res = await POST(
+      makeRequest(`/api/villas/${VILLA_ID}/tickets`, {
+        method: 'POST',
+        body: { title: '주차 문제', description: '무단 주차 차량', category: 'PARKING' },
+        headers: authHeaders({ sub: USER_ID, role: 'RESIDENT' }),
+      }) as never,
+      { params },
+    );
+    expect(res.status).toBe(403);
   });
 
   test('정상 민원 접수 시 201', async () => {
