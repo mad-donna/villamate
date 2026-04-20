@@ -16,7 +16,7 @@ async function assertVillaAccess(
   if (villa.adminId === userId) return { isAdmin: true };
 
   const resident = await prisma.residentRecord.findFirst({
-    where: { villaId, userId },
+    where: { villaId, userId, status: 'APPROVED' },
     select: { id: true },
   });
   if (!resident) return null;

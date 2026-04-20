@@ -44,28 +44,32 @@ export async function PATCH(
     if (existing.invoiceId !== invoiceId) return err('권한이 없습니다.', 403);
 
     const wasPaid = existing.status === 'PAID';
+    const becomesPaid = status === 'PAID' && !wasPaid;
+    const now = new Date();
 
-    const payment = await prisma.invoicePayment.update({
-      where: { id: paymentId },
-      data: {
-        status,
-        paidAt: status === 'PAID' ? new Date() : null,
-      },
-    });
-
-    // 납부 완료 전환 시 장부 자동 기록
-    if (status === 'PAID' && !wasPaid) {
-      await prisma.ledgerTransaction.create({
+    const [payment] = await prisma.$transaction([
+      prisma.invoicePayment.update({
+        where: { id: paymentId },
         data: {
-          villaId,
-          type: 'INCOME',
-          amount: Number(existing.amount),
-          description: `${existing.invoice.billingMonth} 관리비 수납 - ${existing.roomNumber}호`,
-          transactionDate: new Date(),
-          createdBy: 'system',
+          status,
+          paidAt: status === 'PAID' ? now : null,
         },
-      });
-    }
+      }),
+      ...(becomesPaid
+        ? [
+            prisma.ledgerTransaction.create({
+              data: {
+                villaId,
+                type: 'INCOME',
+                amount: Number(existing.amount),
+                description: `${existing.invoice.billingMonth} 관리비 수납 - ${existing.roomNumber}호`,
+                transactionDate: now,
+                createdBy: 'system',
+              },
+            }),
+          ]
+        : []),
+    ]);
 
     return ok({ payment });
   } catch {
