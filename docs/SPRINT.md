@@ -219,6 +219,19 @@ Sprint 3 계획 기능 전체 완료. Sprint 4(Phase 3 장기 항목)으로 전�
 
 ---
 
+## QA 잔여 항목 (Low / Design) — 2026-04-20
+
+> Critical·High·Medium 전체 수정 완료. 아래는 디자인 명세 불일치 및 마이너 UX 이슈.
+
+| # | 위치 | 문제 | 권장 수정 |
+|---|------|------|-----------|
+| D-01 | `components/ui/Button.tsx:82-84` | `loading` 상태에서 Spinner + 텍스트 동시 표시 — 디자인 명세 "텍스트 숨김 + Spinner 중앙 배치, 버튼 폭 유지" 불일치 | `{loading ? <Spinner /> : children}` 으로 교체 |
+| D-02 | `components/ui/Badge.tsx` | 각 variant에 `border` 테두리 누락 — 디자인 명세 5-3 "배경보다 한 단계 진한 1px 테두리" 불일치 | variant별 `ring-1 ring-{color}-200` 추가 |
+| D-03 | `app/(admin)/home/page.tsx:271-281` | 바로가기 그리드 버튼 터치 타깃 44px 미만 — 디자인 원칙 8번 위반 | 버튼에 `min-h-[44px] min-w-[44px]` 추가 |
+| D-04 | `app/api/cron/poll-reminder/route.ts` | Cron 스케줄 `"0 0 * * *"` (KST 09:00) — 다른 모든 Cron의 `"0 15 * * *"` (KST 00:00)과 불일치. 의도적이면 주석으로 명시 필요 | `vercel.json` 스케줄 통일 또는 의도 주석 추가 |
+
+---
+
 ## Phase 3 잔여 항목 (미구현 — 외부 의존성 필요)
 
 > 외부 사업자 등록·API 계약·법적 검토가 선행되어야 하는 항목. 빠른 실행 불가.
