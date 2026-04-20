@@ -59,11 +59,15 @@ export async function POST(req: NextRequest) {
   const threeDayPaymentIds = threeDayTargets
     .filter((p) => p.residentRecord)
     .map((p) => p.id);
+  const threeDayUserIds = [
+    ...new Set(threeDayTargets.filter((p) => p.residentRecord).map((p) => p.residentRecord!.userId)),
+  ];
 
   const existingThreeDay = threeDayPaymentIds.length > 0
     ? await prisma.notification.findMany({
         where: {
           type: 'PAYMENT_REMINDER',
+          userId: { in: threeDayUserIds },
           OR: threeDayPaymentIds.map((id) => ({ body: { contains: id } })),
         },
         select: { body: true },
@@ -71,7 +75,7 @@ export async function POST(req: NextRequest) {
     : [];
   const sentThreeDayIds = new Set(
     existingThreeDay.flatMap((n) => {
-      const match = n.body.match(/payment:([^\s)]+)/);
+      const match = n.body.match(/payment:([a-f0-9-]{36})\)/);
       return match ? [match[1]] : [];
     }),
   );
@@ -94,12 +98,16 @@ export async function POST(req: NextRequest) {
   const sevenDayPaymentIds = sevenDayTargets
     .filter((p) => p.residentRecord)
     .map((p) => p.id);
+  const sevenDayUserIds = [
+    ...new Set(sevenDayTargets.filter((p) => p.residentRecord).map((p) => p.residentRecord!.userId)),
+  ];
 
   const existingSevenDay = sevenDayPaymentIds.length > 0
     ? await prisma.notification.findMany({
         where: {
           type: 'PAYMENT_REMINDER',
           title: { contains: '최종' },
+          userId: { in: sevenDayUserIds },
           OR: sevenDayPaymentIds.map((id) => ({ body: { contains: id } })),
         },
         select: { body: true },
@@ -107,7 +115,7 @@ export async function POST(req: NextRequest) {
     : [];
   const sentSevenDayIds = new Set(
     existingSevenDay.flatMap((n) => {
-      const match = n.body.match(/payment:([^\s)]+)/);
+      const match = n.body.match(/payment:([a-f0-9-]{36})\)/);
       return match ? [match[1]] : [];
     }),
   );

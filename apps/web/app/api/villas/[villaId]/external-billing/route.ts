@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
+import { requireActiveSubscription } from '@/lib/subscription';
 
 // GET — 외부 청구 목록 조회 (ADMIN 전용)
 export async function GET(
@@ -52,6 +53,9 @@ export async function POST(
     });
     if (!villa) return err('빌라를 찾을 수 없습니다.', 404);
     if (villa.adminId !== user.sub) return err('권한이 없습니다.', 403);
+
+    const subErr = await requireActiveSubscription(villaId);
+    if (subErr) return subErr;
 
     const body = await req.json();
     const { targetName, phoneNumber, amount, description, dueDate } = body as {

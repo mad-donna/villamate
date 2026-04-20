@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
+import { requireActiveSubscription } from '@/lib/subscription';
 
 async function assertVillaAccess(villaId: string, userId: string) {
   const villa = await prisma.villa.findUnique({
@@ -80,6 +81,9 @@ export async function POST(
     });
     if (!villa) return err('빌라를 찾을 수 없습니다.', 404);
     if (villa.adminId !== user.sub) return err('관리자만 투표를 생성할 수 있습니다.', 403);
+
+    const subErr = await requireActiveSubscription(villaId);
+    if (subErr) return subErr;
 
     const body = (await req.json()) as {
       title?: string;

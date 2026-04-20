@@ -138,9 +138,10 @@ export async function POST(
               villaId,
               type: 'SYSTEM' as const,
               title: `📢 공지사항: ${post.title}`,
-              body: post.content.length > 60
-                ? post.content.slice(0, 60) + '...'
-                : post.content,
+              body: (() => {
+                const plain = post.content.replace(/<[^>]*>/g, '').trim();
+                return plain.length > 60 ? plain.slice(0, 60) + '...' : plain;
+              })(),
             })),
           });
         })

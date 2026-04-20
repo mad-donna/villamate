@@ -1,9 +1,9 @@
 import { SignJWT, jwtVerify } from 'jose';
 
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('JWT_SECRET 환경변수가 설정되지 않았습니다. 프로덕션에서는 필수입니다.');
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET 환경변수가 설정되지 않았습니다.');
 }
-const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev-secret-change-me');
+const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 const EXPIRES_IN = '30d';
 
 export interface JwtPayload {

@@ -7,8 +7,7 @@ export async function GET(req: NextRequest) {
     const user = await getUser(req);
     if (!user) return err('인증이 필요합니다.', 401);
 
-    const { searchParams } = new URL(req.url);
-    const villaId = searchParams.get('villaId') ?? user.villaId;
+    const villaId = user.villaId;
     const role = user.role;
 
     if (!villaId) {

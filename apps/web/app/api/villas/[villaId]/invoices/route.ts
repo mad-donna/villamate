@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
+import { requireActiveSubscription } from '@/lib/subscription';
 
 // ADMIN 권한 및 빌라 소속 확인 헬퍼
 async function requireAdmin(userId: string, villaId: string) {
@@ -71,6 +72,9 @@ export async function POST(
 
     const { error } = await requireAdmin(user.sub, villaId);
     if (error) return error;
+
+    const subErr = await requireActiveSubscription(villaId);
+    if (subErr) return subErr;
 
     const body = await req.json();
     const { type, billingMonth, memo, amount, items } = body;
