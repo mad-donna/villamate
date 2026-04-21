@@ -89,6 +89,15 @@ enum NotificationType {
   TICKET
 }
 
+enum VendorCategory {
+  PLUMBING
+  ELECTRICAL
+  CLEANING
+  CONSTRUCTION
+  ELEVATOR
+  ETC
+}
+
 model User {
   id              String           @id @default(uuid())
   email           String           @unique
@@ -106,11 +115,12 @@ model User {
   notifications     Notification[]
   pushSubscriptions PushSubscription[]
   socialAccounts    SocialAccount[]
-  vehicles          Vehicle[]
-  tickets           Ticket[]
-  polls             Poll[]
-  buildingEvents    BuildingEvent[]
-  postLikes         PostLike[]
+  vehicles             Vehicle[]
+  tickets              Ticket[]
+  polls                Poll[]
+  buildingEvents       BuildingEvent[]
+  postLikes            PostLike[]
+  facilityReservations FacilityReservation[]
 }
 
 model Villa {
@@ -141,6 +151,8 @@ model Villa {
   notifications      Notification[]      @relation("VillaNotifications")
   tossBillingKey     TossBillingKey?
   energyUsages       EnergyUsage[]
+  facilities         Facility[]
+  vendors            Vendor[]
 }
 
 model SocialAccount {
@@ -475,4 +487,48 @@ model EnergyUsage {
 
   @@unique([villaId, year, month])
   @@index([villaId, year])
+}
+
+model Facility {
+  id           String                @id @default(uuid())
+  villaId      String
+  villa        Villa                 @relation(fields: [villaId], references: [id])
+  name         String
+  description  String?
+  maxPerDay    Int                   @default(1)
+  isActive     Boolean               @default(true)
+  reservations FacilityReservation[]
+  createdAt    DateTime              @default(now())
+
+  @@index([villaId])
+}
+
+model FacilityReservation {
+  id         String   @id @default(uuid())
+  facilityId String
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  villaId    String
+  roomNumber String
+  date       String   // "YYYY-MM-DD"
+  timeSlot   String?  // "09:00-10:00"
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([facilityId, date])
+  @@index([userId])
+}
+
+model Vendor {
+  id        String         @id @default(uuid())
+  villaId   String
+  villa     Villa          @relation(fields: [villaId], references: [id])
+  name      String
+  category  VendorCategory
+  phone     String
+  memo      String?
+  createdAt DateTime       @default(now())
+
+  @@index([villaId])
 }

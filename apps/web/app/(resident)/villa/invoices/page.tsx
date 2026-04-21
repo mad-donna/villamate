@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import Script from 'next/script';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -239,7 +240,15 @@ export default function ResidentInvoicePage() {
       />
 
       <main className="px-4 pt-6 pb-12">
-        <h1 className="text-xl font-bold text-neutral-900 mb-6">관리비 내역</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-bold text-neutral-900">관리비 내역</h1>
+          <Link
+            href="/villa/invoices/history"
+            className="text-xs text-primary-600 font-medium bg-primary-50 px-3 py-1.5 rounded-full min-h-[36px] flex items-center"
+          >
+            납부 이력
+          </Link>
+        </div>
 
         {error && (
           <p className="text-center text-error-500 py-8">{error}</p>

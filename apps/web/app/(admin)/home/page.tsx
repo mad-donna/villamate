@@ -6,6 +6,7 @@ import { getUser as getStoredUser, getToken } from '@/lib/client-auth';
 import { WidgetCard } from '@/components/ui/WidgetCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
+import { InsightsSection } from '@/components/InsightsSection';
 
 // ---------- 타입 ----------
 
@@ -283,6 +284,9 @@ export default function AdminHomePage() {
             ))}
           </div>
         </section>
+
+        {/* 수금 인사이트 */}
+        <InsightsSection />
       </main>
     </>
   );
