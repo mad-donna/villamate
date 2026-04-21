@@ -219,16 +219,36 @@ Sprint 3 계획 기능 전체 완료. Sprint 4(Phase 3 장기 항목)으로 전�
 
 ---
 
-## QA 잔여 항목 (Low / Design) — 2026-04-20
+## ✅ Sprint 9 완료 항목 — 보안·안정성 QA + 예시 데이터 (2026-04-20)
 
-> Critical·High·Medium 전체 수정 완료. 아래는 디자인 명세 불일치 및 마이너 UX 이슈.
+| # | 항목 | 완료일 |
+|---|------|--------|
+| - | `prisma/seed.ts` 신규 — 전 기능 예시 데이터 시드 (건물이력/청구서/외부청구/커뮤니티/장부/민원/투표/에너지) | 2026-04-20 |
+| - | `lib/portone.ts` 신규 — PortOne 검증 함수 공통 모듈 추출 (Critical QA #1) | 2026-04-20 |
+| - | `status:'APPROVED'` 미승인 입주자 차단 — polls/posts/postId/like 4개 라우트 (High QA #2) | 2026-04-20 |
+| - | `$transaction` 납부+장부 원자화 — payments/[paymentId] PATCH + verify POST (High QA #3) | 2026-04-20 |
+| - | auto-payment Cron: subscriptionExpiry 재조회 제거 + 갱신 실패 시 긴급 알림 (High QA #4) | 2026-04-20 |
+| - | invoice-reminder: `amount: { gt: 0 }` 0원 독촉 방지 (High QA #5) | 2026-04-20 |
+| - | vehicles GET: N+1 → ownerIds 배치 조회 + Map 룩업 (High QA #6) | 2026-04-20 |
+| - | dashboard: searchParams villaId 제거, JWT villaId만 신뢰 (Medium QA #7) | 2026-04-20 |
+| - | invoice-reminder: 중복 체크에 userId 필터 + UUID regex 한정 (Medium QA #8) | 2026-04-20 |
+| - | `auth.ts`: JWT_SECRET 전 환경 필수화, 하드코딩 폴백 제거 (Medium QA #9) | 2026-04-20 |
+| - | 공지 알림 body HTML 태그 제거 (`replace(/<[^>]*>/g,'')`) (Medium QA #10) | 2026-04-20 |
+| - | `requireActiveSubscription` — 청구서/외부청구/투표/건물이력 POST 추가 (Medium QA #11) | 2026-04-20 |
+| - | tickets 테스트 mock 수정 + 미승인 입주민 403 케이스 신규 추가, 33/33 통과 | 2026-04-20 |
 
-| # | 위치 | 문제 | 권장 수정 |
-|---|------|------|-----------|
-| D-01 | `components/ui/Button.tsx:82-84` | `loading` 상태에서 Spinner + 텍스트 동시 표시 — 디자인 명세 "텍스트 숨김 + Spinner 중앙 배치, 버튼 폭 유지" 불일치 | `{loading ? <Spinner /> : children}` 으로 교체 |
-| D-02 | `components/ui/Badge.tsx` | 각 variant에 `border` 테두리 누락 — 디자인 명세 5-3 "배경보다 한 단계 진한 1px 테두리" 불일치 | variant별 `ring-1 ring-{color}-200` 추가 |
-| D-03 | `app/(admin)/home/page.tsx:271-281` | 바로가기 그리드 버튼 터치 타깃 44px 미만 — 디자인 원칙 8번 위반 | 버튼에 `min-h-[44px] min-w-[44px]` 추가 |
-| D-04 | `app/api/cron/poll-reminder/route.ts` | Cron 스케줄 `"0 0 * * *"` (KST 09:00) — 다른 모든 Cron의 `"0 15 * * *"` (KST 00:00)과 불일치. 의도적이면 주석으로 명시 필요 | `vercel.json` 스케줄 통일 또는 의도 주석 추가 |
+---
+
+## ✅ QA 잔여 항목 (Low / Design) — 2026-04-21
+
+> Critical·High·Medium 전체 수정 완료. 아래 디자인 명세 불일치 및 마이너 UX 이슈 모두 수정 완료.
+
+| # | 위치 | 수정 내용 | 완료일 |
+|---|------|----------|--------|
+| D-01 | `components/ui/Button.tsx` | `loading` 상태 → `{loading ? <Spinner /> : children}` (텍스트 숨김 + Spinner 단독 표시) | 2026-04-21 |
+| D-02 | `components/ui/Badge.tsx` | variant별 `ring-1 ring-{color}-200` 테두리 추가 | 2026-04-21 |
+| D-03 | `app/(admin)/home/page.tsx` | 바로가기 그리드 버튼 `min-h-[44px] min-w-[44px]` 추가 (44px 터치 타깃 확보) | 2026-04-21 |
+| D-04 | `app/api/cron/poll-reminder/route.ts` | 주석 스케줄 `"0 0 * * *"` → `"0 15 * * *"` (vercel.json 실제 값과 일치) | 2026-04-21 |
 
 ---
 

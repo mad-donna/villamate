@@ -13,11 +13,11 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const variantClasses: Record<BadgeVariant, string> = {
-  success: 'bg-success-100 text-success-700',
-  error: 'bg-error-100 text-error-700',
-  warning: 'bg-warning-100 text-warning-700',
-  info: 'bg-primary-100 text-primary-700',
-  neutral: 'bg-neutral-100 text-neutral-500',
+  success: 'bg-success-100 text-success-700 ring-1 ring-success-200',
+  error: 'bg-error-100 text-error-700 ring-1 ring-error-200',
+  warning: 'bg-warning-100 text-warning-700 ring-1 ring-warning-200',
+  info: 'bg-primary-100 text-primary-700 ring-1 ring-primary-200',
+  neutral: 'bg-neutral-100 text-neutral-500 ring-1 ring-neutral-200',
 };
 
 function Badge({ variant, children, className = '', ...props }: BadgeProps) {

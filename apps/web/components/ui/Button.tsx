@@ -81,8 +81,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ].join(' ')}
         {...props}
       >
-        {loading && <Spinner />}
-        {children}
+        {loading ? <Spinner /> : children}
       </button>
     );
   },

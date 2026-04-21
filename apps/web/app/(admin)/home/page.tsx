@@ -273,7 +273,7 @@ export default function AdminHomePage() {
                 key={href}
                 type="button"
                 onClick={() => router.push(href)}
-                className="bg-white rounded-2xl shadow-sm p-4 flex flex-col items-center gap-2 active:scale-95 transition-transform"
+                className="bg-white rounded-2xl shadow-sm p-4 flex flex-col items-center gap-2 active:scale-95 transition-transform min-h-[44px] min-w-[44px]"
               >
                 <span className="text-2xl" aria-hidden="true">{icon}</span>
                 <span className="text-xs font-medium text-neutral-700 text-center leading-tight">

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * POST /api/cron/poll-reminder
- * Vercel Cron: "0 0 * * *" (매일 00:00 UTC = 09:00 KST)
+ * Vercel Cron: "0 15 * * *" (매일 15:00 UTC = 00:00 KST)
  *
  * 마감 24시간 이내인 진행 중인 투표의 미참여 HEAD 세대주에게 독촉 알림을 자동 발송합니다.
  */
