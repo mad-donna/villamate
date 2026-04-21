@@ -169,7 +169,7 @@ export default function FacilitiesPage() {
 
       {/* 등록/수정 바텀시트 */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40">
+        <div className="fixed inset-0 z-60 flex flex-col justify-end bg-black/40">
           <div className="bg-white rounded-t-3xl p-6 space-y-4 max-w-lg mx-auto w-full">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-neutral-900">

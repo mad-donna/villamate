@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getUser, clearAuth, hasDualMode, setViewMode, type StoredUser } from '@/lib/client-auth';
+import { getUser, clearAuth, hasDualMode, setViewMode, saveUser, type StoredUser } from '@/lib/client-auth';
 import { getAmountStep, setAmountStep, PRESET_STEPS } from '@/lib/amount-step';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -316,6 +316,10 @@ export default function AdminProfilePage() {
   const [currentStep, setCurrentStep] = useState(10000);
   const [dualMode, setDualMode] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [registerSheetOpen, setRegisterSheetOpen] = useState(false);
+  const [registerRoom, setRegisterRoom] = useState('');
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerError, setRegisterError] = useState('');
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
 
   useEffect(() => {
@@ -368,6 +372,38 @@ export default function AdminProfilePage() {
   function handleSwitchToResident() {
     setViewMode('resident');
     router.push('/villa');
+  }
+
+  async function handleRegisterAsResident() {
+    const room = registerRoom.trim().replace(/호$/, '');
+    if (!room) { setRegisterError('호수를 입력해주세요.'); return; }
+    const villaId = user?.villa?.id;
+    if (!villaId) return;
+    setRegisterLoading(true);
+    setRegisterError('');
+    try {
+      const token = localStorage.getItem('token') ?? '';
+      const res = await fetch(`/api/villas/${villaId}/residents/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ roomNumber: room }),
+      });
+      const data = await res.json() as { error?: string; villa?: StoredUser['villa']; roomNumber?: string };
+      if (!res.ok) { setRegisterError(data.error ?? '등록에 실패했습니다.'); return; }
+      const currentUser = getUser();
+      if (currentUser && data.villa) {
+        const updated = { ...currentUser, residentVilla: { ...data.villa, roomNumber: room } };
+        saveUser(updated as StoredUser);
+        setUser(updated as StoredUser);
+        setDualMode(true);
+      }
+      setRegisterSheetOpen(false);
+      setRegisterRoom('');
+    } catch {
+      setRegisterError('네트워크 오류가 발생했습니다.');
+    } finally {
+      setRegisterLoading(false);
+    }
   }
 
   const inviteCode = user?.villa?.inviteCode ?? '-';
@@ -444,7 +480,7 @@ export default function AdminProfilePage() {
   ];
 
   return (
-    <main className="pt-6 pb-10">
+    <main className="pt-6 pb-24">
       {confirmDialogEl}
       {/* 아바타 + 사용자 정보 */}
       <div className="flex flex-col items-center gap-3 px-4 mb-8">
@@ -458,8 +494,8 @@ export default function AdminProfilePage() {
         </div>
       </div>
 
-      {/* 듀얼 모드 전환 — ADMIN이 입주민으로도 등록된 경우에만 표시 */}
-      {dualMode && (
+      {/* 듀얼 모드 전환 — 입주민으로 등록된 경우 */}
+      {dualMode ? (
         <div className="px-4 mb-6">
           <div className="bg-primary-50 border border-primary-200 rounded-2xl p-4 flex items-center justify-between">
             <div>
@@ -474,6 +510,22 @@ export default function AdminProfilePage() {
               className="text-sm font-semibold text-primary-700 bg-white border border-primary-300 rounded-xl px-4 py-2 min-h-[44px] hover:bg-primary-50 transition-colors"
             >
               전환
+            </button>
+          </div>
+        </div>
+      ) : user?.villa && (
+        <div className="px-4 mb-6">
+          <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-neutral-700">입주민 모드 미활성</p>
+              <p className="text-xs text-neutral-500 mt-0.5">내 빌라에 입주민으로 등록하면 전환 가능</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setRegisterSheetOpen(true); setRegisterRoom(''); setRegisterError(''); }}
+              className="text-sm font-semibold text-primary-700 bg-white border border-primary-300 rounded-xl px-4 py-2 min-h-[44px] hover:bg-primary-50 transition-colors"
+            >
+              등록
             </button>
           </div>
         </div>
@@ -492,6 +544,37 @@ export default function AdminProfilePage() {
           setCurrentStep(getAmountStep());
         }}
       />
+
+      {/* 입주민 등록 바텀시트 */}
+      {registerSheetOpen && (
+        <div className="fixed inset-0 z-60 flex flex-col justify-end bg-black/40">
+          <div className="bg-white rounded-t-3xl p-6 space-y-4 max-w-lg mx-auto w-full">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-neutral-900">입주민으로 등록</h2>
+              <button
+                type="button"
+                onClick={() => setRegisterSheetOpen(false)}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-neutral-400"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-sm text-neutral-500">내 빌라에서 거주하는 호수를 입력하면 관리자·입주민 모드를 함께 사용할 수 있습니다.</p>
+            {registerError && <p className="text-error-500 text-sm" role="alert">{registerError}</p>}
+            <Input
+              label="내 거주 호수"
+              placeholder="예: 101"
+              value={registerRoom}
+              onChange={(e) => setRegisterRoom(e.target.value)}
+            />
+            <Button className="w-full" onClick={handleRegisterAsResident} loading={registerLoading}>
+              등록하기
+            </Button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
