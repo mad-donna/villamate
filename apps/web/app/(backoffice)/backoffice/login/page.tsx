@@ -15,7 +15,7 @@ export default function BackofficeLoginPage() {
 
   // 이미 로그인된 SUPER_ADMIN이면 대시보드로 (getBoUser: try/catch 포함)
   useEffect(() => {
-    if (getBoUser()) router.replace('/backoffice/dashboard');
+    if (getBoUser()) router.replace('/dashboard');
   }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,7 +47,7 @@ export default function BackofficeLoginPage() {
 
       localStorage.setItem('bo_token', data.token!);
       localStorage.setItem('bo_user', JSON.stringify(data.user!));
-      router.push('/backoffice/dashboard');
+      router.push('/dashboard');
     } catch {
       setError('네트워크 오류가 발생했습니다.');
     } finally {

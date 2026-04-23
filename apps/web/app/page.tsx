@@ -25,7 +25,7 @@ export default function LandingPage() {
     }
 
     if (user.role === 'SUPER_ADMIN') {
-      router.replace('/backoffice/dashboard');
+      router.replace('/dashboard');
     } else if (user.role === 'RESIDENT') {
       router.replace('/resident/home');
     } else {

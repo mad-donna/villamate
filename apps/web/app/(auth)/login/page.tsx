@@ -46,7 +46,7 @@ function LoginForm() {
       saveUser(user);
 
       if (user.role === 'SUPER_ADMIN') {
-        router.push('/backoffice/dashboard');
+        router.push('/dashboard');
       } else {
         router.push('/home');
       }

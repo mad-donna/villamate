@@ -23,17 +23,17 @@ interface SidebarItem {
 }
 
 const platformItems: SidebarItem[] = [
-  { href: '/backoffice/dashboard', label: '대시보드', Icon: ChartBarIcon },
-  { href: '/backoffice/villas', label: '빌라 목록', Icon: BuildingOffice2Icon },
-  { href: '/backoffice/users', label: '사용자', Icon: UsersIcon },
-  { href: '/backoffice/billing', label: '청구 현황', Icon: DocumentTextIcon },
-  { href: '/backoffice/mrr', label: 'MRR 모니터링', Icon: CurrencyDollarIcon },
+  { href: '/dashboard', label: '대시보드', Icon: ChartBarIcon },
+  { href: '/villas', label: '빌라 목록', Icon: BuildingOffice2Icon },
+  { href: '/users', label: '사용자', Icon: UsersIcon },
+  { href: '/billing', label: '청구 현황', Icon: DocumentTextIcon },
+  { href: '/mrr', label: 'MRR 모니터링', Icon: CurrencyDollarIcon },
 ];
 
 const contentItems: SidebarItem[] = [
-  { href: '/backoffice/content/notices', label: '공지사항', Icon: MegaphoneIcon },
-  { href: '/backoffice/content/faqs', label: 'FAQ', Icon: QuestionMarkCircleIcon },
-  { href: '/backoffice/content/guides', label: '가이드', Icon: BookOpenIcon },
+  { href: '/content/notices', label: '공지사항', Icon: MegaphoneIcon },
+  { href: '/content/faqs', label: 'FAQ', Icon: QuestionMarkCircleIcon },
+  { href: '/content/guides', label: '가이드', Icon: BookOpenIcon },
 ];
 
 function SidebarLink({ item }: { item: SidebarItem }) {

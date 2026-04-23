@@ -40,7 +40,16 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // 백오피스 페이지 서버 사이드 인증 (로그인 페이지 제외)
-  if (pathname.startsWith('/backoffice/') && pathname !== '/backoffice/login') {
+  const isBackofficePage =
+    (pathname.startsWith('/backoffice/') && pathname !== '/backoffice/login') ||
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/villas') ||
+    pathname.startsWith('/users') ||
+    pathname.startsWith('/billing') ||
+    pathname.startsWith('/mrr') ||
+    pathname.startsWith('/content');
+
+  if (isBackofficePage) {
     const boSession = req.cookies.get('bo_session')?.value;
     if (!boSession) {
       return NextResponse.redirect(new URL('/backoffice/login', req.url));
@@ -104,5 +113,18 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/backoffice/:path*'],
+  matcher: [
+    '/api/:path*',
+    '/backoffice/:path*',
+    '/dashboard/:path*',
+    '/dashboard',
+    '/villas/:path*',
+    '/villas',
+    '/users/:path*',
+    '/users',
+    '/billing/:path*',
+    '/billing',
+    '/mrr',
+    '/content/:path*',
+  ],
 };
