@@ -114,6 +114,17 @@ export async function PATCH(
     };
     const { title, content, category, isNotice, imageUrl } = body;
 
+    // 공지 승격은 ADMIN 전용
+    if (isNotice === true) {
+      const villa = await prisma.villa.findUnique({
+        where: { id: villaId },
+        select: { adminId: true },
+      });
+      if (!villa || villa.adminId !== user.sub) {
+        return err('공지 승격은 관리자만 가능합니다.', 403);
+      }
+    }
+
     if (!title?.trim() || !content?.trim()) {
       return err('제목과 내용을 입력해주세요.', 400);
     }

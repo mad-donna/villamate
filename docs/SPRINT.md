@@ -40,12 +40,12 @@
 
 | # | 파일 | 내용 | 상태 |
 |---|------|------|------|
-| M-1 | `app/(admin)/manage/facilities/page.tsx` | 삭제·토글 시 `res.ok` 미체크로 오류 묵살 | ⬜ |
-| M-2 | `app/(admin)/manage/vendors/page.tsx` | 삭제 시 `res.ok` 미체크 (`handleDelete`) | ⬜ |
-| M-4 | `app/api/resident/payments/history/route.ts` | role 검증 없음 — 모든 인증 사용자 접근 가능 | ⬜ |
-| M-5 | `app/api/villas/[villaId]/posts/[postId]/route.ts` | PATCH 공지 승격 시 ADMIN 권한 미검증 | ⬜ |
+| M-1 | `app/(admin)/manage/facilities/page.tsx` | 삭제·토글 시 `res.ok` 미체크로 오류 묵살 | ✅ |
+| M-2 | `app/(admin)/manage/vendors/page.tsx` | 삭제 시 `res.ok` 미체크 (`handleDelete`) | ✅ |
+| M-4 | `app/api/resident/payments/history/route.ts` | role 검증 없음 — 모든 인증 사용자 접근 가능 | ✅ |
+| M-5 | `app/api/villas/[villaId]/posts/[postId]/route.ts` | PATCH 공지 승격 시 ADMIN 권한 미검증 | ✅ |
 | M-6 | `app/api/admin/insights/route.ts` | 월별 집계를 JS에서 처리 → DB `groupBy`로 교체 권장 | ⬜ |
-| M-8 | `lib/notify.ts` `createNotificationForVilla` | `status: 'APPROVED'` 필터 누락 — PENDING 세대에게 알림 발송 | ⬜ |
+| M-8 | `lib/notify.ts` `createNotificationForVilla` | `status: 'APPROVED'` 필터 누락 — PENDING 세대에게 알림 발송 | ✅ |
 
 ### 🎨 디자인 — 즉시 수정 가능
 

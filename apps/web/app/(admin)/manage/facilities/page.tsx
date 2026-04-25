@@ -79,16 +79,26 @@ export default function FacilitiesPage() {
   };
 
   const handleToggle = async (f: Facility) => {
-    await apiFetch(`/api/admin/facilities/${f.id}`, {
+    const res = await apiFetch(`/api/admin/facilities/${f.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ isActive: !f.isActive }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError((data as { error?: string } | null)?.error ?? '상태 변경 중 오류가 발생했습니다.');
+      return;
+    }
     fetchFacilities();
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('이 시설을 삭제하시겠습니까?')) return;
-    await apiFetch(`/api/admin/facilities/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/admin/facilities/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError((data as { error?: string } | null)?.error ?? '삭제 중 오류가 발생했습니다.');
+      return;
+    }
     fetchFacilities();
   };
 

@@ -81,16 +81,13 @@ export default function VendorsPage() {
     setSubmitting(true);
     setError(null);
     try {
-      if (editTarget) {
-        await apiFetch(`/api/admin/vendors/${editTarget.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(form),
-        });
-      } else {
-        await apiFetch('/api/admin/vendors', {
-          method: 'POST',
-          body: JSON.stringify(form),
-        });
+      const res = editTarget
+        ? await apiFetch(`/api/admin/vendors/${editTarget.id}`, { method: 'PATCH', body: JSON.stringify(form) })
+        : await apiFetch('/api/admin/vendors', { method: 'POST', body: JSON.stringify(form) });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError((data as { error?: string } | null)?.error ?? '저장 중 오류가 발생했습니다.');
+        return;
       }
       setShowForm(false);
       fetchVendors();
@@ -103,7 +100,12 @@ export default function VendorsPage() {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('이 업체를 삭제하시겠습니까?')) return;
-    await apiFetch(`/api/admin/vendors/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/admin/vendors/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError((data as { error?: string } | null)?.error ?? '삭제 중 오류가 발생했습니다.');
+      return;
+    }
     fetchVendors();
   };
 

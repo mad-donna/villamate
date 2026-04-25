@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 export async function GET(req: NextRequest) {
   const user = await getUser(req);
   if (!user) return err('Unauthorized', 401);
+  if (user.role !== 'RESIDENT' && user.role !== 'ADMIN') return err('접근 권한이 없습니다.', 403);
 
   const { searchParams } = new URL(req.url);
   const statusFilter = searchParams.get('status') as 'PAID' | 'PENDING' | 'OVERDUE' | null;

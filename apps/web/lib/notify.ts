@@ -23,7 +23,7 @@ export async function createNotificationForVilla(
   body: string,
 ) {
   const records = await prisma.residentRecord.findMany({
-    where: { villaId },
+    where: { villaId, status: 'APPROVED' },
     select: { userId: true },
   });
   const adminVilla = await prisma.villa.findUnique({
