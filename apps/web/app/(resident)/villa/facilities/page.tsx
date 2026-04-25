@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { apiFetch } from '@/lib/client-api';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface Reservation {
   id: string;
@@ -27,6 +28,7 @@ interface FacilitiesResponse {
 }
 
 export default function FacilitiesPage() {
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [today, setToday] = useState('');
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,8 @@ export default function FacilitiesPage() {
   };
 
   const handleCancel = async (facilityId: string, reservationId: string) => {
-    if (!window.confirm('예약을 취소하시겠습니까?')) return;
+    const ok = await confirmDialog({ title: '예약 취소', description: '예약을 취소하시겠습니까?', confirmLabel: '취소하기', variant: 'destructive' });
+    if (!ok) return;
     await apiFetch(`/api/resident/facilities/${facilityId}/reservations/${reservationId}`, {
       method: 'DELETE',
     });
@@ -110,6 +113,7 @@ export default function FacilitiesPage() {
 
   return (
     <main className="px-4 pt-6 pb-24 min-h-screen bg-neutral-50">
+      {confirmDialogEl}
       <h1 className="text-xl font-bold text-neutral-900 mb-2">공용시설 예약</h1>
       <p className="text-sm text-neutral-500 mb-6">오늘 예약 현황을 확인하고 예약하세요.</p>
 
@@ -164,7 +168,7 @@ export default function FacilitiesPage() {
                         <button
                           type="button"
                           onClick={() => handleCancel(f.id, r.id)}
-                          className="text-xs text-error-600 font-medium min-h-[32px] px-2"
+                          className="text-xs text-error-600 font-medium min-h-[44px] px-2"
                         >
                           취소
                         </button>

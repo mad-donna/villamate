@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { apiFetch } from '@/lib/client-api';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface Facility {
   id: string;
@@ -23,6 +24,7 @@ interface FormState {
 const EMPTY_FORM: FormState = { name: '', description: '', maxPerDay: 1 };
 
 export default function FacilitiesPage() {
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -92,7 +94,7 @@ export default function FacilitiesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('이 시설을 삭제하시겠습니까?')) return;
+    if (!await confirmDialog({ title: '시설 삭제', description: '이 시설을 삭제하시겠습니까?', confirmLabel: '삭제', variant: 'destructive' })) return;
     const res = await apiFetch(`/api/admin/facilities/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
@@ -104,6 +106,7 @@ export default function FacilitiesPage() {
 
   return (
     <main className="px-4 pt-6 pb-24 min-h-screen bg-neutral-50">
+      {confirmDialogEl}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-neutral-900">공용시설 관리</h1>
@@ -152,21 +155,21 @@ export default function FacilitiesPage() {
                   <button
                     type="button"
                     onClick={() => handleToggle(f)}
-                    className="text-xs text-neutral-500 bg-neutral-100 px-2 py-1 rounded-lg min-h-[32px]"
+                    className="text-xs text-neutral-500 bg-neutral-100 px-2 py-1 rounded-lg min-h-[44px]"
                   >
                     {f.isActive ? '중단' : '재개'}
                   </button>
                   <button
                     type="button"
                     onClick={() => openEdit(f)}
-                    className="text-xs text-primary-600 bg-primary-50 px-2 py-1 rounded-lg min-h-[32px]"
+                    className="text-xs text-primary-600 bg-primary-50 px-2 py-1 rounded-lg min-h-[44px]"
                   >
                     수정
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(f.id)}
-                    className="text-xs text-error-600 bg-error-50 px-2 py-1 rounded-lg min-h-[32px]"
+                    className="text-xs text-error-600 bg-error-50 px-2 py-1 rounded-lg min-h-[44px]"
                   >
                     삭제
                   </button>

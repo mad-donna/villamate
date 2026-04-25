@@ -8,6 +8,7 @@ import { getAmountStep, setAmountStep, PRESET_STEPS } from '@/lib/amount-step';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useConfirm } from '@/hooks/useConfirm';
+import { useToast } from '@/hooks/useToast';
 
 interface SectionItem {
   label: string;
@@ -321,6 +322,7 @@ export default function AdminProfilePage() {
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerError, setRegisterError] = useState('');
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
+  const { toast, toastEl } = useToast();
 
   useEffect(() => {
     setUser(getUser());
@@ -345,14 +347,13 @@ export default function AdminProfilePage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        // toast 대신 간단한 alert은 이미 useConfirm으로 처리 불가이므로 메시지 표시
-        window.alert(data.error ?? '탈퇴에 실패했습니다.');
+        toast(data.error ?? '탈퇴에 실패했습니다.', 'error');
         return;
       }
       clearAuth();
       router.push('/login');
     } catch {
-      window.alert('네트워크 오류가 발생했습니다.');
+      toast('네트워크 오류가 발생했습니다.', 'error');
     } finally {
       setWithdrawing(false);
     }
@@ -482,6 +483,7 @@ export default function AdminProfilePage() {
   return (
     <main className="pt-6 pb-24">
       {confirmDialogEl}
+      {toastEl}
       {/* 아바타 + 사용자 정보 */}
       <div className="flex flex-col items-center gap-3 px-4 mb-8">
         <ProfileAvatar name={user?.name ?? '?'} />

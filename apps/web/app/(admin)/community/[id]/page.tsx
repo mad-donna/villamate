@@ -4,6 +4,8 @@ import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useConfirm } from '@/hooks/useConfirm';
+import { useToast } from '@/hooks/useToast';
 
 interface Author {
   id: string;
@@ -43,6 +45,9 @@ export default function AdminPostDetailPage({
 }) {
   const { id: postId } = use(params);
   const router = useRouter();
+
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
+  const { toast, toastEl } = useToast();
 
   const [villaId, setVillaId] = useState('');
   const [userId, setUserId] = useState('');
@@ -124,7 +129,7 @@ export default function AdminPostDetailPage({
 
   async function handleDelete() {
     if (!post || !villaId) return;
-    const confirmed = window.confirm('게시글을 삭제하시겠습니까?');
+    const confirmed = await confirmDialog({ title: '게시글 삭제', description: '게시글을 삭제하시겠습니까?', confirmLabel: '삭제', variant: 'destructive' });
     if (!confirmed) return;
 
     setDeleting(true);
@@ -140,7 +145,7 @@ export default function AdminPostDetailPage({
       }
       router.back();
     } catch (e) {
-      alert(e instanceof Error ? e.message : '삭제에 실패했습니다.');
+      toast(e instanceof Error ? e.message : '삭제에 실패했습니다.', 'error');
     } finally {
       setDeleting(false);
     }
@@ -166,6 +171,8 @@ export default function AdminPostDetailPage({
 
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
+      {confirmDialogEl}
+      {toastEl}
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 pt-6 pb-4">
         <button

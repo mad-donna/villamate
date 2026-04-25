@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearAuth } from '@/lib/client-auth';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface Resident {
   id: string;
@@ -14,6 +15,7 @@ interface Resident {
 
 export default function TransferAdminPage() {
   const router = useRouter();
+  const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [villaId, setVillaId] = useState('');
   const [residents, setResidents] = useState<Resident[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,9 +43,12 @@ export default function TransferAdminPage() {
   async function handleTransfer() {
     if (!selected || !villaId || transferring) return;
 
-    const confirmed = window.confirm(
-      `정말로 ${selected.user.name}님(${selected.roomNumber}호)에게 동대표 권한을 이양하시겠습니까?\n\n이 작업은 되돌릴 수 없으며, 현재 계정은 로그아웃됩니다.`,
-    );
+    const confirmed = await confirmDialog({
+      title: '동대표 권한 이양',
+      description: `${selected.user.name}님(${selected.roomNumber}호)에게 권한을 이양하시겠습니까? 이 작업은 되돌릴 수 없으며 현재 계정은 로그아웃됩니다.`,
+      confirmLabel: '이양하기',
+      variant: 'destructive',
+    });
     if (!confirmed) return;
 
     setTransferring(true);
@@ -57,7 +62,6 @@ export default function TransferAdminPage() {
       const data = await res.json() as { error?: string; message?: string };
       if (!res.ok) throw new Error(data.error ?? '권한 이양에 실패했습니다.');
 
-      alert(data.message ?? '동대표 권한이 이양되었습니다. 다시 로그인해주세요.');
       clearAuth();
       router.push('/login');
     } catch (err) {
@@ -69,6 +73,7 @@ export default function TransferAdminPage() {
 
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
+      {confirmDialogEl}
       {/* 헤더 */}
       <div className="flex items-center gap-3 px-4 pt-6 pb-4">
         <button

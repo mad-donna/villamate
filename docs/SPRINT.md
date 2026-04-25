@@ -51,9 +51,9 @@
 
 | # | 파일 | 내용 | 상태 |
 |---|------|------|------|
-| D-1 | 앱 전반 | `window.confirm` / `window.alert` → `ConfirmDialog` / `Toast` 컴포넌트 교체 | ⬜ |
-| D-2 | `app/(resident)/villa/invoices/page.tsx`, `villa/invoices/history/page.tsx` | 납부 상태 Badge 시맨틱 역전 수정 — PENDING=`warning`, OVERDUE=`error` | ⬜ |
-| D-3 | facilities, vendors, 기타 인라인 버튼 | 삭제 버튼 터치 타깃 `min-h-[32px]` → `min-h-[44px]` | ⬜ |
+| D-1 | 앱 전반 | `window.confirm` / `window.alert` → `ConfirmDialog` / `Toast` 컴포넌트 교체 | ✅ |
+| D-2 | `app/(resident)/villa/invoices/page.tsx`, `villa/invoices/history/page.tsx` | 납부 상태 Badge 시맨틱 역전 수정 — PENDING=`warning`, OVERDUE=`error` | ✅ |
+| D-3 | facilities, vendors, 기타 인라인 버튼 | 삭제 버튼 터치 타깃 `min-h-[32px]` → `min-h-[44px]` | ✅ |
 
 ### 🔵 Low
 

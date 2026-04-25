@@ -6,6 +6,7 @@ import Script from 'next/script';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import InvoicePDFButton from '@/components/InvoicePDFButton';
+import { useToast } from '@/hooks/useToast';
 
 interface InvoicePayment {
   id: string;
@@ -62,11 +63,12 @@ function getUserInfo(): {
 
 const statusBadgeVariant = {
   PAID: 'success',
-  PENDING: 'error',
-  OVERDUE: 'warning',
+  PENDING: 'warning',
+  OVERDUE: 'error',
 } as const;
 
 export default function ResidentInvoicePage() {
+  const { toast, toastEl } = useToast();
   const [payments, setPayments] = useState<InvoicePayment[]>([]);
   const [villaInfo, setVillaInfo] = useState<VillaInfo | null>(null);
   const [roomNumber, setRoomNumber] = useState('');
@@ -127,19 +129,19 @@ export default function ResidentInvoicePage() {
   const handlePay = useCallback(
     async (payment: InvoicePayment) => {
       if (!sdkReady) {
-        window.alert('결제 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+        toast('결제 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.', 'error');
         return;
       }
 
       const impCode = process.env.NEXT_PUBLIC_PORTONE_IMP_CODE;
       if (!impCode) {
-        window.alert('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.');
+        toast('결제 설정이 올바르지 않습니다. 관리자에게 문의해주세요.', 'error');
         return;
       }
 
       const { villaId, token, name, phone } = getUserInfo();
       if (!villaId || !token) {
-        window.alert('로그인 정보를 확인할 수 없습니다. 다시 로그인해주세요.');
+        toast('로그인 정보를 확인할 수 없습니다. 다시 로그인해주세요.', 'error');
         return;
       }
 
@@ -163,7 +165,7 @@ export default function ResidentInvoicePage() {
           },
           async (response: PortOneResponse) => {
             if (!response.success || !response.imp_uid) {
-              window.alert(`결제에 실패했습니다.\n${response.error_msg ?? ''}`);
+              toast(`결제에 실패했습니다. ${response.error_msg ?? ''}`.trim(), 'error');
               setPayingId(null);
               return;
             }
@@ -185,9 +187,7 @@ export default function ResidentInvoicePage() {
               const verifyData = await verifyRes.json();
 
               if (!verifyRes.ok || verifyData.error) {
-                window.alert(
-                  `결제 검증 실패: ${verifyData.error ?? '알 수 없는 오류가 발생했습니다.'}\n고객센터에 문의해주세요.`,
-                );
+                toast(`결제 검증 실패: ${verifyData.error ?? '알 수 없는 오류'}. 고객센터에 문의해주세요.`, 'error');
                 setPayingId(null);
                 return;
               }
@@ -206,16 +206,16 @@ export default function ResidentInvoicePage() {
                 ),
               );
 
-              window.alert('납부가 완료되었습니다.');
+              toast('납부가 완료되었습니다.', 'success');
             } catch {
-              window.alert('결제 검증 중 네트워크 오류가 발생했습니다. 고객센터에 문의해주세요.');
+              toast('결제 검증 중 네트워크 오류가 발생했습니다. 고객센터에 문의해주세요.', 'error');
             } finally {
               setPayingId(null);
             }
           },
         );
       } catch {
-        window.alert('결제창을 열 수 없습니다. 잠시 후 다시 시도해주세요.');
+        toast('결제창을 열 수 없습니다. 잠시 후 다시 시도해주세요.', 'error');
         setPayingId(null);
       }
     },
@@ -240,6 +240,7 @@ export default function ResidentInvoicePage() {
       />
 
       <main className="px-4 pt-6 pb-12">
+        {toastEl}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-neutral-900">관리비 내역</h1>
           <Link

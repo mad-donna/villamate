@@ -76,15 +76,16 @@ export default function InvoicePDFButton({
   className = '',
 }: InvoicePDFButtonProps) {
   const [sharing, setSharing] = useState(false);
+  const [popupBlocked, setPopupBlocked] = useState(false);
 
   const openPrintPopup = () => {
     const html = buildPrintHtml(invoiceData);
     const popup = window.open('', '_blank', 'width=700,height=900,scrollbars=yes');
     if (!popup) {
-      // 팝업 차단 시 fallback 안내
-      window.alert('팝업이 차단되었습니다. 브라우저 팝업 허용 설정 후 다시 시도해 주세요.');
+      setPopupBlocked(true);
       return;
     }
+    setPopupBlocked(false);
     popup.document.write(html);
     popup.document.close();
   };
@@ -120,16 +121,23 @@ export default function InvoicePDFButton({
   const label = '청구서 저장';
 
   return (
-    <Button
-      variant="secondary"
-      size={size}
-      loading={sharing}
-      onClick={handleClick}
-      className={['gap-1.5', className].join(' ')}
-      aria-label={`${formatMonth(invoiceData.billingMonth)} 청구서 저장`}
-    >
-      {sharing ? <ShareIcon /> : <PrintIcon />}
-      {label}
-    </Button>
+    <div className="flex flex-col gap-1">
+      <Button
+        variant="secondary"
+        size={size}
+        loading={sharing}
+        onClick={handleClick}
+        className={['gap-1.5', className].join(' ')}
+        aria-label={`${formatMonth(invoiceData.billingMonth)} 청구서 저장`}
+      >
+        {sharing ? <ShareIcon /> : <PrintIcon />}
+        {label}
+      </Button>
+      {popupBlocked && (
+        <p className="text-xs text-error-500 text-center">
+          팝업이 차단되었습니다. 브라우저 팝업 허용 후 다시 시도해주세요.
+        </p>
+      )}
+    </div>
   );
 }

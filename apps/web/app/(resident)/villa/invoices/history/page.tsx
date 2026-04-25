@@ -29,8 +29,8 @@ const FILTER_TABS: { key: StatusFilter; label: string }[] = [
 
 const statusBadgeVariant = {
   PAID: 'success',
-  PENDING: 'error',
-  OVERDUE: 'warning',
+  PENDING: 'warning',
+  OVERDUE: 'error',
 } as const;
 
 const statusLabel = {
