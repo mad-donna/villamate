@@ -59,10 +59,10 @@
 
 | # | 내용 | 상태 |
 |---|------|------|
-| L-2 | 예약 바텀시트 `today` 초기화 타이밍 의존성 (`app/(resident)/villa/facilities/page.tsx`) | ⬜ |
-| L-3 | 오늘 날짜 예약 조회 시 미래 예약 미표시 | ⬜ |
-| L-4 | `InsightsSection` 로드 실패 무음 처리 — 에러 상태 표시 추가 | ⬜ |
-| L-5 | 장부 API — 입주민에게 전체 내역 노출 여부 정책 확인 필요 | ⬜ |
+| L-2 | 예약 바텀시트 `today` 초기화 타이밍 의존성 (`app/(resident)/villa/facilities/page.tsx`) | ✅ |
+| L-3 | 오늘 날짜 예약 조회 시 미래 예약 미표시 | ✅ |
+| L-4 | `InsightsSection` 로드 실패 무음 처리 — 에러 상태 표시 추가 | ✅ |
+| L-5 | 장부 API — 입주민에게 전체 내역 노출 여부 정책 확인 필요 | 🔄 현재 입주민에게 전체 내역 노출 중. 제한이 필요하면 `assertVillaAccess` 수정 필요 |
 
 ---
 

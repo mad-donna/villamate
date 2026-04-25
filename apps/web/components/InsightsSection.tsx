@@ -24,11 +24,12 @@ function formatMonth(ym: string) {
 export function InsightsSection() {
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     apiGet<InsightsData>('/api/admin/insights')
       .then(setData)
-      .catch(() => {/* 인사이트 로드 실패는 홈 UX에 영향 없음 */})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -41,7 +42,16 @@ export function InsightsSection() {
     );
   }
 
-  if (!data) return null;
+  if (error || !data) {
+    return (
+      <section aria-label="수금 현황" className="space-y-3">
+        <h2 className="text-sm font-semibold text-neutral-600">수금 현황</h2>
+        <div className="bg-white rounded-2xl shadow-sm p-4 text-center">
+          <p className="text-sm text-neutral-400">수금 현황을 불러오지 못했습니다.</p>
+        </div>
+      </section>
+    );
+  }
 
   const maxAmount = Math.max(...data.monthlyCollection.map((m) => m.amount), 1);
 

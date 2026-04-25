@@ -12,14 +12,16 @@ export async function GET(req: NextRequest) {
   });
   if (!record) return err('입주민 정보를 찾을 수 없습니다.', 404);
 
-  const today = new Date().toISOString().slice(0, 10);
+  // KST 기준 오늘 날짜
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const facilities = await prisma.facility.findMany({
     where: { villaId: record.villaId, isActive: true },
     include: {
       reservations: {
-        where: { date: today },
-        select: { id: true, userId: true, roomNumber: true, timeSlot: true, note: true },
+        where: { date: { gte: today } },
+        select: { id: true, userId: true, roomNumber: true, date: true, timeSlot: true, note: true },
+        orderBy: { date: 'asc' },
       },
     },
     orderBy: { createdAt: 'asc' },

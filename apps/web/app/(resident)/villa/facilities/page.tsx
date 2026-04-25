@@ -10,6 +10,7 @@ interface Reservation {
   id: string;
   userId: string;
   roomNumber: string;
+  date: string;
   timeSlot: string | null;
   note: string | null;
 }
@@ -27,17 +28,21 @@ interface FacilitiesResponse {
   today: string;
 }
 
+function getKSTToday() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export default function FacilitiesPage() {
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [facilities, setFacilities] = useState<Facility[]>([]);
-  const [today, setToday] = useState('');
+  const [today, setToday] = useState(getKSTToday);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [myUserId, setMyUserId] = useState('');
 
   // 예약 폼 상태
   const [reservingId, setReservingId] = useState<string | null>(null);
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(getKSTToday);
   const [timeSlot, setTimeSlot] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -130,7 +135,9 @@ export default function FacilitiesPage() {
         {facilities.map((f) => {
           const myReservations = f.reservations.filter((r) => r.userId === myUserId);
           const otherReservations = f.reservations.filter((r) => r.userId !== myUserId);
-          const canReserve = myReservations.length < f.maxPerDay;
+          const todayReservationsCount = f.reservations.filter((r) => r.date === today).length;
+          const myTodayCount = myReservations.filter((r) => r.date === today).length;
+          const canReserve = myTodayCount < f.maxPerDay;
 
           return (
             <li key={f.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -142,7 +149,7 @@ export default function FacilitiesPage() {
                       <p className="text-sm text-neutral-500 mt-0.5">{f.description}</p>
                     )}
                     <p className="text-xs text-neutral-400 mt-1">
-                      세대당 하루 최대 {f.maxPerDay}회 · 오늘 총 {f.reservations.length}건 예약
+                      세대당 하루 최대 {f.maxPerDay}회 · 오늘 총 {todayReservationsCount}건 예약
                     </p>
                   </div>
                   {canReserve && (
@@ -159,8 +166,11 @@ export default function FacilitiesPage() {
                         className="flex items-center justify-between bg-primary-50 rounded-xl px-3 py-2"
                       >
                         <div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <Badge variant="info">내 예약</Badge>
+                            {r.date !== today && (
+                              <span className="text-xs font-medium text-primary-700">{r.date}</span>
+                            )}
                             {r.timeSlot && <span className="text-xs text-neutral-600">{r.timeSlot}</span>}
                           </div>
                           {r.note && <p className="text-xs text-neutral-500 mt-0.5">{r.note}</p>}
@@ -177,10 +187,10 @@ export default function FacilitiesPage() {
                   </div>
                 )}
 
-                {/* 다른 입주민 예약 */}
-                {otherReservations.length > 0 && (
+                {/* 다른 입주민 예약 (오늘 날짜만 표시) */}
+                {otherReservations.filter((r) => r.date === today).length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {otherReservations.map((r) => (
+                    {otherReservations.filter((r) => r.date === today).map((r) => (
                       <div key={r.id} className="flex items-center gap-2 text-xs text-neutral-500 bg-neutral-50 rounded-lg px-3 py-1.5">
                         <span>{r.roomNumber}호</span>
                         {r.timeSlot && <span>{r.timeSlot}</span>}
