@@ -126,16 +126,8 @@ export default function OnboardingPage() {
       // 관리자가 자신의 빌라에 입주민으로도 등록하는 경우
       if (isAlsoResident && adminRoomNumber.trim()) {
         const normalizedRoom = adminRoomNumber.trim().replace(/호$/, '');
-        const joinRes = await fetch(`/api/villas/${data.id}/residents/join`, {
+        const joinRes = await apiFetch(`/api/villas/${data.id}/residents/join`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(data.token
-              ? { Authorization: `Bearer ${data.token}` }
-              : token
-              ? { Authorization: `Bearer ${token}` }
-              : {}),
-          },
           body: JSON.stringify({ roomNumber: normalizedRoom }),
         });
 
