@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     include: {
       reservations: {
         where: { date: { gte: today } },
-        select: { id: true, userId: true, roomNumber: true, date: true, timeSlot: true, note: true },
+        select: { id: true, userId: true, roomNumber: true, date: true, startTime: true, endTime: true, note: true },
         orderBy: { date: 'asc' },
       },
     },

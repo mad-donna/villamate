@@ -11,7 +11,8 @@ interface Reservation {
   userId: string;
   roomNumber: string;
   date: string;
-  timeSlot: string | null;
+  startTime: string | null;
+  endTime: string | null;
   note: string | null;
 }
 
@@ -19,7 +20,9 @@ interface Facility {
   id: string;
   name: string;
   description: string | null;
-  maxPerDay: number;
+  openTime: string | null;
+  closeTime: string | null;
+  maxConcurrent: number;
   reservations: Reservation[];
 }
 
@@ -32,6 +35,11 @@ function getKSTToday() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function formatTimeRange(startTime: string | null, endTime: string | null) {
+  if (!startTime || !endTime) return null;
+  return `${startTime} ~ ${endTime}`;
+}
+
 export default function FacilitiesPage() {
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
   const [facilities, setFacilities] = useState<Facility[]>([]);
@@ -41,9 +49,10 @@ export default function FacilitiesPage() {
   const [myUserId, setMyUserId] = useState('');
 
   // 예약 폼 상태
-  const [reservingId, setReservingId] = useState<string | null>(null);
+  const [reservingFacility, setReservingFacility] = useState<Facility | null>(null);
   const [date, setDate] = useState(getKSTToday);
-  const [timeSlot, setTimeSlot] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -70,27 +79,31 @@ export default function FacilitiesPage() {
 
   useEffect(() => { fetchFacilities(); }, []);
 
-  const openReserve = (id: string) => {
-    setReservingId(id);
+  const openReserve = (f: Facility) => {
+    setReservingFacility(f);
     setDate(today);
-    setTimeSlot('');
+    setStartTime(f.openTime ?? '');
+    setEndTime('');
     setNote('');
     setFormError(null);
   };
 
   const handleReserve = async () => {
-    if (!reservingId) return;
+    if (!reservingFacility) return;
     if (!date) { setFormError('날짜를 선택해주세요.'); return; }
+    if (!startTime) { setFormError('시작 시간을 입력해주세요.'); return; }
+    if (!endTime) { setFormError('종료 시간을 입력해주세요.'); return; }
+    if (startTime >= endTime) { setFormError('종료 시간은 시작 시간보다 늦어야 합니다.'); return; }
     setSubmitting(true);
     setFormError(null);
     try {
-      const res = await apiFetch(`/api/resident/facilities/${reservingId}/reservations`, {
+      const res = await apiFetch(`/api/resident/facilities/${reservingFacility.id}/reservations`, {
         method: 'POST',
-        body: JSON.stringify({ date, timeSlot: timeSlot || undefined, note: note || undefined }),
+        body: JSON.stringify({ date, startTime, endTime, note: note || undefined }),
       });
       const data = await res.json() as { error?: string };
       if (data.error) { setFormError(data.error); return; }
-      setReservingId(null);
+      setReservingFacility(null);
       fetchFacilities();
     } catch {
       setFormError('예약 중 오류가 발생했습니다.');
@@ -134,10 +147,8 @@ export default function FacilitiesPage() {
       <ul className="space-y-4">
         {facilities.map((f) => {
           const myReservations = f.reservations.filter((r) => r.userId === myUserId);
-          const otherReservations = f.reservations.filter((r) => r.userId !== myUserId);
-          const todayReservationsCount = f.reservations.filter((r) => r.date === today).length;
-          const myTodayCount = myReservations.filter((r) => r.date === today).length;
-          const canReserve = myTodayCount < f.maxPerDay;
+          const otherTodayReservations = f.reservations.filter((r) => r.userId !== myUserId && r.date === today);
+          const todayCount = f.reservations.filter((r) => r.date === today).length;
 
           return (
             <li key={f.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -149,12 +160,11 @@ export default function FacilitiesPage() {
                       <p className="text-sm text-neutral-500 mt-0.5">{f.description}</p>
                     )}
                     <p className="text-xs text-neutral-400 mt-1">
-                      세대당 하루 최대 {f.maxPerDay}회 · 오늘 총 {todayReservationsCount}건 예약
+                      {f.openTime && f.closeTime ? `${f.openTime} ~ ${f.closeTime}` : '운영시간 미설정'}
+                      {' · '}동시 최대 {f.maxConcurrent}건 · 오늘 {todayCount}건 예약
                     </p>
                   </div>
-                  {canReserve && (
-                    <Button size="sm" onClick={() => openReserve(f.id)}>예약</Button>
-                  )}
+                  <Button size="sm" onClick={() => openReserve(f)}>예약</Button>
                 </div>
 
                 {/* 내 예약 */}
@@ -171,7 +181,9 @@ export default function FacilitiesPage() {
                             {r.date !== today && (
                               <span className="text-xs font-medium text-primary-700">{r.date}</span>
                             )}
-                            {r.timeSlot && <span className="text-xs text-neutral-600">{r.timeSlot}</span>}
+                            {formatTimeRange(r.startTime, r.endTime) && (
+                              <span className="text-xs text-neutral-600">{formatTimeRange(r.startTime, r.endTime)}</span>
+                            )}
                           </div>
                           {r.note && <p className="text-xs text-neutral-500 mt-0.5">{r.note}</p>}
                         </div>
@@ -188,12 +200,14 @@ export default function FacilitiesPage() {
                 )}
 
                 {/* 다른 입주민 예약 (오늘 날짜만 표시) */}
-                {otherReservations.filter((r) => r.date === today).length > 0 && (
+                {otherTodayReservations.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {otherReservations.filter((r) => r.date === today).map((r) => (
+                    {otherTodayReservations.map((r) => (
                       <div key={r.id} className="flex items-center gap-2 text-xs text-neutral-500 bg-neutral-50 rounded-lg px-3 py-1.5">
                         <span>{r.roomNumber}호</span>
-                        {r.timeSlot && <span>{r.timeSlot}</span>}
+                        {formatTimeRange(r.startTime, r.endTime) && (
+                          <span>{formatTimeRange(r.startTime, r.endTime)}</span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -205,17 +219,23 @@ export default function FacilitiesPage() {
       </ul>
 
       {/* 예약 바텀시트 */}
-      {reservingId && (
+      {reservingFacility && (
         <div className="fixed inset-0 z-60 flex flex-col justify-end bg-black/40">
           <div className="bg-white rounded-t-3xl p-6 space-y-4 max-w-lg mx-auto w-full">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-neutral-900">예약하기</h2>
-              <button type="button" onClick={() => setReservingId(null)} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-neutral-400">
+              <button type="button" onClick={() => setReservingFacility(null)} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-neutral-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
+
+            {reservingFacility.openTime && reservingFacility.closeTime && (
+              <p className="text-xs text-neutral-500 bg-neutral-50 rounded-lg px-3 py-2">
+                운영 시간: {reservingFacility.openTime} ~ {reservingFacility.closeTime}
+              </p>
+            )}
 
             {formError && <p className="text-error-500 text-sm" role="alert">{formError}</p>}
 
@@ -231,14 +251,26 @@ export default function FacilitiesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">이용 시간대 (선택)</label>
-                <input
-                  type="text"
-                  value={timeSlot}
-                  onChange={(e) => setTimeSlot(e.target.value)}
-                  className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
-                  placeholder="예: 09:00-10:00"
-                />
+                <label className="block text-sm font-medium text-neutral-700 mb-1">이용 시간 *</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={startTime}
+                    min={reservingFacility.openTime ?? undefined}
+                    max={reservingFacility.closeTime ?? undefined}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+                  />
+                  <span className="text-neutral-400 text-sm">~</span>
+                  <input
+                    type="time"
+                    value={endTime}
+                    min={startTime || (reservingFacility.openTime ?? undefined)}
+                    max={reservingFacility.closeTime ?? undefined}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">메모 (선택)</label>

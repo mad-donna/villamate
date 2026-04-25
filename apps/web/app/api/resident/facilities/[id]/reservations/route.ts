@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server';
 import { getUser, ok, err } from '@/lib/api';
 import { prisma } from '@/lib/prisma';
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/;
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,26 +26,42 @@ export async function POST(
 
   const body = await req.json() as {
     date?: string;
-    timeSlot?: string;
+    startTime?: string;
+    endTime?: string;
     note?: string;
   };
 
-  if (!body.date || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+  if (!body.date || !DATE_RE.test(body.date)) {
     return err('날짜를 올바르게 입력해주세요. (YYYY-MM-DD)');
   }
 
-  // 과거 날짜 예약 방지 (KST 기준)
   const todayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   if (body.date < todayKST) {
     return err('과거 날짜에는 예약할 수 없습니다.');
   }
 
-  // 당일 예약 횟수 제한 확인
-  const todayCount = await prisma.facilityReservation.count({
-    where: { facilityId, userId: user.sub, date: body.date },
+  if (!body.startTime || !TIME_RE.test(body.startTime)) return err('시작 시간을 올바르게 입력해주세요. (HH:MM)');
+  if (!body.endTime || !TIME_RE.test(body.endTime)) return err('종료 시간을 올바르게 입력해주세요. (HH:MM)');
+  if (body.startTime >= body.endTime) return err('종료 시간은 시작 시간보다 늦어야 합니다.');
+
+  if (facility.openTime && body.startTime < facility.openTime) {
+    return err(`운영 시작 시간(${facility.openTime}) 이후로 예약해주세요.`);
+  }
+  if (facility.closeTime && body.endTime > facility.closeTime) {
+    return err(`운영 종료 시간(${facility.closeTime}) 이전으로 예약해주세요.`);
+  }
+
+  // 동시 예약 초과 확인: 시간이 겹치는 예약 수
+  const overlapping = await prisma.facilityReservation.count({
+    where: {
+      facilityId,
+      date: body.date,
+      startTime: { lt: body.endTime },
+      endTime: { gt: body.startTime },
+    },
   });
-  if (todayCount >= facility.maxPerDay) {
-    return err(`하루 최대 ${facility.maxPerDay}회까지 예약할 수 있습니다.`);
+  if (overlapping >= facility.maxConcurrent) {
+    return err(`해당 시간대는 이미 최대 ${facility.maxConcurrent}건 예약되었습니다.`);
   }
 
   const reservation = await prisma.facilityReservation.create({
@@ -52,7 +71,8 @@ export async function POST(
       villaId: record.villaId,
       roomNumber: record.roomNumber,
       date: body.date,
-      timeSlot: body.timeSlot?.trim() ?? null,
+      startTime: body.startTime,
+      endTime: body.endTime,
       note: body.note?.trim() ?? null,
     },
   });

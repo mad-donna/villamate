@@ -10,7 +10,9 @@ interface Facility {
   id: string;
   name: string;
   description: string | null;
-  maxPerDay: number;
+  openTime: string | null;
+  closeTime: string | null;
+  maxConcurrent: number;
   isActive: boolean;
   createdAt: string;
 }
@@ -18,10 +20,12 @@ interface Facility {
 interface FormState {
   name: string;
   description: string;
-  maxPerDay: number;
+  openTime: string;
+  closeTime: string;
+  maxConcurrent: number;
 }
 
-const EMPTY_FORM: FormState = { name: '', description: '', maxPerDay: 1 };
+const EMPTY_FORM: FormState = { name: '', description: '', openTime: '', closeTime: '', maxConcurrent: 1 };
 
 export default function FacilitiesPage() {
   const { confirm: confirmDialog, dialog: confirmDialogEl } = useConfirm();
@@ -51,24 +55,41 @@ export default function FacilitiesPage() {
 
   const openEdit = (f: Facility) => {
     setEditTarget(f);
-    setForm({ name: f.name, description: f.description ?? '', maxPerDay: f.maxPerDay });
+    setForm({
+      name: f.name,
+      description: f.description ?? '',
+      openTime: f.openTime ?? '',
+      closeTime: f.closeTime ?? '',
+      maxConcurrent: f.maxConcurrent,
+    });
     setShowForm(true);
   };
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { setError('이름을 입력해주세요.'); return; }
+    if (form.openTime && form.closeTime && form.openTime >= form.closeTime) {
+      setError('종료 시간은 시작 시간보다 늦어야 합니다.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
+      const payload = {
+        name: form.name,
+        description: form.description,
+        openTime: form.openTime || null,
+        closeTime: form.closeTime || null,
+        maxConcurrent: form.maxConcurrent,
+      };
       if (editTarget) {
         await apiFetch(`/api/admin/facilities/${editTarget.id}`, {
           method: 'PATCH',
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         });
       } else {
         await apiFetch('/api/admin/facilities', {
           method: 'POST',
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         });
       }
       setShowForm(false);
@@ -149,7 +170,10 @@ export default function FacilitiesPage() {
                   {f.description && (
                     <p className="text-sm text-neutral-500 mt-0.5">{f.description}</p>
                   )}
-                  <p className="text-xs text-neutral-400 mt-1">세대당 하루 최대 {f.maxPerDay}회 예약</p>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    {f.openTime && f.closeTime ? `${f.openTime} ~ ${f.closeTime}` : '운영시간 미설정'}
+                    {' · '}동시 최대 {f.maxConcurrent}건
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
@@ -219,12 +243,30 @@ export default function FacilitiesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">세대당 하루 최대 예약 횟수</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">운영 시간 (선택)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={form.openTime}
+                    onChange={(e) => setForm((p) => ({ ...p, openTime: e.target.value }))}
+                    className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+                  />
+                  <span className="text-neutral-400 text-sm">~</span>
+                  <input
+                    type="time"
+                    value={form.closeTime}
+                    onChange={(e) => setForm((p) => ({ ...p, closeTime: e.target.value }))}
+                    className="flex-1 border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">동시 예약 가능 건수</label>
                 <input
                   type="number"
                   min={1}
-                  value={form.maxPerDay}
-                  onChange={(e) => setForm((p) => ({ ...p, maxPerDay: Number(e.target.value) }))}
+                  value={form.maxConcurrent}
+                  onChange={(e) => setForm((p) => ({ ...p, maxConcurrent: Number(e.target.value) }))}
                   className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
                 />
               </div>

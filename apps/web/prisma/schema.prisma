@@ -491,15 +491,17 @@ model EnergyUsage {
 }
 
 model Facility {
-  id           String                @id @default(uuid())
-  villaId      String
-  villa        Villa                 @relation(fields: [villaId], references: [id])
-  name         String
-  description  String?
-  maxPerDay    Int                   @default(1)
-  isActive     Boolean               @default(true)
-  reservations FacilityReservation[]
-  createdAt    DateTime              @default(now())
+  id             String                @id @default(uuid())
+  villaId        String
+  villa          Villa                 @relation(fields: [villaId], references: [id])
+  name           String
+  description    String?
+  openTime       String?               // "HH:MM"
+  closeTime      String?               // "HH:MM"
+  maxConcurrent  Int                   @default(1)
+  isActive       Boolean               @default(true)
+  reservations   FacilityReservation[]
+  createdAt      DateTime              @default(now())
 
   @@index([villaId])
 }
@@ -513,7 +515,8 @@ model FacilityReservation {
   villaId    String
   roomNumber String
   date       String   // "YYYY-MM-DD"
-  timeSlot   String?  // "09:00-10:00"
+  startTime  String?  // "HH:MM"
+  endTime    String?  // "HH:MM"
   note       String?
   createdAt  DateTime @default(now())
 
