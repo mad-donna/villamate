@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { apiFetch } from '@/lib/client-api';
 
 interface InvoiceSummary {
   id: string;
@@ -14,6 +15,11 @@ interface InvoiceSummary {
   createdAt: string;
   paidCount: number;
   totalCount: number;
+}
+
+interface AutoPublishSettings {
+  autoPublishDay: number | null;
+  fixedFee: number | null;
 }
 
 function formatAmount(n: number | string) {
@@ -37,21 +43,138 @@ function getVillaId(): string | null {
   }
 }
 
+function AutoPublishCard({ villaId }: { villaId: string }) {
+  const [settings, setSettings] = useState<AutoPublishSettings>({ autoPublishDay: null, fixedFee: null });
+  const [day, setDay] = useState('');
+  const [fee, setFee] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch(`/api/villas/${villaId}`)
+      .then((r) => r.json())
+      .then((data: AutoPublishSettings & { error?: string }) => {
+        if (data.error) return;
+        setSettings(data);
+        setDay(data.autoPublishDay != null ? String(data.autoPublishDay) : '');
+        setFee(data.fixedFee != null ? String(data.fixedFee) : '');
+      })
+      .catch(() => {});
+  }, [villaId]);
+
+  const handleSave = async () => {
+    const dayNum = day ? Number(day) : null;
+    const feeNum = fee ? Number(fee) : null;
+    if (dayNum !== null && (dayNum < 1 || dayNum > 31)) {
+      setSettingsError('발행일은 1~31 사이로 입력하세요.');
+      return;
+    }
+    if (feeNum !== null && feeNum < 0) {
+      setSettingsError('관리비는 0 이상으로 입력하세요.');
+      return;
+    }
+    setSaving(true);
+    setSettingsError(null);
+    try {
+      const res = await apiFetch(`/api/villas/${villaId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ autoPublishDay: dayNum, fixedFee: feeNum }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setSettingsError((data as { error?: string } | null)?.error ?? '저장 중 오류가 발생했습니다.');
+        return;
+      }
+      setSettings({ autoPublishDay: dayNum, fixedFee: feeNum });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setSettingsError('저장 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isConfigured = settings.autoPublishDay != null;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-4 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="font-semibold text-neutral-900 text-sm">자동 발행 설정</p>
+          <p className="text-xs text-neutral-400 mt-0.5">
+            {isConfigured
+              ? `매월 ${settings.autoPublishDay}일 자동 발행 · 세대당 ${settings.fixedFee != null ? formatAmount(settings.fixedFee) : '금액 미설정'}`
+              : '매월 지정한 날짜에 고정 관리비 청구서를 자동 발행합니다.'}
+          </p>
+        </div>
+        {isConfigured && (
+          <span className="text-xs bg-success-100 text-success-700 px-2 py-0.5 rounded-full font-medium">켜짐</span>
+        )}
+      </div>
+
+      {settingsError && <p className="text-error-500 text-xs mb-2">{settingsError}</p>}
+
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className="block text-xs text-neutral-500 mb-1">발행일 (매월)</label>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            placeholder="예: 25"
+            className="w-full border border-neutral-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs text-neutral-500 mb-1">세대당 고정 관리비</label>
+          <input
+            type="number"
+            min={0}
+            value={fee}
+            onChange={(e) => setFee(e.target.value)}
+            placeholder="예: 150000"
+            className="w-full border border-neutral-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mt-3">
+        {day && fee ? (
+          <p className="text-xs text-neutral-400">
+            매월 {day}일 · 세대당 {Number(fee).toLocaleString('ko-KR')}원
+          </p>
+        ) : (
+          <span />
+        )}
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          {saved ? '저장됨 ✓' : saving ? '저장 중...' : '저장'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function InvoiceListPage() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [villaId, setVillaId] = useState<string | null>(null);
 
   useEffect(() => {
-    const villaId = getVillaId();
-    if (!villaId) {
+    const id = getVillaId();
+    setVillaId(id);
+    if (!id) {
       setError('빌라 정보를 찾을 수 없습니다.');
       setLoading(false);
       return;
     }
 
-    fetch(`/api/villas/${villaId}/invoices`, {
+    fetch(`/api/villas/${id}/invoices`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
       },
@@ -80,6 +203,9 @@ export default function InvoiceListPage() {
           + 새 청구서
         </Button>
       </div>
+
+      {/* 자동 발행 설정 카드 */}
+      {villaId && <AutoPublishCard villaId={villaId} />}
 
       {/* 로딩 */}
       {loading && (

@@ -76,7 +76,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { name, address, totalUnits, roomNumbers, accountBank, accountNumber, autoPublishDay } =
+    const { name, address, totalUnits, roomNumbers, accountBank, accountNumber, autoPublishDay, fixedFee } =
       body as {
         name?: string;
         address?: string;
@@ -85,6 +85,7 @@ export async function PATCH(
         accountBank?: string;
         accountNumber?: string;
         autoPublishDay?: number | null;
+        fixedFee?: number | null;
       };
 
     const updated = await prisma.villa.update({
@@ -97,6 +98,7 @@ export async function PATCH(
         ...(accountBank !== undefined && { accountBank }),
         ...(accountNumber !== undefined && { accountNumber }),
         ...(autoPublishDay !== undefined && { autoPublishDay }),
+        ...(fixedFee !== undefined && { fixedFee }),
       },
     });
 

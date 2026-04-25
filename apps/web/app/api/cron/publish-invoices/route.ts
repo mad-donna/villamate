@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   // autoPublishDay가 오늘인 빌라 조회
   const villas = await prisma.villa.findMany({
     where: { autoPublishDay: day },
-    select: { id: true, name: true, adminId: true },
+    select: { id: true, name: true, adminId: true, fixedFee: true },
   });
 
   if (villas.length === 0) {
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 청구서 + InvoicePayment 트랜잭션 생성
+    const fee = villa.fixedFee ?? 0;
     try {
       await prisma.$transaction(async (tx) => {
         const invoice = await tx.invoice.create({
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
             villaId: villa.id,
             type: 'FIXED',
             billingMonth,
-            totalAmount: 0,
+            totalAmount: fee * headResidents.length,
             memo: null,
           },
         });
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
             invoiceId: invoice.id,
             residentRecordId: r.id,
             roomNumber: r.roomNumber,
-            amount: 0,
+            amount: fee,
             status: 'PENDING',
           })),
         });
@@ -89,7 +90,9 @@ export async function POST(req: NextRequest) {
       villaId: villa.id,
       type: 'SYSTEM',
       title: '청구서가 자동 발행되었습니다',
-      body: `${billingMonth} 청구서가 자동 발행되었습니다. 금액을 입력해주세요.`,
+      body: fee > 0
+        ? `${billingMonth} 고정 관리비 청구서가 자동 발행되었습니다. (세대당 ${fee.toLocaleString('ko-KR')}원)`
+        : `${billingMonth} 청구서가 자동 발행되었습니다. 금액을 입력해주세요.`,
     });
 
     published++;

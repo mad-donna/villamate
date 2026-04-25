@@ -135,6 +135,7 @@ model Villa {
   subscriptionStatus SubscriptionStatus  @default(FREE_TRIAL)
   subscriptionExpiry DateTime?
   autoPublishDay     Int?
+  fixedFee           Int?
   adminId            String
   admin              User                @relation("VillaAdmin", fields: [adminId], references: [id])
   createdAt          DateTime            @default(now())
