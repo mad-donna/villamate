@@ -2787,3 +2787,60 @@ Prisma 스키마 변경 없이 `LedgerTransaction.createdBy = 'system'`으로 �
 | 기존 평문 빌링키 마이그레이션 | High |
 | PortOne 운영 MID 전환 | High |
 | 백오피스 | https://villamate.vercel.app/backoffice/login — 정상 동작 확인 |
+
+---
+
+### Sprint 13 (2026-04-25) — 공용시설 예약 구조 개선 + 인증 헤더 전수 수정
+
+#### 아키텍처 변경
+
+**공용시설 예약 구조 개선**:
+- 기존: 자유 텍스트 `timeSlot` + 하루 최대 건수(`maxPerDay`)
+- 변경: 운영시간(`openTime/closeTime`) + 동시 예약 가능 건수(`maxConcurrent`) + 구조화된 시작/종료 시간(`startTime/endTime`)
+- 예약 충돌 방지: 인터벌 오버랩 알고리즘 (`A.start < B.end AND A.end > B.start`) 으로 겹치는 예약 카운트 >= maxConcurrent 시 거부
+
+**클라이언트 인증 헤더 전수 수정**:
+- `(admin)`, `(resident)` 경로 32개 파일: raw `fetch('/api/...')` → `apiFetch()` 전환
+- 동대표 입주민 모드에서 민원·투표 등 기능 401 오류 완전 해소
+- `/api/upload` (FormData)만 예외 — Authorization 헤더 수동 주입 유지
+
+#### 데이터 모델 변경
+
+| 모델 | 제거 | 추가 |
+|------|------|------|
+| `Facility` | `maxPerDay Int?` | `openTime String?`, `closeTime String?`, `maxConcurrent Int @default(1)` |
+| `FacilityReservation` | `timeSlot String?` | `startTime String?`, `endTime String?` |
+
+`prisma db push --accept-data-loss` 적용 (Vendor 테이블 포함 전체 스키마 동기화 완료).
+
+#### API 변경
+
+| 엔드포인트 | 변경 내용 |
+|-----------|---------|
+| `POST/PATCH /api/admin/facilities` | `maxPerDay` → `openTime/closeTime/maxConcurrent` |
+| `POST /api/resident/facilities/[id]/reservations` | `timeSlot` → `startTime/endTime` + 인터벌 오버랩 검증 |
+
+#### 기술 부채 해소
+
+| 항목 | 상태 |
+|------|------|
+| `lib/client-api.ts` 헬퍼 미활용 (Medium) | **완전 해소** — 32개 파일 apiFetch 전환 완료 |
+| Facility/FacilityReservation/Vendor 테이블 Supabase 미적용 | **해소** — prisma db push 완료 |
+
+#### 현재 제품 상태 (2026-04-25 최종)
+
+| 구분 | 현황 |
+|------|------|
+| 핵심 기능 | 전체 구현 완료 |
+| 공용시설 예약 | 운영시간 + 인터벌 오버랩 기반 예약 (Sprint 13) |
+| 클라이언트 인증 | apiFetch 전수 적용, 인증 오류 전체 해소 |
+| 배포 | https://villamate.vercel.app |
+| 테스트 | 33/33 통과 |
+
+#### 잔여 운영 과제
+
+| 항목 | 우선순위 |
+|------|---------|
+| `BILLING_ENCRYPTION_KEY` Vercel 등록 | Critical |
+| 기존 평문 빌링키 마이그레이션 | High |
+| PortOne 운영 MID 전환 | High |

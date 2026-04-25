@@ -2377,3 +2377,57 @@ Sprint 9(납부+장부), Sprint 12(외부청구+장부) 두 차례. 상태 갱�
 **클라이언트 검증만으로는 불충분**:
 H-1(과거 날짜 예약): 클라이언트 `min={today}` 있어도 API에서 반드시 서버 사이드 재검증 필요.
 - bo_session 쿠키는 `path: '/'`로 발급해야 백오피스 전체 경로에서 미들웨어가 읽을 수 있음
+
+---
+
+## 2026-04-25 — Sprint 13: 공용시설 예약 구조 개선 + apiFetch 전수 전환
+
+### 수정된 파일 목록
+
+#### 공용시설 예약 구조 개선
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `prisma/schema.prisma` | `Facility`: `maxPerDay` 제거, `openTime/closeTime/maxConcurrent` 추가. `FacilityReservation`: `timeSlot` 제거, `startTime/endTime` 추가 |
+| `app/api/admin/facilities/route.ts` | POST 바디 `maxPerDay` → `openTime/closeTime/maxConcurrent`, TIME_RE 형식 검증 추가 |
+| `app/api/admin/facilities/[id]/route.ts` | PATCH 바디 동일 변경, `isActive` 토글 지원 유지 |
+| `app/api/resident/facilities/[id]/reservations/route.ts` | POST: `timeSlot` → `startTime/endTime`, 인터벌 오버랩 검증, 운영시간 범위 검증, HH:MM 형식 검증 |
+| `app/(admin)/manage/facilities/page.tsx` | 폼 필드 `maxPerDay` → `openTime/closeTime/maxConcurrent` (time picker 2개) |
+| `app/(resident)/villa/facilities/page.tsx` | 예약 바텀시트 `timeSlot` → `startTime/endTime` (time input 2개), 운영시간 안내 표시 |
+
+#### 클라이언트 apiFetch 전수 전환 (32개 파일)
+
+**`lib/client-api.ts`**: `API_BASE` 제거, `fetch(path, ...)` 직접 사용
+
+**`(admin)` 경로 변환 파일**:
+- `manage/facilities/page.tsx`, `manage/invoices/page.tsx`, `manage/vendors/page.tsx`
+- `manage/residents/page.tsx`, `manage/residents/[id]/page.tsx`
+- `community/page.tsx`, `community/[id]/page.tsx`, `community/new/page.tsx`
+- `profile/page.tsx`, `profile/transfer-admin/page.tsx`
+- `home/page.tsx`
+
+**`(resident)` 경로 변환 파일**:
+- `villa/tickets/new/page.tsx`, `villa/tickets/page.tsx`, `villa/tickets/[id]/page.tsx`
+- `villa/invoices/page.tsx`, `villa/invoices/history/page.tsx`
+- `villa/facilities/page.tsx`
+- `resident/community/page.tsx`, `resident/community/[id]/page.tsx`, `resident/community/new/page.tsx`
+- `resident/vehicles/page.tsx`
+- `resident/poll/page.tsx`, `resident/poll/[id]/page.tsx`, `resident/poll/new/page.tsx`
+- 기타 resident 경로 페이지들
+
+**예외 유지 (raw fetch)**:
+- `/api/upload` 호출부: FormData multipart — `apiFetch`의 `Content-Type: application/json` 오버라이드 방지
+
+#### 빌드 오류 수정
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `app/(auth)/onboarding/page.tsx` | `const token = localStorage.getItem('token')` 제거 후 잔존 참조 버그. raw fetch → `apiFetch` 전환으로 해소 (saveToken 먼저 호출되므로 apiFetch가 토큰을 읽을 수 있음) |
+
+### 반복 패턴 메모
+
+**FormData 업로드는 `apiFetch` 불가**:
+`apiFetch`는 항상 `Content-Type: application/json` 설정 → multipart boundary 손상. 업로드 파일은 raw `fetch` + `Authorization` 헤더 수동 주입 패턴 사용.
+
+**클라이언트 raw fetch 잔존 위험**:
+새 페이지 추가 시 `fetch('/api/...')` 직접 사용 금지 — 반드시 `apiFetch` 사용. 예외는 FormData 업로드뿐.

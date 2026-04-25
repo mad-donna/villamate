@@ -22,6 +22,7 @@
 | Sprint 10 | 2026-04-21 | D-01~D-04 해소, 인사이트/납부히스토리/시설예약/업체연락처 |
 | Sprint 11 | 2026-04-23 | 백오피스 라우팅 버그 수정, SUPER_ADMIN 계정 생성, 시드 데이터 반영 |
 | Sprint 12 | 2026-04-24~25 | 보안·기능 QA 전수 수정 (H×3, M×5, D×3, L×3), Toast 컴포넌트 신규, fixedFee 고정 관리비 자동 발행 |
+| Sprint 13 | 2026-04-25 | 공용시설 예약 구조 개선 (openTime/closeTime/maxConcurrent + 인터벌 오버랩), apiFetch 전수 전환 (32개 파일), 인증 버그 전체 해소 |
 
 ---
 
@@ -47,7 +48,7 @@
 
 | 항목 | 위험도 | 설명 |
 |------|--------|------|
-| **신규 테이블 Supabase 적용** | **Critical** | Facility / FacilityReservation / Vendor — Supabase SQL Editor 수동 실행 필요. 미적용 시 공용시설·업체 API 런타임 오류 |
+| ~~신규 테이블 Supabase 적용~~ | ~~Critical~~ | ~~Facility / FacilityReservation / Vendor~~ — **Sprint 13에서 `prisma db push` 완료** |
 | `BILLING_ENCRYPTION_KEY` Vercel 등록 | **Critical** | Vercel Dashboard → Environment Variables에 64자 hex 키 등록 필요 |
 | 기존 평문 빌링키 DB 마이그레이션 | High | `decryptBillingKey()` 호환을 위한 one-time 마이그레이션 스크립트 |
 | PortOne 운영 MID 전환 | High | 현재 테스트 MID(`INIpayTest`) 사용 중 — 실결제 전 교체 필요 |

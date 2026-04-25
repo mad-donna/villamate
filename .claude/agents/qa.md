@@ -1048,3 +1048,50 @@ Sprint 12 백로그 High 3건, Medium 5건, Design 3건, Low 3건 전체 수정 
 | L-5 — 장부 입주민 노출 정책 결정 | Low |
 | `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical |
 | 기존 평문 빌링키 마이그레이션 | High |
+
+---
+
+## 2026-04-25 — Sprint 13 QA 결과
+
+### 🔴 버그 리포트 — Unauthorized 오류
+
+**증상**: 동대표(ADMIN) 계정이 입주민 모드로 전환하여 민원 접수, 투표 생성 시 `Unauthorized` 반환.
+
+**근본 원인**: `(admin)`, `(resident)` 경로 클라이언트 페이지들이 raw `fetch('/api/...')` 직접 호출 → `Authorization` 헤더 미포함 → 미들웨어 JWT 검증 실패.
+
+**수정**: `lib/client-api.ts`의 `apiFetch` 헬퍼 전수 적용. 32개 파일 일괄 전환.
+
+**확인된 취약 파일 (예시)**:
+- `app/(resident)/villa/tickets/new/page.tsx` — 민원 접수 POST
+- `app/(resident)/resident/poll/new/page.tsx` — 투표 생성 POST
+- `app/(admin)/manage/residents/page.tsx` — 입주민 승인/거부 PATCH
+
+### 🔴 빌드 오류 — TypeScript 컴파일 실패
+
+**증상**: Vercel 배포 실패. `apps/web/app/(auth)/onboarding/page.tsx:135 — Cannot find name 'token'`.
+
+**원인**: 자동화 수정 과정에서 `const token = localStorage.getItem('token')` 선언 제거 후 잔존 참조 (`{ Authorization: \`Bearer ${token}\`` })가 남음.
+
+**수정**: 해당 raw fetch를 `apiFetch`로 교체. `saveToken(data.token)` 호출이 먼저 실행되므로 `apiFetch`가 localStorage에서 토큰을 읽을 수 있어 안전.
+
+### 🔍 FormData 업로드 예외 처리 확인
+
+`/api/upload` raw fetch 유지 확인 완료. `apiFetch`를 쓰면 `Content-Type: application/json` 헤더가 multipart boundary를 덮어써 업로드 실패. Authorization 헤더는 수동 주입으로 보완.
+
+### ✅ 예약 API 검증 항목 추가
+
+기존 과거 날짜 차단 (H-1, Sprint 12)에 더해 Sprint 13에서 추가 검증:
+- `HH:MM` 형식 검증
+- `startTime < endTime` 논리 검증
+- 운영시간(`openTime~closeTime`) 범위 검증
+- 인터벌 오버랩 `>= maxConcurrent` 시 409
+
+### 재발 방지 체크리스트 추가
+
+**새 클라이언트 페이지 추가 시**:
+- `fetch('/api/...')` 직접 사용 금지 → 반드시 `apiFetch` 사용
+- 예외: FormData 업로드는 raw fetch + 수동 Authorization 헤더
+
+**미들웨어 보호 대상 엔드포인트 확인**:
+- 공개 예외: `/api/auth/`, `/api/cron/`, `/api/pay/`, `/api/backoffice/auth/`, visitor QR 경로
+- 위 경로 외 모든 `/api/*`는 JWT 필수

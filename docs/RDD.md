@@ -496,16 +496,18 @@ app/
 | - | 전체/완납/미납 탭 필터 납부 이력 조회 | ✅ | `GET /api/resident/payments/history` |
 | - | 청구 월·금액·상태 Badge·납부일 표시 | ✅ | `app/(resident)/villa/invoices/history/page.tsx` |
 
-### 신규 기능 — 공용시설 예약
+### 신규 기능 — 공용시설 예약 (Sprint 13에서 구조 개선)
 
 | # | 요구사항 | 상태 | 비고 |
 |---|---------|------|------|
 | - | 시설 등록·수정·삭제·운영중단 토글 (관리자) | ✅ | `POST/PATCH/DELETE /api/admin/facilities` |
+| - | 운영시간(`openTime/closeTime`) + 동시 예약 가능 건수(`maxConcurrent`) 설정 (관리자) | ✅ | Sprint 13: `maxPerDay` 대체 |
 | - | 시설별 예약 현황 조회 (관리자) | ✅ | `GET /api/admin/facilities/[id]/reservations` |
-| - | 날짜·시간대·메모 입력 예약 (입주민) | ✅ | `POST /api/resident/facilities/[id]/reservations` |
-| - | 세대당 하루 최대 예약 횟수(`maxPerDay`) 초과 차단 | ✅ | 서버 사이드 검증 |
+| - | 날짜·시작/종료 시간(`startTime/endTime`)·메모 입력 예약 (입주민) | ✅ | Sprint 13: `timeSlot` 자유 텍스트 대체 |
+| - | 인터벌 오버랩 기반 중복 예약 차단 (`maxConcurrent` 기준) | ✅ | Sprint 13: `maxPerDay` 일 기준 → 시간대 기준으로 변경 |
+| - | 과거 날짜·운영시간 범위·HH:MM 형식 서버 검증 | ✅ | Sprint 12 H-1 + Sprint 13 추가 |
 | - | 내 예약 취소 (입주민) | ✅ | `DELETE /api/resident/facilities/[id]/reservations/[rid]` |
-| - | Facility, FacilityReservation 신규 Prisma 모델 | ✅ | Supabase 수동 적용 필요 |
+| - | Facility, FacilityReservation 신규 Prisma 모델 | ✅ | `prisma db push` 완료 (Sprint 13) |
 
 ### 신규 기능 — 외부 업체 연락처 관리
 

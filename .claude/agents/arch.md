@@ -2814,3 +2814,86 @@ z-[100] Toast (최상위)
 | M-6: 인사이트 API JS 집계 → DB groupBy | Medium | 미완료 |
 | L-5: 장부 입주민 노출 정책 | Low | 검토 중 |
 | PortOne 운영 MID 전환 | High | 미완료 |
+
+---
+
+## 2026-04-25 — Sprint 13: 공용시설 예약 구조 개선 + apiFetch 전수 전환
+
+### 아키텍처 변경점
+
+#### 1. 데이터 모델 — Facility/FacilityReservation 구조 개선
+
+`Facility` 모델에서 `maxPerDay Int?` 제거, `openTime String?`, `closeTime String?`, `maxConcurrent Int @default(1)` 추가.
+`FacilityReservation` 모델에서 `timeSlot String?` 제거, `startTime String?`, `endTime String?` 추가.
+`prisma db push --accept-data-loss` 적용 (기존 `maxPerDay` 컬럼 데이터 1건 손실 허용, Vendor 테이블 포함 전체 스키마 동기화 완료).
+
+```prisma
+model Facility {
+  openTime       String?  // "HH:MM" 운영 시작
+  closeTime      String?  // "HH:MM" 운영 종료
+  maxConcurrent  Int      @default(1)  // 동시간대 최대 중복 예약 수
+}
+
+model FacilityReservation {
+  startTime  String?  // "HH:MM"
+  endTime    String?  // "HH:MM"
+}
+```
+
+#### 2. 예약 중복 검사 — 인터벌 오버랩 알고리즘
+
+기존: `maxPerDay` 기반 하루 최대 건수 제한  
+변경: 시간 구간 인터벌 오버랩 카운트
+
+```ts
+const overlapping = await prisma.facilityReservation.count({
+  where: {
+    facilityId,
+    date: body.date,
+    startTime: { lt: body.endTime },
+    endTime: { gt: body.startTime },
+  },
+});
+if (overlapping >= facility.maxConcurrent) return err(..., 409);
+```
+
+표준 인터벌 오버랩 조건: `A.start < B.end AND A.end > B.start`. 카운트가 `maxConcurrent` 이상이면 해당 시간대 예약 거부.
+
+#### 3. 클라이언트 인증 헤더 전수 전환 — apiFetch 마이그레이션
+
+**배경**: `(admin)`, `(resident)` 페이지들이 `fetch('/api/...')` 직접 호출 시 `Authorization` 헤더 누락 → 미들웨어 JWT 검증 실패 → 401 Unauthorized.
+
+**해결**: `lib/client-api.ts`의 `apiFetch`가 localStorage에서 토큰을 읽어 `Authorization: Bearer {token}` 자동 주입. 32개 파일 일괄 전환.
+
+**예외 — `/api/upload` (FormData)**:
+- `apiFetch`는 `Content-Type: application/json` 강제 설정 → 멀티파트 boundary 덮어씀 → 업로드 실패
+- raw `fetch` 유지 + `Authorization` 헤더 수동 추가로 해결
+
+**`lib/client-api.ts` 내부 변경**: `API_BASE` 변수 제거 (빈 문자열이었으므로 dead code), `fetch(path, ...)` 상대 경로 직접 사용.
+
+### API 변경
+
+| 엔드포인트 | 변경 전 | 변경 후 |
+|-----------|--------|--------|
+| `POST /api/admin/facilities` | `maxPerDay` | `openTime`, `closeTime`, `maxConcurrent` |
+| `PATCH /api/admin/facilities/[id]` | `maxPerDay` | `openTime`, `closeTime`, `maxConcurrent` |
+| `POST /api/resident/facilities/[id]/reservations` | `timeSlot` (자유 텍스트) | `startTime`, `endTime` (HH:MM + 인터벌 검증) |
+
+예약 POST 서버 검증 항목 (신규):
+1. KST 기준 과거 날짜 차단
+2. `HH:MM` 형식 정규식 검증
+3. `startTime < endTime` 확인
+4. `openTime ≤ startTime`, `endTime ≤ closeTime` 범위 검증
+5. 인터벌 오버랩 카운트 `≥ maxConcurrent` 시 409 반환
+
+### 기술 부채 현황 (2026-04-25 업데이트)
+
+| 항목 | 위험도 | 상태 |
+|------|--------|------|
+| `lib/client-api.ts` 헬퍼 미활용 | Medium | **완전 해소** (32개 파일 전환) |
+| Facility/FacilityReservation/Vendor 테이블 Supabase 적용 | High | **해소** (prisma db push 완료) |
+| `BILLING_ENCRYPTION_KEY` Vercel 등록 | Critical | 미완료 |
+| 기존 평문 빌링키 마이그레이션 | High | 미완료 |
+| PortOne 운영 MID 전환 | High | 미완료 |
+| M-6: 인사이트 API JS 집계 → DB groupBy | Medium | 미완료 |
+| L-5: 장부 입주민 노출 정책 | Low | 검토 중 |
