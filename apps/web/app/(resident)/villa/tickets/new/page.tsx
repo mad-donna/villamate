@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Chip } from '@/components/ui/Chip';
+import { apiFetch } from '@/lib/client-api';
 
 type TicketCategory = 'COMMON_FACILITY' | 'PARKING' | 'NOISE_COMPLAINT' | 'ETC';
 
@@ -70,9 +71,8 @@ export default function NewTicketPage() {
     setSubmitting(true);
     setSubmitError('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/tickets`, {
+      const res = await apiFetch(`/api/villas/${villaId}/tickets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
