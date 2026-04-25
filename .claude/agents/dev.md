@@ -2149,3 +2149,231 @@ function handleAddressSearch() {
 | 항목 | 위험도 | 비고 |
 |------|--------|------|
 | 로그인 시 villa 쿼리 증가 | Low | ADMIN 최대 2쿼리(villa + residentRecord) 추가. 현재 문제없으나 고트래픽 시 캐싱 고려 |
+
+---
+
+## 2026-04-20 구현 사항 (Sprint 9 — QA 보안·안정성 + 예시 데이터)
+
+### 예시 데이터 시드 (`prisma/seed.ts`)
+
+신규 유저가 각 기능을 직관적으로 파악할 수 있도록 햇살 빌라 데모 계정과 기능별 예시 컨텐츠를 시드로 제공.
+
+**실행 방법**: `npx prisma db seed`
+
+**생성 데이터**:
+- 관리자 1명 (`admin@villamate.demo`), 입주민 4명 (`r101~r202@villamate.demo`) / 비밀번호: `demo1234!`
+- 건물이력 5건, 청구서 2건(3월 고정/4월 변동), 외부청구 3건, 커뮤니티 게시글 4건+댓글, 장부 8건, 민원 4건, 전자투표 3건(첫 번째 투표 결과 포함), 에너지 6개월치
+
+**idempotent 설계**: `upsert` + `findFirst` 중복 체크로 재실행 안전.
+
+**package.json 설정**:
+```json
+"prisma": { "seed": "npx tsx prisma/seed.ts" }
+```
+
+**`.env` DB URL 수정**: `DATABASE_URL`과 `DIRECT_URL` 값이 바뀌어 있던 것 교정 (Supabase pooler URL 기준으로 정상화).
+
+### PortOne 공통 모듈 (`lib/portone.ts`)
+
+```typescript
+export async function getPortOneToken(): Promise<string>
+export async function getPortOnePayment(impUid, accessToken): Promise<{status, amount, merchant_uid, pg_provider}>
+```
+
+- `app/api/pay/[billId]/confirm/route.ts` — 로컬 함수 제거, import로 교체
+- `app/api/villas/[villaId]/invoices/[invoiceId]/payments/[paymentId]/verify/route.ts` — 동일
+
+### 보안 패치 요약
+
+**`status: 'APPROVED'` 필터 추가 (4파일)**
+```typescript
+// 변경 전
+where: { villaId, userId }
+// 변경 후
+where: { villaId, userId, status: 'APPROVED' }
+```
+적용: `polls/route.ts`, `posts/route.ts`, `posts/[postId]/route.ts`, `posts/[postId]/like/route.ts`
+
+**`$transaction` 원자화 패턴**
+```typescript
+const [payment] = await prisma.$transaction([
+  prisma.invoicePayment.update({ ... }),
+  ...(becomesPaid ? [prisma.ledgerTransaction.create({ ... })] : []),
+]);
+```
+적용: `payments/[paymentId]/route.ts` PATCH, `verify/route.ts` POST
+
+**`auth.ts` JWT_SECRET 전 환경 필수화**
+```typescript
+// 변경 전
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') { ... }
+const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev-secret-change-me');
+// 변경 후
+if (!process.env.JWT_SECRET) { throw new Error(...); }
+const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+```
+
+### 기술 부채 신규 해소
+
+| 항목 | 상태 |
+|------|------|
+| `requireActiveSubscription` 미적용 라우트 | ✅ 해소 — 4개 POST 추가 |
+| 개발환경 JWT 하드코딩 폴백 | ✅ 해소 — 전 환경 필수화 |
+| N+1 쿼리 (vehicles) | ✅ 해소 — 배치 조회 |
+| PortOne 함수 중복 | ✅ 해소 — lib 모듈화 |
+
+### 잔존 기술 부채
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 잔존 |
+| 기존 평문 빌링키 DB 마이그레이션 | High | 잔존 |
+| `lib/client-api.ts` 헬퍼 미활용 | Medium | 잔존 |
+| 동대표 교체 후 JWT 블랙리스트 없음 | Medium | 잔존 |
+
+---
+
+## 2026-04-21 — Sprint 10 신규 기능 구현
+
+### 구현 기능 4종
+
+#### 1. 관리자 수금 인사이트
+
+- API: `GET /api/admin/insights` — InvoicePayment 집계, 최근 6개월 월별 groupBy billingMonth
+- UI: `components/InsightsSection.tsx` — 이번 달 수금률 프로그레스 바 + 6개월 수금액 순수 CSS 막대 차트 (외부 차트 라이브러리 미사용)
+- 관리자 홈 하단 자동 삽입 (클라이언트 컴포넌트, `apiFetch` 사용)
+
+#### 2. 입주민 납부 히스토리
+
+- API: `GET /api/resident/payments/history?status=PAID|PENDING|OVERDUE`
+- UI: `app/(resident)/villa/invoices/history/page.tsx` — 전체/완납/미납 필터 탭
+- `app/(resident)/villa/invoices/page.tsx`에 "납부 이력" 버튼 추가
+
+#### 3. 공용시설 예약
+
+- 신규 DB 모델: `Facility`, `FacilityReservation`
+- 관리자 API: CRUD + 운영중단/재개 토글 + 예약 현황 조회
+- 입주민 API: 활성 시설 목록(오늘 예약 포함), 예약 생성, 예약 취소
+- `maxPerDay` 초과 시 예약 차단 (서버 사이드 검증)
+- UI: `app/(admin)/manage/facilities/page.tsx`, `app/(resident)/villa/facilities/page.tsx`
+
+#### 4. 외부 업체 연락처 관리
+
+- 신규 DB 모델: `Vendor`, `VendorCategory` enum
+- 관리자: CRUD + 카테고리 필터 (6종)
+- 입주민: 읽기 전용 + `tel:` 링크 전화 바로가기
+- UI: `app/(admin)/manage/vendors/page.tsx`, `app/(resident)/villa/vendors/page.tsx`
+
+### 버그 수정 3건
+
+1. **바텀시트 z-index 충돌**: 신규 3개 페이지 `z-50` → `z-60` (BottomNav z-50과 충돌 해소)
+2. **관리자 프로필 하단 가림**: `pb-10` → `pb-24`
+3. **기존 관리자 듀얼 모드 활성화 불가**: 프로필에 "입주민 등록" 바텀시트 추가 — join API 호출 후 `saveUser()`로 즉시 반영
+
+### 패턴 메모
+
+- **바텀시트 z-index 룰**: BottomNav=z-50 / 바텀시트=z-60 / 토스트=z-90
+- **신규 테이블**: Supabase SQL Editor 수동 적용 필요 (`prisma migrate dev`는 Vercel 빌드 불가)
+- **듀얼 모드 등록 흐름**: `POST /api/villas/${villaId}/residents/join` → `saveUser({...user, residentVilla})`
+
+### 잔존 기술 부채 추가
+
+| 항목 | 위험도 |
+|------|--------|
+| Facility/FacilityReservation/Vendor 테이블 Supabase 미적용 | High |
+
+---
+
+## 2026-04-23 — 백오피스 라우팅 버그 수정
+
+### 수정된 파일 4개
+
+#### 1. `app/(backoffice)/backoffice/login/page.tsx`
+- 로그인 성공 후 `router.push('/backoffice/dashboard')` → `router.push('/dashboard')`
+- 이미 로그인된 경우 `router.replace('/backoffice/dashboard')` → `router.replace('/dashboard')`
+
+#### 2. `app/(backoffice)/layout.tsx`
+- 사이드바 `platformItems` 링크 전체 수정: `/backoffice/dashboard` → `/dashboard` 등
+- `contentItems` 링크 수정: `/backoffice/content/*` → `/content/*`
+
+#### 3. `app/(auth)/login/page.tsx` / `app/page.tsx`
+- SUPER_ADMIN 로그인 후 리다이렉트: `/backoffice/dashboard` → `/dashboard`
+
+#### 4. `app/api/backoffice/auth/login/route.ts`
+- `bo_session` 쿠키 `path: '/backoffice'` → `path: '/'`
+- **핵심 수정**: 쿠키가 `/dashboard` 등 루트 레벨 경로에서 전송되지 않아 미들웨어가 쿠키를 읽지 못하고 로그인 루프 발생하던 버그 해소
+
+#### 5. `middleware.ts`
+- `isBackofficePage` 조건 블록 신규 추가
+- matcher 배열에 `/dashboard`, `/villas`, `/users`, `/billing`, `/mrr`, `/content/:path*` 추가
+
+### 운영 작업 — SUPER_ADMIN 계정 생성 및 Seed 실행
+
+```bash
+# DB에 SUPER_ADMIN 계정 직접 생성 (bcrypt hash)
+node -e "..."  # dmlehsasd@gmail.com / SUPER_ADMIN role
+
+# 예시 데이터 시드 실행
+npx prisma db seed  # 햇살 빌라 데모 데이터 DB 반영
+```
+
+### 패턴 메모
+- Next.js App Router route group `(name)/` 은 URL에 포함되지 않음. `(backoffice)/dashboard/` → `/dashboard`
+
+---
+
+## 2026-04-24~25 — Sprint 12 QA 수정 + fixedFee 구현
+
+### 수정된 파일 목록
+
+#### 보안·기능 수정 (High/Medium)
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `app/api/resident/facilities/[id]/reservations/route.ts` | 과거 날짜 서버 검증 추가 (H-1) |
+| `app/api/villas/[villaId]/invoices/route.ts` | headResidents `status: 'APPROVED'` 필터 (H-2) |
+| `app/api/cron/publish-invoices/route.ts` | APPROVED 필터 + fixedFee 기반 금액 설정 (H-2 + fixedFee) |
+| `app/api/villas/[villaId]/external-billing/[billId]/confirm/route.ts` | $transaction 원자화 (H-3) |
+| `app/(admin)/manage/facilities/page.tsx` | useConfirm 도입 + res.ok 체크 (M-1) |
+| `app/(admin)/manage/vendors/page.tsx` | handleDelete res.ok 체크 (M-2) |
+| `app/api/resident/payments/history/route.ts` | RESIDENT/ADMIN role 검증 (M-4) |
+| `app/api/villas/[villaId]/posts/[postId]/route.ts` | isNotice 승격 ADMIN 검증 (M-5) |
+| `lib/notify.ts` | createNotificationForVilla APPROVED 필터 (M-8) |
+
+#### 디자인 수정 (D/L)
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `components/ui/Toast.tsx` | 신규 생성 — 토스트 알림 컴포넌트 |
+| `hooks/useToast.tsx` | 신규 생성 — useToast 훅 |
+| `app/(resident)/villa/invoices/page.tsx` | alert 7개 → useToast, Badge 시맨틱 수정 (D-1, D-2) |
+| `app/(resident)/villa/invoices/history/page.tsx` | Badge 시맨틱 수정 (D-2) |
+| `app/(admin)/profile/page.tsx` | alert → useToast (D-1) |
+| `app/(admin)/profile/transfer-admin/page.tsx` | window.confirm → useConfirm (D-1) |
+| `components/InvoicePDFButton.tsx` | alert → 인라인 에러 상태 (D-1) |
+| `app/(admin)/community/[id]/page.tsx` | confirm/alert → useConfirm/useToast (D-1) |
+| `app/(resident)/resident/community/[id]/page.tsx` | 동일 (D-1) |
+| `app/(resident)/villa/facilities/page.tsx` | 터치 타깃 min-h-[44px], today 초기화 수정 (D-3, L-2) |
+| `app/api/resident/facilities/route.ts` | 예약 조회 date: { gte: today } (L-3) |
+| `components/InsightsSection.tsx` | 에러 상태 UI 추가 (L-4) |
+
+#### fixedFee 자동 발행
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `prisma/schema.prisma` | `fixedFee Int?` 추가 (prisma db push 완료) |
+| `app/api/villas/[villaId]/route.ts` | PATCH에서 fixedFee 저장 지원 |
+| `app/api/cron/publish-invoices/route.ts` | fixedFee 기반 금액 설정 |
+| `app/(admin)/manage/invoices/page.tsx` | AutoPublishCard 컴포넌트 추가 |
+
+### 반복 패턴 메모
+
+**residentRecord 쿼리에서 status: 'APPROVED' 빠짐 반복 주의**:
+Sprint 9, 12 두 차례 동일 패턴 발견. residentRecord.findMany/findFirst 시 항상 `status: 'APPROVED'` 포함 확인.
+
+**외부 API 호출 + DB 업데이트 조합은 항상 $transaction**:
+Sprint 9(납부+장부), Sprint 12(외부청구+장부) 두 차례. 상태 갱신 + 부작용 기록 쌍은 무조건 원자화.
+
+**클라이언트 검증만으로는 불충분**:
+H-1(과거 날짜 예약): 클라이언트 `min={today}` 있어도 API에서 반드시 서버 사이드 재검증 필요.
+- bo_session 쿠키는 `path: '/'`로 발급해야 백오피스 전체 경로에서 미들웨어가 읽을 수 있음

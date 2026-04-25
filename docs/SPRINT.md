@@ -21,47 +21,22 @@
 | Sprint 9 | 2026-04-20 | 보안·안정성 QA 전수 수정, seed.ts, 테스트 33/33 |
 | Sprint 10 | 2026-04-21 | D-01~D-04 해소, 인사이트/납부히스토리/시설예약/업체연락처 |
 | Sprint 11 | 2026-04-23 | 백오피스 라우팅 버그 수정, SUPER_ADMIN 계정 생성, 시드 데이터 반영 |
+| Sprint 12 | 2026-04-24~25 | 보안·기능 QA 전수 수정 (H×3, M×5, D×3, L×3), Toast 컴포넌트 신규, fixedFee 고정 관리비 자동 발행 |
 
 ---
 
-## Sprint 12 백로그 — QA / 디자인 검토 결과 (2026-04-24)
+## 잔여 백로그
 
-> QA 에이전트 + 디자인 에이전트 자동 검토 결과. 심각도 순 정렬.
-
-### 🔴 High — 데이터 무결성 / 보안
+### 🟡 Medium — 개선 권고
 
 | # | 파일 | 내용 | 상태 |
 |---|------|------|------|
-| H-1 | `app/api/resident/facilities/[id]/reservations/route.ts` | 과거 날짜 예약 서버 검증 없음 — API 직접 호출 시 과거 날짜 예약 가능 | ✅ |
-| H-2 | `app/api/villas/[villaId]/invoices/route.ts` L99-101, `app/api/cron/publish-invoices/route.ts` L47-48 | `status: 'APPROVED'` 필터 누락 — PENDING 세대에게 청구서 발행됨 | ✅ |
-| H-3 | `app/api/villas/[villaId]/external-billing/[billId]/confirm/route.ts` L32-47 | 결제 완료 처리 + 장부 기록이 트랜잭션으로 미묶음 — 부분 실패 시 데이터 불일치 | ✅ |
-
-### 🟡 Medium — 기능 결함 / 권한
-
-| # | 파일 | 내용 | 상태 |
-|---|------|------|------|
-| M-1 | `app/(admin)/manage/facilities/page.tsx` | 삭제·토글 시 `res.ok` 미체크로 오류 묵살 | ✅ |
-| M-2 | `app/(admin)/manage/vendors/page.tsx` | 삭제 시 `res.ok` 미체크 (`handleDelete`) | ✅ |
-| M-4 | `app/api/resident/payments/history/route.ts` | role 검증 없음 — 모든 인증 사용자 접근 가능 | ✅ |
-| M-5 | `app/api/villas/[villaId]/posts/[postId]/route.ts` | PATCH 공지 승격 시 ADMIN 권한 미검증 | ✅ |
 | M-6 | `app/api/admin/insights/route.ts` | 월별 집계를 JS에서 처리 → DB `groupBy`로 교체 권장 | ⬜ |
-| M-8 | `lib/notify.ts` `createNotificationForVilla` | `status: 'APPROVED'` 필터 누락 — PENDING 세대에게 알림 발송 | ✅ |
-
-### 🎨 디자인 — 즉시 수정 가능
-
-| # | 파일 | 내용 | 상태 |
-|---|------|------|------|
-| D-1 | 앱 전반 | `window.confirm` / `window.alert` → `ConfirmDialog` / `Toast` 컴포넌트 교체 | ✅ |
-| D-2 | `app/(resident)/villa/invoices/page.tsx`, `villa/invoices/history/page.tsx` | 납부 상태 Badge 시맨틱 역전 수정 — PENDING=`warning`, OVERDUE=`error` | ✅ |
-| D-3 | facilities, vendors, 기타 인라인 버튼 | 삭제 버튼 터치 타깃 `min-h-[32px]` → `min-h-[44px]` | ✅ |
 
 ### 🔵 Low
 
 | # | 내용 | 상태 |
 |---|------|------|
-| L-2 | 예약 바텀시트 `today` 초기화 타이밍 의존성 (`app/(resident)/villa/facilities/page.tsx`) | ✅ |
-| L-3 | 오늘 날짜 예약 조회 시 미래 예약 미표시 | ✅ |
-| L-4 | `InsightsSection` 로드 실패 무음 처리 — 에러 상태 표시 추가 | ✅ |
 | L-5 | 장부 API — 입주민에게 전체 내역 노출 여부 정책 확인 필요 | 🔄 현재 입주민에게 전체 내역 노출 중. 제한이 필요하면 `assertVillaAccess` 수정 필요 |
 
 ---

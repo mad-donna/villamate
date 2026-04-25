@@ -731,3 +731,150 @@ export default function Page() {
 KG Inicis 결제창은 서드파티 팝업/리다이렉트 페이지이므로 VillaMate 디자인 시스템 적용 불가.
 모바일에서 리다이렉트 방식으로 동작 시 결제창은 별도 페이지로 이동 → 복귀 후 납부 완료 화면 표시.
 
+
+---
+
+## 2026-04-20 디자인 이슈 (QA 발견 — 미수정)
+
+### 발견된 디자인 명세 불일치 4건
+
+아래 항목은 SPRINT.md D-01~D-04로 이관. 기능 버그가 아닌 디자인 명세 불일치이므로 별도 스프린트에서 처리.
+
+#### D-01 — `Button.tsx:82` loading 상태 UI
+**현재**: `loading && <Spinner />` + `children` 동시 표시
+**명세 (5-1. Button States, Loading)**: 텍스트 숨김 + Spinner 중앙 배치, 버튼 폭 유지
+**수정**: `{loading ? <Spinner /> : children}` 으로 교체
+
+#### D-02 — `Badge.tsx` 테두리 누락
+**현재**: 배경색만 적용, border 없음
+**명세 (5-3)**: 배경보다 한 단계 진한 1px 테두리
+**수정**: 각 variant에 `ring-1 ring-{color}-200` 추가
+
+#### D-03 — `(admin)/home/page.tsx:271` 바로가기 버튼 터치 타깃
+**현재**: `p-4`만 적용 — 실제 터치 타깃 44px 미달 가능
+**명세 (디자인 원칙 8번)**: 터치 타깃 최소 44×44px
+**수정**: `min-h-[44px] min-w-[44px]` 추가
+
+#### D-04 — `vercel.json` poll-reminder Cron 스케줄
+**현재**: `"0 0 * * *"` (UTC 00:00 = KST 09:00)
+**다른 Cron**: `"0 15 * * *"` (UTC 15:00 = KST 00:00)
+**수정 또는 명시**: 의도적이라면 주석 추가, 아니라면 `"0 15 * * *"` 통일
+
+---
+
+## 2026-04-21 — QA D-01~D-04 수정 + 신규 페이지 UX 수정
+
+### D-01: Button loading 상태 — 텍스트 숨김
+
+- **이전**: `{loading && <Spinner />}{children}` — 로딩 중 스피너와 텍스트 동시 표시
+- **이후**: `{loading ? <Spinner /> : children}` — 로딩 중 텍스트 숨김, 스피너 단독 중앙 배치
+- 버튼 너비 고정으로 레이아웃 흔들림(CLS) 방지
+
+### D-02: Badge 1px 테두리 추가
+
+- 디자인 명세 5-3 "배경보다 한 단계 진한 1px 테두리" 적용
+- `ring-1 ring-{color}-200` 패턴으로 variant 5종 모두 추가
+
+### D-03: 관리자 홈 바로가기 버튼 터치 타깃
+
+- `min-h-[44px] min-w-[44px]` 추가 — WCAG 2.1 AA 최소 44×44px 터치 타깃 기준 달성
+
+### D-04: Cron 주석 스케줄 통일
+
+- `poll-reminder/route.ts` 주석: `"0 0 * * *"` → `"0 15 * * *"` (vercel.json 실제 등록값과 동기화)
+
+### 신규 페이지 바텀시트 z-index 룰 확립
+
+- **문제**: 신규 3개 페이지의 바텀시트가 BottomNav에 가려짐
+- **원인**: BottomNav `z-50`, 신규 바텀시트도 `z-50` → DOM 후순위 BottomNav가 덮음
+- **수정**: 신규 바텀시트 `z-60`으로 상향
+- **설계 원칙 확립**:
+  - BottomNav: `z-50` (고정)
+  - 바텀시트·모달: `z-60`
+  - 토스트: `z-90`
+
+### 관리자 프로필 하단 가림 수정
+
+- `pb-10` (40px) → `pb-24` (96px) — BottomNav 높이 56px보다 작아 하단 항목이 가려지던 문제
+
+---
+
+## 2026-04-23 — 디자인 변경 없음
+
+오늘은 백오피스 라우팅 버그 수정(기능 버그)만 진행. 디자인 시스템 및 UI 변경 없음.
+
+---
+
+## 2026-04-24~25 — Sprint 12 디자인 QA 수정 + Toast 신규 + fixedFee UI
+
+### 신규 컴포넌트 — Toast / useToast
+
+브라우저 `window.alert()`을 대체하는 토스트 알림 시스템 도입.
+
+**`components/ui/Toast.tsx` 스펙:**
+```
+위치: fixed bottom-20 left-4 right-4 z-[100]
+형태: rounded-2xl px-4 py-3 shadow-lg
+variant:
+  default  → bg-neutral-900 text-white
+  error    → bg-error-600 text-white
+  success  → bg-success-600 text-white
+자동 닫힘: 3초 후 onClose 콜백 호출
+```
+
+**`hooks/useToast.tsx` 인터페이스:**
+```tsx
+const { toast, toastEl } = useToast();
+toast('저장되었습니다', 'success');
+// JSX에 {toastEl} 삽입
+```
+
+z-index `z-[100]`: BottomNav(z-50), 바텀시트(z-60), ConfirmDialog(z-90) 모두 위에 위치하도록 설정.
+
+### D-1 — window.alert 완전 제거 완료
+
+| 파일 | 교체 내용 |
+|------|----------|
+| `app/(resident)/villa/invoices/page.tsx` | 7개 alert → `useToast` |
+| `app/(admin)/profile/page.tsx` | 2개 alert → `useToast` |
+| `app/(admin)/profile/transfer-admin/page.tsx` | confirm → `useConfirm`, 성공 alert 제거 (리다이렉트로 대체) |
+| `components/InvoicePDFButton.tsx` | 팝업 차단 alert → 인라인 에러 메시지 |
+| `app/(admin)/community/[id]/page.tsx` | confirm → `useConfirm`, catch alert → `useToast` |
+| `app/(resident)/resident/community/[id]/page.tsx` | 동일 패턴 |
+
+### D-2 — 납부 Badge 시맨틱 교정
+
+**이전 (잘못된 시맨틱)**:
+- PENDING → `'info'` (파랑)
+- OVERDUE → `'warning'` (노랑)
+
+**이후 (올바른 시맨틱)**:
+- PENDING → `'warning'` (노랑 — 아직 납부 전, 주의)
+- OVERDUE → `'error'` (빨강 — 기한 초과, 긴급)
+- PAID → `'success'` (초록 — 완료)
+
+적용 파일: `villa/invoices/page.tsx`, `villa/invoices/history/page.tsx`
+
+### D-3 — 삭제 버튼 터치 타깃 44px 표준화
+
+facilities 관리, vendors 관리 페이지의 삭제·편집 버튼:
+- 이전: `min-h-[32px]`
+- 이후: `min-h-[44px]` (WCAG 2.1 AA 기준)
+
+### 신규 UI — 자동 발행 설정 카드 (AutoPublishCard)
+
+`manage/invoices/page.tsx` 상단에 인라인 카드 컴포넌트 추가.
+
+**레이아웃:**
+```
+[제목: 자동 발행 설정]  [상태: 켜짐 배지]
+부제목: 현재 설정 요약 또는 기능 안내
+
+[발행일 (매월)] [세대당 고정 관리비]  ← 2열 grid
+                                      [저장] 버튼
+```
+
+**상태 표현:**
+- 미설정 → 배지 없음, 기능 안내 문구
+- 설정 완료 → `bg-success-100 text-success-700` 배지 "켜짐" + "매월 N일 · 세대당 X원" 요약
+- 저장 성공 → 버튼 텍스트 "저장됨 ✓" (2초 후 복귀)

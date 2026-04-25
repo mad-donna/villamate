@@ -1,6 +1,6 @@
 # 빌라메이트 (VillaMate) — 요구사항 정의서 (RDD) v2.0
 
-> 최종 업데이트: 2026-04-07
+> 최종 업데이트: 2026-04-21
 > 기준: 전면 리빌드 — NestJS + Next.js (모바일 웹) 전환
 > 이전 버전: `RDD(backup).md` (React Native + Express 기준)
 > 범례: ✅ 완료 · 🔄 진행중 · ⬜ 미구현 · 🚫 제외
@@ -185,7 +185,7 @@ app/
 |---|---------|-------|------|------|
 | F-24 | 고정 관리비 청구서 발행 (전 세대 동일 금액) | 1 | ✅ | `FIXED` 타입, prisma.$transaction |
 | F-25 | 변동 관리비 청구서 발행 (항목별 합산 → 1/N) | 1 | ✅ | `VARIABLE` 타입, 항목별 동적 입력 |
-| F-26 | 매월 지정일 고정 관리비 자동 발행 (Cron) | 1 | ✅ | autoPublishDay 필드 기반, KST 00:00 실행 |
+| F-26 | 매월 지정일 고정 관리비 자동 발행 (Cron) | 1 | ✅ | autoPublishDay + fixedFee 기반, KST 기준 실행. fixedFee 미설정 시 0원 |
 | F-27 | 세대별 납부 현황 조회 (동대표) | 1 | ✅ | paidCount/totalCount 포함 |
 | F-28 | 입주민 청구서 목록 및 수동 납부 처리 | 1 | ✅ | GET /invoices/my + PATCH payments |
 | F-29 | PortOne PG 인앱 결제 + 서버 imp_uid 검증 | 2 | ✅ | 수동 납부와 병행 |
@@ -455,6 +455,10 @@ app/
 | 2026-04-16 | Sprint 6 버그 수정 — AmountInput 공통 컴포넌트 신규 추가(`lib/amount-step.ts` + `components/ui/AmountInput.tsx`). 커뮤니티/입주민 API Authorization 헤더 누락 8건 수정. 세대 호수 하단 시트 레이아웃 및 z-index 수정. /ledger 스텁 페이지 → 완전 구현. Vercel 배포 완료. |
 | 2026-04-18 | Sprint 7 버그 수정 — PortOne 외부 결제 안정화(CSP 도메인 추가, m_redirect_url 모바일 리다이렉트, PG MID 명시, useSearchParams 제거). 전체 클라이언트 페이지 GET/POST/DELETE API 인증 헤더 누락 13개 파일 일괄 수정. 하단 시트 BottomNav 겹침 z-index 수정. |
 | 2026-04-19 | Sprint 8 — 커뮤니티 게시글 수정(PATCH /posts/[postId], "수정됨" 배지). 청구서/외부청구서/장부 복사 기능. 장부 자동 기록(관리비 납부/외부청구 완료 시 LedgerTransaction 자동 생성, createdBy:'system'). 듀얼 모드 같은 빌라 지원(F-23 확장, 온보딩 체크박스, join 자동 승인, 로그인 API full villa object 반환). Daum Postcode CSP 수정(t1.daumcdn.net, kakao.com). 온보딩 주소 검색 동적 로딩 + 필드 순서 개선. |
+| 2026-04-20 | Sprint 9 — 보안·안정성 QA 전수 수정(Critical 1 + High 5 + Medium 5). `lib/portone.ts` 신규(PortOne 검증 공통 모듈). `$transaction` 납부+장부 원자화(payments/verify 2개 라우트). `status:'APPROVED'` 미승인 입주자 차단(polls/posts/like 4개 라우트). `requireActiveSubscription` 가드 추가(청구서/외부청구/투표/건물이력 POST). dashboard villaId searchParam 제거. JWT_SECRET 전 환경 필수화. 공지 알림 HTML 태그 제거. invoice-reminder 0원 필터 + userId 범위 축소. vehicles N+1 → 배치 쿼리. 테스트 33/33 통과. `prisma/seed.ts` 신규(전 기능 예시 데이터 시드). |
+| 2026-04-21 | Sprint 10 — QA D-01~D-04 전체 해소(Button loading/Badge 테두리/터치 타깃/Cron 주석). 신규 기능 4종: 관리자 수금 인사이트(`GET /api/admin/insights`, InsightsSection 컴포넌트), 입주민 납부 히스토리(`GET /api/resident/payments/history`), 공용시설 예약(Facility/FacilityReservation 모델 신규, 관리자 CRUD + 입주민 예약), 외부 업체 연락처(Vendor/VendorCategory 모델 신규, CRUD + tel 링크). 버그 수정: 신규 바텀시트 z-50→z-60, 관리자 프로필 pb-10→pb-24, 기존 관리자 듀얼 모드 활성화 경로 추가(프로필 "등록" 버튼). 신규 테이블 Supabase 수동 적용 필요(운영 블로커). |
+| 2026-04-23 | Sprint 11 — 백오피스 라우팅 버그 수정. `(backoffice)` route group 실제 URL(`/dashboard`, `/villas` 등) 확정 및 코드 전반 경로 수정. `bo_session` 쿠키 path `/backoffice`→`/` 수정(로그인 루프 버그 해소). `middleware.ts` matcher에 백오피스 페이지 경로 명시 추가. SUPER_ADMIN 계정 DB 생성. `prisma db seed` 실행(햇살 빌라 데모 데이터 반영). |
+| 2026-04-24~25 | Sprint 12 — 보안·기능 QA 전수 수정(H×3, M×5, D×3, L×3). Toast/useToast 컴포넌트 신규. window.alert/confirm 완전 제거. Badge 납부 상태 시맨틱 교정. 터치 타깃 표준화. 고정 관리비 자동 발행(fixedFee) 기능 구현: `Villa.fixedFee Int?` 추가, PATCH API 지원, publish-invoices 크론 금액 자동 설정, AutoPublishCard UI. |
 
 ---
 
@@ -463,3 +467,95 @@ app/
 | # | 요구사항 | Phase | 상태 | 비고 |
 |---|---------|-------|------|------|
 | F-NEW | 빌라 등록 주소 자동완성 (카카오 우편번호 API) | 2 | ✅ | 건물명 자동 입력 포함 |
+
+---
+
+## 2026-04-21 추가 기능 (Sprint 10)
+
+### 디자인 QA 완료 항목
+
+| # | 항목 | 파일 | 상태 |
+|---|------|------|------|
+| D-01 | Button loading 텍스트 숨김 + Spinner 단독 | `components/ui/Button.tsx` | ✅ |
+| D-02 | Badge variant별 `ring-1 ring-{color}-200` 테두리 | `components/ui/Badge.tsx` | ✅ |
+| D-03 | 관리자 홈 바로가기 버튼 터치 타깃 44px | `app/(admin)/home/page.tsx` | ✅ |
+| D-04 | poll-reminder Cron 주석 스케줄 통일 | `app/api/cron/poll-reminder/route.ts` | ✅ |
+
+### 신규 기능 — 관리자 수금 인사이트
+
+| # | 요구사항 | 상태 | 비고 |
+|---|---------|------|------|
+| - | 이번 달 수금률 (PAID / 전체 건수) 프로그레스 바 표시 | ✅ | `GET /api/admin/insights` |
+| - | 최근 6개월 월별 수금액 막대 차트 | ✅ | 순수 CSS, recharts 미사용 |
+| - | 관리자 홈 하단 자동 삽입 (`InsightsSection` 컴포넌트) | ✅ | |
+
+### 신규 기능 — 입주민 납부 히스토리
+
+| # | 요구사항 | 상태 | 비고 |
+|---|---------|------|------|
+| - | 전체/완납/미납 탭 필터 납부 이력 조회 | ✅ | `GET /api/resident/payments/history` |
+| - | 청구 월·금액·상태 Badge·납부일 표시 | ✅ | `app/(resident)/villa/invoices/history/page.tsx` |
+
+### 신규 기능 — 공용시설 예약
+
+| # | 요구사항 | 상태 | 비고 |
+|---|---------|------|------|
+| - | 시설 등록·수정·삭제·운영중단 토글 (관리자) | ✅ | `POST/PATCH/DELETE /api/admin/facilities` |
+| - | 시설별 예약 현황 조회 (관리자) | ✅ | `GET /api/admin/facilities/[id]/reservations` |
+| - | 날짜·시간대·메모 입력 예약 (입주민) | ✅ | `POST /api/resident/facilities/[id]/reservations` |
+| - | 세대당 하루 최대 예약 횟수(`maxPerDay`) 초과 차단 | ✅ | 서버 사이드 검증 |
+| - | 내 예약 취소 (입주민) | ✅ | `DELETE /api/resident/facilities/[id]/reservations/[rid]` |
+| - | Facility, FacilityReservation 신규 Prisma 모델 | ✅ | Supabase 수동 적용 필요 |
+
+### 신규 기능 — 외부 업체 연락처 관리
+
+| # | 요구사항 | 상태 | 비고 |
+|---|---------|------|------|
+| - | 업체 등록·수정·삭제 + 카테고리 필터 6종 (관리자) | ✅ | `POST/PATCH/DELETE /api/admin/vendors` |
+| - | 업체 목록 읽기 전용 + `tel:` 전화 바로가기 (입주민) | ✅ | `GET /api/resident/vendors` |
+| - | Vendor, VendorCategory enum 신규 Prisma 모델 | ✅ | Supabase 수동 적용 필요 |
+
+### 버그 수정
+
+| 항목 | 원인 | 수정 | 상태 |
+|------|------|------|------|
+| 신규 페이지 바텀시트 BottomNav 가림 | 바텀시트 z-50 = BottomNav z-50 | 바텀시트 z-60 상향 | ✅ |
+| 관리자 프로필 하단 항목 BottomNav 가림 | `pb-10` (40px) < BottomNav 56px | `pb-24` 수정 | ✅ |
+| 기존 관리자 듀얼 모드 활성화 불가 | 온보딩 이후 입주민 등록 경로 없음 | 프로필 "등록" 버튼 + join API | ✅ |
+
+---
+
+## 2026-04-24~25 완료 항목 (Sprint 12)
+
+### 보안·기능 QA 수정
+
+| # | 파일 | 내용 | 상태 |
+|---|------|------|------|
+| H-1 | `app/api/resident/facilities/[id]/reservations/route.ts` | 과거 날짜 예약 서버 검증 추가 (KST 기준) | ✅ |
+| H-2 | `app/api/villas/[villaId]/invoices/route.ts`, `publish-invoices/route.ts` | headResidents `status: 'APPROVED'` 필터 추가 | ✅ |
+| H-3 | `app/api/villas/[villaId]/external-billing/[billId]/confirm/route.ts` | 결제완료+장부기록 `$transaction` 원자화 | ✅ |
+| M-1 | `app/(admin)/manage/facilities/page.tsx` | `useConfirm` 도입 + `res.ok` 체크 | ✅ |
+| M-2 | `app/(admin)/manage/vendors/page.tsx` | `handleDelete` `res.ok` 체크 추가 | ✅ |
+| M-4 | `app/api/resident/payments/history/route.ts` | RESIDENT/ADMIN role 검증 추가 | ✅ |
+| M-5 | `app/api/villas/[villaId]/posts/[postId]/route.ts` | 공지 승격 시 `villa.adminId` 검증 | ✅ |
+| M-8 | `lib/notify.ts` `createNotificationForVilla` | `status: 'APPROVED'` 필터 추가 | ✅ |
+
+### 디자인·UX QA 수정
+
+| # | 내용 | 상태 |
+|---|------|------|
+| D-1 | `Toast` 컴포넌트 + `useToast` 훅 신규. 앱 전반 `window.alert/confirm` 완전 제거 | ✅ |
+| D-2 | Badge 납부 상태 시맨틱 수정: PENDING=`warning`, OVERDUE=`error` | ✅ |
+| D-3 | 삭제 버튼 터치 타깃 `min-h-[44px]` 표준화 | ✅ |
+| L-2 | 시설 예약 바텀시트 `today` KST 초기화 확정 | ✅ |
+| L-3 | 시설 API 오늘 이후 예약 포함, 타인 예약 오늘만 표시 | ✅ |
+| L-4 | `InsightsSection` 에러 상태 UI 추가 | ✅ |
+
+### 신규 기능 — fixedFee 고정 관리비 자동 발행
+
+| # | 요구사항 | 상태 | 비고 |
+|---|---------|------|------|
+| - | `Villa.fixedFee Int?` DB 필드 추가 | ✅ | `prisma db push` 완료 |
+| - | `PATCH /api/villas/[villaId]`에서 `fixedFee` 저장 지원 | ✅ | `autoPublishDay`와 동일 패턴 |
+| - | `publish-invoices` 크론 — `fixedFee` 기반 청구서 금액 설정 | ✅ | 미설정 시 0원(하위 호환) |
+| - | `AutoPublishCard` UI — 발행일 + 세대당 관리비 설정 카드 | ✅ | `manage/invoices/page.tsx` 상단 |

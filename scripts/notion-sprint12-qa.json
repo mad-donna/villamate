@@ -1,0 +1,11 @@
+{
+  "기능명": "Sprint 12 QA 전수 수정",
+  "reqId": "H-1,H-2,H-3,M-1,M-2,M-4,M-5,M-8,D-1,D-2,D-3,L-2,L-3,L-4",
+  "sprint": "Sprint 12",
+  "상태": "완료",
+  "구현일": "2026-04-24",
+  "요약": "보안·기능 QA 전수 수정 완료. 과거날짜 예약 서버검증(H-1), APPROVED 필터 누락(H-2), 외부청구 트랜잭션 원자화(H-3), res.ok 체크(M-1,M-2), 역할검증(M-4,M-5), 알림 필터(M-8), Toast/useToast 신규(D-1), Badge 납부상태 시맨틱(D-2), 터치타깃 44px(D-3), 시설예약 날짜수정(L-2,L-3), InsightsSection 에러상태(L-4)",
+  "수정된파일": "facilities/reservations/route.ts, invoices/route.ts, publish-invoices/route.ts, external-billing/confirm/route.ts, manage/facilities/page.tsx, manage/vendors/page.tsx, payments/history/route.ts, posts/[postId]/route.ts, lib/notify.ts, Toast.tsx, useToast.tsx, villa/invoices/page.tsx, history/page.tsx, profile/page.tsx, transfer-admin/page.tsx, InvoicePDFButton.tsx, community/[id]/page.tsx",
+  "스펙편차": "없음",
+  "비고": "Sprint 12 백로그 14개 항목 전체 완료. M-6(인사이트 DB groupBy), L-5(장부 노출 정책)은 다음 스프린트로 이관"
+}

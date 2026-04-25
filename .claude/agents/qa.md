@@ -880,3 +880,171 @@ z-90  토스트 / 알림 (항상 최상위)
 | `lib/client-api.ts` 헬퍼 미활용 | Medium | 잔존 |
 | 동대표 교체 후 JWT 블랙리스트 없음 | Medium | 잔존 |
 | 로그인 API 추가 DB 쿼리 | Low | ADMIN 로그인 시 최대 2쿼리 추가 |
+
+---
+
+## 2026-04-20 QA 세션 — 전체 코드베이스 보안·안정성 리뷰
+
+### 전체 평가
+Critical 1건, High 5건, Medium 5건, Low/Design 4건 발견. Critical~Medium 전체 수정 완료. Low/Design은 SPRINT.md D-01~D-04로 이관.
+
+### 수정 완료 항목
+
+#### 🔴 Critical
+| # | 위치 | 문제 | 수정 |
+|---|------|------|------|
+| 1 | `pay/confirm/route.ts`, `verify/route.ts` | PortOne 검증 함수 두 파일에 복붙 — 한쪽만 수정될 경우 결제 검증 불일치 | `lib/portone.ts` 공통 모듈로 추출 |
+
+#### 🟠 High
+| # | 위치 | 문제 | 수정 |
+|---|------|------|------|
+| 2 | `polls/route.ts`, `posts/route.ts`, `posts/[postId]`, `like` | `assertVillaAccess`에 `status: 'APPROVED'` 미필터 — PENDING 신청자 정보 열람 가능 | `status: 'APPROVED'` 조건 4개 파일 추가 |
+| 3 | `payments/[paymentId]/route.ts`, `verify/route.ts` | 납부 상태 갱신 + 장부 기록 비원자 — 부분 실패 시 데이터 불일치 | `prisma.$transaction` 적용 |
+| 4 | `cron/auto-payment/route.ts` | 결제 성공 후 villa.update 실패 시 알림 없음 + subscriptionExpiry 재조회 | 실패 시 관리자 긴급 알림 + 초기 select에 포함 |
+| 5 | `cron/invoice-reminder/route.ts` | 0원 청구서도 독촉 알림 발송 | `amount: { gt: 0 }` 조건 추가 |
+| 6 | `vehicles/route.ts` | 차량 목록 N+1 쿼리 | ownerIds 배치 조회 + Map 룩업으로 교체 |
+
+#### 🟡 Medium
+| # | 위치 | 문제 | 수정 |
+|---|------|------|------|
+| 7 | `dashboard/route.ts` | 클라이언트 임의 villaId 파라미터 전달 가능 | searchParams 제거, JWT villaId만 사용 |
+| 8 | `invoice-reminder/route.ts` | 중복 체크 쿼리가 전체 알림 테이블 스캔 + 불안정한 regex | userId 필터 추가, UUID 형식 regex `[a-f0-9-]{36}` 한정 |
+| 9 | `lib/auth.ts` | JWT_SECRET 미설정 시 프로덕션만 throw — 개발 환경 하드코딩 폴백 | 전 환경 throw로 강화 |
+| 10 | `posts/route.ts` | 공지 알림 body에 TipTap HTML 태그 노출 | `replace(/<[^>]*>/g, '')` 스트립 후 발송 |
+| 11 | `requireActiveSubscription` | 청구서/투표/외부청구/건물이력 POST에 구독 가드 미적용 | 4개 엔드포인트 추가 |
+
+#### 🟢 Low/Design — SPRINT.md D-01~D-04로 이관 (미수정)
+- D-01: `Button.tsx` loading Spinner + 텍스트 동시 표시
+- D-02: `Badge.tsx` 테두리 누락
+- D-03: `(admin)/home` 바로가기 터치 타깃 44px 미달
+- D-04: `poll-reminder` Cron 스케줄 불일치
+
+### 테스트 결과
+- 수정 전: 29/33 통과 (4건 실패 — tickets POST mock 미등록)
+- 수정 후: **33/33 통과**
+- 추가 케이스: 미승인 입주민 POST 403 검증 케이스 신규 추가
+
+### 이 프로젝트의 보안 취약 패턴 (반복 주의)
+- `residentRecord.findFirst`에 `status: 'APPROVED'` 누락 → 미승인자 데이터 접근
+- 외부 결제 API 호출 + DB 업데이트 사이의 비원자성 → `$transaction` 필수
+- `searchParams` 파라미터를 그대로 DB 쿼리에 사용 → JWT 값만 신뢰
+
+---
+
+## 2026-04-21 — D-01~D-04 해소 확인 + 신규 버그 발견·수정
+
+### D-01~D-04 전체 해소
+
+| # | 항목 | 수정 내용 | 상태 |
+|---|------|----------|------|
+| D-01 | Button loading 텍스트+스피너 동시 표시 | `{loading ? <Spinner/> : children}` | ✅ 해소 |
+| D-02 | Badge 테두리 누락 | `ring-1 ring-{color}-200` 추가 | ✅ 해소 |
+| D-03 | 관리자 홈 바로가기 터치 타깃 44px 미달 | `min-h/w-[44px]` 추가 | ✅ 해소 |
+| D-04 | poll-reminder 주석 스케줄 불일치 | 주석 `"0 15 * * *"` 통일 | ✅ 해소 |
+
+### 신규 발견·즉시 수정 버그 3건
+
+#### 1. 바텀시트 BottomNav 가림 (공용시설·업체 3페이지)
+- **원인**: 신규 바텀시트 `z-50` = BottomNav `z-50`. DOM 렌더 후순위로 BottomNav가 바텀시트를 덮음
+- **수정**: 바텀시트 `z-60` 상향
+- **재발 방지**: 이 프로젝트에서 바텀시트/모달은 반드시 `z-60` 이상 사용. BottomNav는 `z-50` 고정
+
+#### 2. 관리자 프로필 하단 가림
+- **원인**: `pb-10` (40px) < BottomNav `h-14` (56px)
+- **수정**: `pb-24` (96px)
+- **재발 방지**: 페이지 `<main>` 하단 패딩은 최소 `pb-24` (기존 패턴 준수)
+
+#### 3. 기존 관리자 듀얼 모드 활성화 불가 (기능 공백)
+- **원인**: 온보딩 체크박스 미선택 시 사후 입주민 등록 경로 없음
+- **수정**: 관리자 프로필에 "등록" 버튼 + 바텀시트 추가, join API 호출 후 localStorage 즉시 반영
+- **검증 포인트**: `hasDualMode()` = true 되어야 "전환" 버튼 표시됨
+
+### 이 프로젝트 반복 패턴 추가 기록
+
+- **바텀시트 z-index 충돌**: Sprint 7, Sprint 10에서 2회 반복. 신규 바텀시트 추가 시 **반드시 z-60 확인**
+
+---
+
+## 2026-04-23 — 백오피스 로그인 플로우 버그 수정
+
+### 발견된 버그 2건
+
+#### 1. 백오피스 로그인 후 404
+- **증상**: 로그인 성공 후 `/backoffice/dashboard`로 리다이렉트되지만 404 반환
+- **원인**: 실제 파일 경로가 `app/(backoffice)/dashboard/page.tsx`이므로 URL은 `/dashboard`. 코드 전반에 `/backoffice/dashboard`가 잘못 하드코딩됨
+- **수정**: 로그인 페이지, 사이드바 링크, app/page.tsx, auth/login/page.tsx의 리다이렉트 경로를 모두 `/dashboard`로 수정
+
+#### 2. 백오피스 대시보드 진입 시 로그인 루프
+- **증상**: `/backoffice/login` 로그인 후 별 반응 없음 (다시 로그인 화면으로 복귀)
+- **원인**: `bo_session` 쿠키가 `path: '/backoffice'`로 발급되어, `/dashboard` 요청 시 쿠키가 전송되지 않음 → 미들웨어가 `bo_session` 없음으로 판단 → 다시 `/backoffice/login`으로 리다이렉트 → 무한 루프
+- **수정**: 쿠키 `path: '/backoffice'` → `path: '/'`
+
+### 재발 방지 체크리스트 추가
+
+백오피스 쿠키 관련:
+- `bo_session` 쿠키는 반드시 `path: '/'`로 발급 (`/backoffice`로 제한하면 루트 레벨 페이지에서 미전송)
+- 미들웨어 matcher에 백오피스 페이지 실제 URL 경로가 포함되어 있는지 확인
+
+Next.js route group URL 확인:
+- `app/(group)/page-name/page.tsx` → URL은 `/page-name` (group 이름 미포함)
+- 새 백오피스 페이지 추가 시 실제 URL을 middleware matcher에 등록해야 서버 사이드 보호 적용됨
+- **pb 부족**: 페이지마다 수작업 확인 필요. `pb-24` 표준으로 사용할 것
+
+---
+
+## 2026-04-24~25 — Sprint 12 QA 전수 수정 결과
+
+### 점검 범위
+Sprint 12 백로그 High 3건, Medium 5건, Design 3건, Low 3건 전체 수정 완료.
+
+### 🔴 High — 전체 수정 완료
+
+| # | 위치 | 문제 | 수정 |
+|---|------|------|------|
+| H-1 | `app/api/resident/facilities/[id]/reservations/route.ts` | 과거 날짜 예약 서버 검증 없음 | KST `todayKST` 기준 `body.date < todayKST` 시 400 반환 |
+| H-2 | `invoices/route.ts`, `publish-invoices/route.ts` | `status: 'APPROVED'` 필터 누락 | headResidents 쿼리에 `status: 'APPROVED'` 추가 |
+| H-3 | `external-billing/[billId]/confirm/route.ts` | 결제완료+장부기록 비원자 | `prisma.$transaction([update, create])` 배열 형식으로 묶음 |
+
+### 🟡 Medium — 전체 수정 완료
+
+| # | 위치 | 수정 |
+|---|------|------|
+| M-1 | `manage/facilities/page.tsx` | `useConfirm` 도입 + `res.ok` 체크 + 에러 표시 |
+| M-2 | `manage/vendors/page.tsx` | `handleDelete` `res.ok` 체크 추가 |
+| M-4 | `api/resident/payments/history/route.ts` | RESIDENT/ADMIN role 검증 추가 |
+| M-5 | `posts/[postId]/route.ts` | `isNotice === true` 시 `villa.adminId` 검증 추가 |
+| M-8 | `lib/notify.ts` `createNotificationForVilla` | `status: 'APPROVED'` 필터 추가 |
+
+### 🎨 Design — 전체 수정 완료
+
+| # | 수정 내용 |
+|---|----------|
+| D-1 | `Toast` 컴포넌트 + `useToast` 훅 신규. 앱 전반 `window.alert/confirm` 교체 완료 |
+| D-2 | Badge 시맨틱 수정: PENDING=`'warning'`, OVERDUE=`'error'` |
+| D-3 | 삭제 버튼 터치 타깃 `min-h-[44px]` 적용 |
+
+### 🔵 Low — 전체 수정 완료
+
+| # | 수정 내용 |
+|---|----------|
+| L-2 | 예약 바텀시트 `today` 초기화 `getKSTToday()` 함수로 확정 |
+| L-3 | 시설 예약 API `date: { gte: today }` — 오늘 이후 예약 포함, 타인 예약은 오늘만 표시 |
+| L-4 | `InsightsSection` 에러 상태 UI 추가 |
+
+### 🆕 fixedFee 고정 관리비 자동 발행
+
+| 항목 | 내용 |
+|------|------|
+| DB | `Villa.fixedFee Int?` 추가 (`prisma db push` 완료) |
+| API | `PATCH /api/villas/[villaId]`에서 `fixedFee` 수신·저장 |
+| 크론 | `publish-invoices`에서 `fee = villa.fixedFee ?? 0` 기반 금액 설정 |
+| UI | `AutoPublishCard` (`manage/invoices/page.tsx` 내 인라인) — 발행일·금액 저장 |
+
+### 미해결 항목 (다음 스프린트)
+
+| 항목 | 위험도 |
+|------|--------|
+| M-6 — 인사이트 API JS 집계 → DB groupBy | Low |
+| L-5 — 장부 입주민 노출 정책 결정 | Low |
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical |
+| 기존 평문 빌링키 마이그레이션 | High |

@@ -1,0 +1,11 @@
+{
+  "기능명": "고정 관리비 자동 발행 (fixedFee)",
+  "reqId": "F-26",
+  "sprint": "Sprint 12",
+  "상태": "완료",
+  "구현일": "2026-04-25",
+  "요약": "Villa 모델에 fixedFee Int? 필드 추가. 관리자가 청구서 관리 페이지에서 세대당 고정 관리비 금액을 설정하면 매월 지정일에 해당 금액으로 청구서 자동 발행. 미설정 시 기존처럼 0원 발행(하위 호환). AutoPublishCard UI 컴포넌트 추가.",
+  "수정된파일": "prisma/schema.prisma, app/api/villas/[villaId]/route.ts, app/api/cron/publish-invoices/route.ts, app/(admin)/manage/invoices/page.tsx",
+  "스펙편차": "없음 — autoPublishDay와 동일 패턴으로 확장",
+  "비고": "prisma db push로 Supabase에 fixedFee 컬럼 추가 완료. Vercel 배포 완료 (commit: bc4bbabc)"
+}

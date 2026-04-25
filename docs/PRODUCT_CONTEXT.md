@@ -2541,3 +2541,249 @@ Prisma 스키마 변경 없이 `LedgerTransaction.createdBy = 'system'`으로 �
 | 주소 검색 버튼 비활성화 | `lazyOnload` 전략 + `postcodeReady` 의존성 | 동적 스크립트 로딩으로 교체 |
 | 주소 검색 팝업 미동작 (CSP) | `script-src` t1.daumcdn.net 미허용 | `next.config.ts` 추가 |
 | 주소 검색 팝업 차단 (CSP) | `frame-src` kakao.com 미허용 | `next.config.ts` 추가 |
+
+---
+
+## 2026-04-20 변경 내역 (Sprint 9 — QA + 예시 데이터)
+
+### 1. 아키텍처 변경점
+
+**PortOne 공통 모듈 분리**
+`lib/portone.ts` 신규 추가. 결제 검증에 사용되는 `getPortOneToken` / `getPortOnePayment` 를 두 개의 별개 라우트에서 공유. 이후 PortOne API 변경 시 단일 파일만 수정.
+
+**`$transaction` 원자성 일관 적용**
+납부 상태 갱신(PATCH /payments) + 장부 자동 기록이 서로 다른 쿼리로 실행되던 것을 `prisma.$transaction`으로 묶어 부분 실패 방지. 적용 대상: 관리자 수동 납부 확인, PortOne 결제 검증 후 자동 기록.
+
+**`requireActiveSubscription` 적용 범위 확장**
+구독 만료(EXPIRED) 시 청구서 발행, 외부청구 생성, 투표 생성, 건물이력 등록 모두 403 반환. 기존에는 에너지 사용량 등록만 적용.
+
+**예시 데이터 시드 추가**
+`prisma/seed.ts` 신규. `npx prisma db seed` 실행 시 "햇살 빌라" 데모 계정과 전 기능 예시 컨텐츠 자동 삽입. 신규 관리자가 빈 화면 없이 기능을 직관적으로 파악 가능.
+
+### 2. API 변경
+
+| 엔드포인트 | 변경 내용 |
+|-----------|----------|
+| `GET /api/dashboard` | `?villaId=` 쿼리 파라미터 제거. JWT의 `user.villaId`만 신뢰 |
+| `GET /api/villas/[villaId]/vehicles` | N+1 쿼리 제거 → ownerIds 배치 조회 + Map 룩업으로 교체. 응답 형식 동일 |
+| `GET|POST /api/villas/[villaId]/polls` | 미승인(PENDING) 입주자 접근 차단 (`status: 'APPROVED'` 필터) |
+| `GET /api/villas/[villaId]/posts` | 미승인(PENDING) 입주자 접근 차단 |
+| `GET /api/villas/[villaId]/posts/[postId]` | 미승인(PENDING) 입주자 접근 차단 |
+| `POST /api/villas/[villaId]/posts/[postId]/like` | 미승인(PENDING) 입주자 접근 차단 |
+| `POST /api/villas/[villaId]/invoices` | 구독 EXPIRED 시 403 반환 추가 |
+| `POST /api/villas/[villaId]/external-billing` | 구독 EXPIRED 시 403 반환 추가 |
+| `POST /api/villas/[villaId]/polls` | 구독 EXPIRED 시 403 반환 추가 |
+| `POST /api/villas/[villaId]/building-events` | 구독 EXPIRED 시 403 반환 추가 |
+| `PATCH .../payments/[paymentId]` | 상태 갱신 + 장부 기록 `$transaction` 원자화 |
+| `POST .../payments/[paymentId]/verify` | PortOne 검증 + 상태 갱신 + 장부 기록 `$transaction` 원자화 |
+
+### 3. 데이터 모델 변경
+
+없음 (Prisma 스키마 변경 없음)
+
+신규 파일:
+- `prisma/seed.ts` — 데모 데이터 시드 스크립트
+- `lib/portone.ts` — PortOne API 클라이언트 공통 모듈
+
+### 4. 기술 부채
+
+**해소된 항목**
+
+| 항목 | 설명 |
+|------|------|
+| PortOne 함수 중복 | `lib/portone.ts` 공통 모듈로 해소 |
+| `requireActiveSubscription` 미적용 라우트 | 4개 POST 엔드포인트 추가 적용 |
+| 개발환경 JWT 하드코딩 폴백 | 전 환경 `JWT_SECRET` 필수화로 해소 |
+| vehicles N+1 쿼리 | 배치 조회 + Map 룩업으로 해소 |
+
+**신규 등록 (미수정 — SPRINT.md D-01~D-04)**
+
+| ID | 위치 | 내용 |
+|----|------|------|
+| D-01 | `Button.tsx:82` | loading 상태 Spinner + 텍스트 동시 표시 |
+| D-02 | `Badge.tsx` | variant별 1px 테두리 누락 |
+| D-03 | `(admin)/home/page.tsx:271` | 바로가기 버튼 터치 타깃 44px 미달 |
+| D-04 | `vercel.json` poll-reminder | Cron 스케줄 KST 불일치 |
+
+**잔존 부채 (변동 없음)**
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 잔존 |
+| 기존 평문 빌링키 DB 마이그레이션 | High | 잔존 |
+| `lib/client-api.ts` 헬퍼 미활용 | Medium | 잔존 |
+| 동대표 교체 후 JWT 블랙리스트 없음 | Medium | 잔존 |
+| PortOne 운영 MID 미전환 | High | 잔존 |
+
+### 버그 수정 요약
+
+| 버그 | 원인 | 수정 |
+|------|------|------|
+| 미승인 입주자 투표·커뮤니티 열람 가능 | `assertVillaAccess`에 `status: 'APPROVED'` 미필터 | 4개 라우트 조건 추가 |
+| 납부 PAID 전환 후 장부 기록 누락 가능 | 별도 쿼리 비원자 실행 | `$transaction` 적용 |
+| dashboard 타 빌라 존재 여부 탐색 | searchParams villaId 미검증 | JWT villaId만 사용 |
+| 0원 청구서 독촉 알림 발송 | amount 필터 없음 | `amount: { gt: 0 }` 추가 |
+| 공지 Web Push에 HTML 태그 노출 | TipTap content 직접 slice | `replace(/<[^>]*>/g, '')` 적용 |
+| 테스트 4건 실패 | tickets POST mock `residentRecord` 미등록 | mock 추가 + 403 케이스 신규 |
+
+---
+
+## 구현 현황 (2026-04-21 기준)
+
+### Sprint 10 — 즉시 추가 기능 4종 + QA D-01~D-04 해소
+
+#### QA D-01~D-04 완전 해소
+
+| # | 항목 | 수정 내용 |
+|---|------|----------|
+| D-01 | Button loading 텍스트+스피너 동시 표시 | `{loading ? <Spinner/> : children}` |
+| D-02 | Badge 1px 테두리 누락 | `ring-1 ring-{color}-200` 추가 |
+| D-03 | 관리자 홈 바로가기 터치 타깃 44px 미달 | `min-h/w-[44px]` 추가 |
+| D-04 | poll-reminder Cron 주석 스케줄 불일치 | 주석 `"0 15 * * *"` 통일 |
+
+#### 신규 기능 4종
+
+**1. 관리자 수금 인사이트**
+- `GET /api/admin/insights` — 이번 달 수금률, 최근 6개월 수금액 월별 집계
+- `components/InsightsSection.tsx` — 순수 CSS 막대 차트 (recharts 미사용), 관리자 홈 하단 자동 표시
+
+**2. 입주민 납부 히스토리**
+- `GET /api/resident/payments/history?status=PAID|PENDING|OVERDUE`
+- `app/(resident)/villa/invoices/history/page.tsx` — 전체/완납/미납 탭 필터
+
+**3. 공용시설 예약**
+- 신규 모델: `Facility` (name, maxPerDay, isActive), `FacilityReservation` (date, timeSlot, note)
+- 관리자: 시설 CRUD + 운영중단/재개 토글 + 예약 현황 조회
+- 입주민: 날짜·시간대 선택 예약, 내 예약 취소
+- 접근: 관리자 `/manage/facilities`, 입주민 `/villa/facilities`
+
+**4. 외부 업체 연락처 관리**
+- 신규 모델: `Vendor` (name, category, phone, memo), `VendorCategory` enum
+- 관리자: 카테고리별 CRUD, 입주민: 읽기 전용 + `tel:` 전화 바로가기
+- 접근: 관리자 `/manage/vendors`, 입주민 `/villa/vendors`
+
+#### 버그 수정 3건
+
+| 버그 | 원인 | 수정 |
+|------|------|------|
+| 신규 페이지 바텀시트 BottomNav 가림 | 바텀시트 z-50 = BottomNav z-50 | 바텀시트 z-60 상향 |
+| 관리자 프로필 하단 항목 가림 | `pb-10` (40px) < BottomNav 56px | `pb-24` 수정 |
+| 기존 관리자 듀얼 모드 활성화 불가 | 온보딩 이후 입주민 등록 경로 없음 | 프로필 "등록" 버튼 + join API 호출 추가 |
+
+#### 현재 기술 스택 (2026-04-21 업데이트)
+
+| 구분 | 현황 |
+|------|------|
+| Frontend | Next.js 15 App Router + TypeScript |
+| Backend | Next.js Route Handlers (풀스택) |
+| DB 모델 수 | User, Villa, ResidentRecord, Invoice(+Item+Payment), ExternalBilling, Post(+Like+Comment), Poll(+Option+Vote), Ticket, LedgerTransaction, BuildingEvent, Vehicle, Notification, PushSubscription, SocialAccount, TossBillingKey, EnergyUsage, **Facility**, **FacilityReservation**, **Vendor** |
+| 배포 | https://villamate.vercel.app (Vercel) |
+| 테스트 | 33/33 통과 |
+
+#### 잔존 운영 과제
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| **신규 테이블 Supabase 미적용** | **High** | Facility/FacilityReservation/Vendor SQL 수동 적용 필요 |
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 자동결제 불가 |
+| 기존 평문 빌링키 마이그레이션 | High | 잔존 |
+| PortOne 운영 MID 미전환 | High | 테스트 MID 사용 중 |
+
+---
+
+### Sprint 11 (2026-04-23) — 백오피스 라우팅 버그 수정 + 운영 초기화
+
+#### 아키텍처 수정
+
+**백오피스 URL 경로 체계 확정**
+
+`(backoffice)` route group 내 페이지들의 실제 URL이 `/dashboard`, `/villas` 등 루트 레벨임을 확인하고, 코드 전반에 잘못 하드코딩된 `/backoffice/dashboard` 등의 경로를 일괄 수정.
+
+| 수정 파일 | 수정 내용 |
+|----------|---------|
+| `app/(backoffice)/backoffice/login/page.tsx` | 리다이렉트 `/backoffice/dashboard` → `/dashboard` |
+| `app/(backoffice)/layout.tsx` | 사이드바 링크 `/backoffice/*` → `/*` |
+| `app/(auth)/login/page.tsx` | SUPER_ADMIN 리다이렉트 경로 수정 |
+| `app/page.tsx` | SUPER_ADMIN 리다이렉트 경로 수정 |
+| `app/api/backoffice/auth/login/route.ts` | `bo_session` 쿠키 `path: '/backoffice'` → `path: '/'` |
+| `middleware.ts` | matcher에 `/dashboard`, `/villas`, `/users`, `/billing`, `/mrr`, `/content/*` 추가 |
+
+**핵심 버그**: `bo_session` 쿠키가 `path: '/backoffice'`로 발급되어 `/dashboard` 접근 시 쿠키 미전송 → 미들웨어 인증 실패 → 로그인 루프 발생. `path: '/'`로 수정하여 해소.
+
+#### API 변경 없음 (라우팅/인증 버그 수정만)
+
+#### 운영 초기화 작업
+
+| 작업 | 내용 |
+|------|------|
+| SUPER_ADMIN 계정 생성 | `dmlehsasd@gmail.com` / role=SUPER_ADMIN DB 직접 생성 |
+| Seed 데이터 적용 | `npx prisma db seed` 실행 — 햇살 빌라 데모 데이터 DB 반영 |
+
+**시드 데이터 내용**: 햇살 빌라 (초대코드: DEMO-VILLA), 관리자 `admin@villamate.demo`, 입주자 `r101~r202@villamate.demo` / 청구서 2건·외부청구 3건·장부 8건·커뮤니티 4건·민원 4건·투표 3건·에너지 6개월치
+
+#### 현재 기술 스택 (2026-04-23 업데이트)
+
+| 구분 | 현황 |
+|------|------|
+| Frontend | Next.js 15 App Router + TypeScript |
+| Backend | Next.js Route Handlers (풀스택) |
+| 배포 | https://villamate.vercel.app (Vercel) |
+| 테스트 | 33/33 통과 |
+
+---
+
+### Sprint 12 (2026-04-24~25) — QA 전수 수정 + fixedFee 고정 관리비 자동 발행
+
+#### 보안·기능 수정
+
+| # | 파일 | 수정 내용 |
+|---|------|----------|
+| H-1 | `facilities/[id]/reservations/route.ts` | 과거 날짜 예약 서버 검증 추가 (KST 기준) |
+| H-2 | `invoices/route.ts`, `publish-invoices/route.ts` | headResidents `status: 'APPROVED'` 필터 — PENDING 세대 청구서 발행 차단 |
+| H-3 | `external-billing/[billId]/confirm/route.ts` | 결제완료 + 장부기록 `prisma.$transaction` 원자화 |
+| M-1 | `manage/facilities/page.tsx` | 삭제·토글 `res.ok` 체크 + `useConfirm` 적용 |
+| M-2 | `manage/vendors/page.tsx` | `handleDelete` `res.ok` 체크 추가 |
+| M-4 | `resident/payments/history/route.ts` | RESIDENT/ADMIN role 검증 추가 |
+| M-5 | `posts/[postId]/route.ts` | PATCH 공지 승격 시 `villa.adminId` 검증 |
+| M-8 | `lib/notify.ts` `createNotificationForVilla` | `status: 'APPROVED'` 필터 추가 |
+
+#### 디자인 QA 수정
+
+| # | 수정 내용 |
+|---|----------|
+| D-1 | `Toast` 컴포넌트 + `useToast` 훅 신규. 앱 전반 `window.alert/confirm` 완전 제거 |
+| D-2 | Badge 시맨틱 수정: PENDING=`warning`, OVERDUE=`error` (납부 상태 페이지) |
+| D-3 | 삭제 버튼 터치 타깃 `min-h-[44px]` 표준화 |
+| L-2 | 시설 예약 today 초기화 KST 기준 확정 |
+| L-3 | 시설 예약 API 오늘 이후 예약 포함 조회, 타인 예약 오늘만 표시 |
+| L-4 | InsightsSection 에러 상태 UI 추가 |
+
+#### 신규 기능 — fixedFee 고정 관리비 자동 발행
+
+| 레이어 | 내용 |
+|--------|------|
+| DB | `Villa.fixedFee Int?` 추가 (`prisma db push` 완료) |
+| API | `PATCH /api/villas/[villaId]`에서 `fixedFee` 저장 지원 |
+| 크론 | `publish-invoices` — `fixedFee ?? 0` 기반 청구서 금액 자동 설정 |
+| UI | `AutoPublishCard` (`manage/invoices/page.tsx`) — 발행일 + 금액 설정 카드 |
+
+기존 자동 발행 기능(autoPublishDay)은 금액이 항상 0원이었으나, fixedFee 설정 시 올바른 금액으로 발행됨. 미설정 시 기존처럼 0원 발행(하위 호환).
+
+#### 현재 기술 스택 (2026-04-25 업데이트)
+
+| 구분 | 현황 |
+|------|------|
+| Frontend | Next.js 15 App Router + TypeScript |
+| Backend | Next.js Route Handlers (풀스택) |
+| 배포 | https://villamate.vercel.app (Vercel) |
+| 테스트 | 33/33 통과 |
+
+#### 잔존 운영 과제
+
+| 항목 | 위험도 |
+|------|--------|
+| Supabase 신규 테이블(Facility/FacilityReservation/Vendor) SQL 적용 | **Critical** |
+| `BILLING_ENCRYPTION_KEY` Vercel 등록 | Critical |
+| 기존 평문 빌링키 마이그레이션 | High |
+| PortOne 운영 MID 전환 | High |
+| 백오피스 | https://villamate.vercel.app/backoffice/login — 정상 동작 확인 |

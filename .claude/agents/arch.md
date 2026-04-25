@@ -2580,3 +2580,237 @@ Daum Postcode 서비스가 카카오로 이전되어 실제 iframe은 `postcode.
 |------|--------|------|
 | 로그인 API 응답 증가 | Low | villa 오브젝트 조회 쿼리 1~2개 추가. 트래픽 많을 경우 캐싱 고려 |
 | Daum Postcode 동적 로딩 | Low | 버튼 첫 클릭 시 외부 스크립트 다운로드 발생 — 느린 네트워크에서 지연 가능 |
+
+---
+
+## 2026-04-20 아키텍처 변경 (Sprint 9 — QA 보안·안정성)
+
+### 1. 아키텍처 변경점
+
+#### `lib/portone.ts` 신규 공통 모듈 추출
+두 결제 경로(`pay/[billId]/confirm/route.ts`, `payments/[paymentId]/verify/route.ts`)에 복붙되어 있던 `getPortOneToken` / `getPortOnePayment` 함수를 `lib/portone.ts`로 추출.
+- **동기**: PortOne API 변경 시 두 경로 중 하나만 수정되어 검증 로직이 불일치할 수 있는 Critical 보안 리스크 제거
+- **패턴**: `lib/` 폴더에 외부 API 클라이언트 모듈 배치 (`lib/toss.ts`, `lib/portone.ts` 등)
+
+#### `$transaction` 원자성 패턴 일관 적용
+`PATCH /invoices/.../payments/[paymentId]` 와 `POST .../verify` 두 결제 경로에서 납부 상태 업데이트 + 장부 자동 기록을 별도 쿼리로 실행하던 것을 `prisma.$transaction([update, create])` 단일 원자 트랜잭션으로 통합.
+- **동기**: 납부 PAID 전환은 성공하고 장부 기록이 실패하는 데이터 불일치 위험 제거
+
+#### `requireActiveSubscription` 가드 적용 범위 확장
+기존 에너지 사용량 등록에만 적용되어 있던 구독 만료 가드를 4개 핵심 POST 엔드포인트로 확장:
+- `POST /invoices` (청구서 발행)
+- `POST /external-billing` (외부청구 생성)
+- `POST /polls` (투표 생성)
+- `POST /building-events` (건물이력 등록)
+
+#### JWT 신뢰 범위 축소 — dashboard villaId
+`GET /api/dashboard` 에서 `searchParams.get('villaId')` 제거. JWT의 `user.villaId`만 신뢰하도록 변경.
+- **동기**: 클라이언트가 임의 villaId 파라미터를 전달해 타 빌라 존재 여부 탐색 가능하던 정보 노출 차단
+
+### 2. 미해결 기술 부채 (기존 유지)
+
+| 항목 | 위험도 | 비고 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 미등록 | Critical | 잔존 |
+| 기존 평문 빌링키 DB 마이그레이션 | High | 잔존 |
+| `lib/client-api.ts` 헬퍼 미활용 | Medium | 잔존 |
+| 동대표 교체 후 JWT 블랙리스트 없음 | Medium | 잔존 |
+| Button loading UI 불일치 (D-01) | Low | SPRINT.md D-01 |
+| Badge 테두리 누락 (D-02) | Low | SPRINT.md D-02 |
+| 홈 바로가기 터치 타깃 미달 (D-03) | Low | SPRINT.md D-03 |
+| poll-reminder Cron 스케줄 불일치 (D-04) | Low | SPRINT.md D-04 |
+
+---
+
+## 2026-04-21 — Sprint 10 아키텍처 변경점
+
+### 1. 신규 DB 모델 3종
+
+| 모델 | 필드 | 관계 |
+|------|------|------|
+| `Facility` | name, description, maxPerDay, isActive | Villa → Facility (1:N) |
+| `FacilityReservation` | facilityId, userId, villaId, roomNumber, date, timeSlot, note | Facility → FacilityReservation (1:N), User → FacilityReservation (1:N) |
+| `Vendor` | name, category(enum), phone, memo | Villa → Vendor (1:N) |
+
+신규 enum: `VendorCategory` (PLUMBING / ELECTRICAL / CLEANING / CONSTRUCTION / ELEVATOR / ETC)
+
+> **⚠️ 기술 부채**: `prisma migrate dev`가 Vercel 빌드 환경에서 실행 불가하여 Supabase SQL Editor 수동 적용 필요. 미적용 시 공용시설·업체 API 런타임 500 오류 발생.
+
+### 2. 신규 API 라우트 11개
+
+| 경로 | 메서드 | 설명 |
+|------|--------|------|
+| `/api/admin/insights` | GET | 수금률 + 6개월 수금액 집계 |
+| `/api/admin/facilities` | GET/POST | 시설 목록/등록 |
+| `/api/admin/facilities/[id]` | PATCH/DELETE | 시설 수정/삭제 |
+| `/api/admin/facilities/[id]/reservations` | GET | 시설별 예약 현황 |
+| `/api/admin/vendors` | GET/POST | 업체 목록/등록 (카테고리 필터) |
+| `/api/admin/vendors/[id]` | PATCH/DELETE | 업체 수정/삭제 |
+| `/api/resident/payments/history` | GET | 입주민 납부 이력 (status 필터) |
+| `/api/resident/facilities` | GET | 활성 시설 + 오늘 예약 현황 |
+| `/api/resident/facilities/[id]/reservations` | POST | 예약 생성 |
+| `/api/resident/facilities/[id]/reservations/[rid]` | DELETE | 예약 취소 |
+| `/api/resident/vendors` | GET | 업체 목록 읽기 전용 |
+
+### 3. 신규 공통 컴포넌트
+
+- `components/InsightsSection.tsx` — 관리자 홈 수금 인사이트 (순수 CSS 막대 차트, recharts 미사용)
+
+### 4. 듀얼 모드 활성화 경로 추가
+
+- **이전**: 온보딩 체크박스(빌라 최초 등록 시)만 가능
+- **추가**: 관리자 프로필 → "등록" 버튼 → 호수 입력 → `POST /api/villas/${villaId}/residents/join` → `saveUser()`로 `residentVilla` 즉시 반영
+
+### 5. 기술 부채 업데이트
+
+해소된 항목 (D-01~D-04):
+
+| 항목 | 상태 |
+|------|------|
+| Button loading Spinner+텍스트 동시 표시 (D-01) | ✅ 해소 |
+| Badge 테두리 누락 (D-02) | ✅ 해소 |
+| 홈 바로가기 터치 타깃 미달 (D-03) | ✅ 해소 |
+| poll-reminder Cron 주석 불일치 (D-04) | ✅ 해소 |
+
+신규 발생 및 즉시 해소:
+- 신규 페이지 바텀시트 z-index 충돌 (z-50 → z-60) — 즉시 수정
+- 관리자 프로필 pb-10 → pb-24 하단 가림 — 즉시 수정
+
+잔존 기술 부채 추가:
+- 신규 테이블(Facility/FacilityReservation/Vendor) Supabase 수동 적용 대기 — High
+
+---
+
+## 2026-04-23 — 아키텍처 변경점
+
+### 1. 백오피스 URL 경로 체계 확정
+
+**변경 전 문제**: `(backoffice)` route group 내 페이지 파일은 `app/(backoffice)/dashboard/page.tsx` 등 루트 레벨에 위치하여 실제 URL이 `/dashboard`, `/villas`, `/users`, `/billing`, `/mrr`, `/content/*`이지만, 코드 전반에 `/backoffice/dashboard` 등 잘못된 경로가 하드코딩되어 있었음.
+
+**확정 구조**:
+
+| 파일 경로 | 실제 URL |
+|----------|---------|
+| `app/(backoffice)/dashboard/page.tsx` | `/dashboard` |
+| `app/(backoffice)/villas/page.tsx` | `/villas` |
+| `app/(backoffice)/users/page.tsx` | `/users` |
+| `app/(backoffice)/billing/page.tsx` | `/billing` |
+| `app/(backoffice)/mrr/page.tsx` | `/mrr` |
+| `app/(backoffice)/content/*/page.tsx` | `/content/*` |
+| `app/(backoffice)/backoffice/login/page.tsx` | `/backoffice/login` |
+
+로그인은 `/backoffice/login`, 나머지 페이지는 루트 레벨 URL 사용.
+
+### 2. 미들웨어 matcher 확장
+
+백오피스 페이지 경로들을 `middleware.ts` matcher에 명시적으로 추가:
+
+```ts
+matcher: [
+  '/api/:path*',
+  '/backoffice/:path*',
+  '/dashboard', '/dashboard/:path*',
+  '/villas', '/villas/:path*',
+  '/users', '/users/:path*',
+  '/billing', '/billing/:path*',
+  '/mrr',
+  '/content/:path*',
+]
+```
+
+`isBackofficePage` 조건 블록으로 위 경로 전부에 `bo_session` HttpOnly 쿠키 검증 적용.
+
+### 3. bo_session 쿠키 scope 수정
+
+**이전**: `path: '/backoffice'` — `/backoffice/*` 요청에만 쿠키 전송
+**이후**: `path: '/'` — 모든 경로에 쿠키 전송
+
+백오피스 페이지가 `/dashboard`, `/villas` 등 루트 레벨에 있기 때문에 쿠키 path가 `/backoffice`이면 미들웨어가 해당 페이지에서 쿠키를 읽지 못해 로그인 루프 발생. `/`로 확장하여 해소.
+
+### 기술 부채 현황 (2026-04-23 기준)
+
+| 항목 | 위험도 | 상태 |
+|------|--------|------|
+| Facility/FacilityReservation/Vendor 테이블 Supabase 수동 적용 | High | 미완료 |
+| `BILLING_ENCRYPTION_KEY` Vercel 등록 | Critical | 미완료 |
+| 기존 평문 빌링키 마이그레이션 | High | 미완료 |
+
+---
+
+## 2026-04-24~25 — Sprint 12 QA 수정 + fixedFee 고정 관리비 자동 발행
+
+### 아키텍처 변경점
+
+#### 1. 데이터 모델 — Villa.fixedFee 추가
+
+`prisma/schema.prisma`의 Villa 모델에 `fixedFee Int?` 필드 추가. `prisma db push`로 Supabase에 직접 반영 (migration 없이 컬럼 추가).
+
+```prisma
+model Villa {
+  autoPublishDay  Int?
+  fixedFee        Int?  // ← 신규: 세대당 고정 관리비 (원)
+}
+```
+
+이 필드는 매월 자동 발행되는 청구서의 세대당 금액 기준으로 사용됨. null이면 0원으로 처리.
+
+#### 2. 크론 로직 변경 — publish-invoices
+
+`app/api/cron/publish-invoices/route.ts`:
+- villa SELECT에 `fixedFee` 추가
+- `totalAmount = fee * headResidents.length` (기존: 항상 0)
+- 각 InvoicePayment `amount = fee` (기존: 항상 0)
+- 알림 메시지: fixedFee > 0이면 금액 포함, 아니면 기존 "금액을 입력해주세요" 유지
+
+**설계 결정**: fixedFee 미설정 시 기존처럼 0원 발행(하위 호환). 관리자가 발행 후 수동 수정 가능.
+
+#### 3. API 변경 — PATCH /api/villas/[villaId]
+
+`app/api/villas/[villaId]/route.ts`: `autoPublishDay`와 동일 패턴으로 `fixedFee?: number | null` 추가.
+
+```ts
+const { ..., autoPublishDay, fixedFee } = body as { ..., fixedFee?: number | null };
+...(fixedFee !== undefined && { fixedFee }),
+```
+
+#### 4. UI 컴포넌트 — AutoPublishCard
+
+`app/(admin)/manage/invoices/page.tsx` 내 인라인 컴포넌트로 분리 (별도 파일 없이 동일 파일 내 선언).
+
+- 마운트 시 `GET /api/villas/[villaId]`로 현재 `autoPublishDay`, `fixedFee` 조회
+- 저장 시 `PATCH /api/villas/[villaId]` 호출
+- villaId는 localStorage `user.villa.id`에서 추출
+
+#### 5. 신규 클라이언트 인프라 — Toast / useToast
+
+브라우저 `window.alert()` 완전 제거를 위한 인프라 추가:
+- `components/ui/Toast.tsx`: 3초 자동 닫힘, variant 3종 (default/error/success)
+- `hooks/useToast.tsx`: `{ toast, toastEl }` 패턴
+
+z-index 계층 최종 확정:
+```
+z-50   BottomNav
+z-60   바텀시트·모달
+z-90   ConfirmDialog
+z-[100] Toast (최상위)
+```
+
+### 보안 수정 (아키텍처적 패턴)
+
+| 패턴 | 수정 파일 | 내용 |
+|------|----------|------|
+| 과거 날짜 서버 검증 | `facilities/[id]/reservations/route.ts` | 클라이언트 min 속성만으로는 불충분 — API에서도 KST 기준 과거 차단 |
+| PENDING 세대 필터 | `invoices/route.ts`, `publish-invoices/route.ts`, `notify.ts` | `residentRecord.findMany`에 `status: 'APPROVED'` 누락은 반복 취약 패턴 |
+| 트랜잭션 원자성 | `external-billing/confirm/route.ts` | 상태 갱신 + 부작용(장부 기록)은 반드시 $transaction으로 묶음 |
+| 역할 기반 접근 | `resident/payments/history/route.ts`, `posts/[postId]/route.ts` | 특정 역할 전용 엔드포인트에 getUser 다음 즉시 role 검증 |
+
+### 기술 부채 현황 (2026-04-25 기준)
+
+| 항목 | 위험도 | 상태 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 등록 | Critical | 미완료 |
+| 기존 평문 빌링키 마이그레이션 | High | 미완료 |
+| PortOne 운영 MID 전환 | High | 미완료 |
+| M-6: 인사이트 API JS 집계 → DB groupBy | Medium | 미완료 |
+| L-5: 장부 입주민 노출 정책 | Low | 검토 중 |
+| PortOne 운영 MID 전환 | High | 미완료 |
