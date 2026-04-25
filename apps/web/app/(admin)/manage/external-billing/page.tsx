@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { AmountInput } from '@/components/ui/AmountInput';
+import { apiFetch } from '@/lib/client-api';
 
 interface ExternalBilling {
   id: string;
@@ -39,13 +40,6 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ko-KR');
 }
 
-function getAuthHeaders(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
-  };
-}
 
 function getVillaId(): string | null {
   if (typeof window === 'undefined') return null;
@@ -97,9 +91,7 @@ export default function ExternalBillingPage() {
     }
 
     try {
-      const res = await fetch(`/api/villas/${villaId}/external-billing`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/external-billing`);
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? '데이터를 불러오지 못했습니다.');
@@ -139,9 +131,8 @@ export default function ExternalBillingPage() {
     setFormError(null);
 
     try {
-      const res = await fetch(`/api/villas/${villaId}/external-billing`, {
+      const res = await apiFetch(`/api/villas/${villaId}/external-billing`, {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           targetName: form.targetName.trim(),
           phoneNumber: form.phoneNumber.trim(),
@@ -172,12 +163,9 @@ export default function ExternalBillingPage() {
 
     setConfirming((prev) => ({ ...prev, [billId]: true }));
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/villas/${villaId}/external-billing/${billId}/confirm`,
-        {
-          method: 'PATCH',
-          headers: getAuthHeaders(),
-        },
+        { method: 'PATCH' },
       );
       const data = await res.json();
       if (res.ok) {

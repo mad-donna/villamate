@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Chip } from '@/components/ui/Chip';
+import { apiFetch } from '@/lib/client-api';
 
 type Category = 'GENERAL' | 'ISSUE';
 
@@ -53,10 +54,7 @@ export default function AdminEditPostPage({
     if (!villaId || !postId) return;
     async function fetchPost() {
       try {
-        const token = localStorage.getItem('token') ?? '';
-        const res = await fetch(`/api/villas/${villaId}/posts/${postId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiFetch(`/api/villas/${villaId}/posts/${postId}`);
         if (!res.ok) throw new Error('fetch failed');
         const data = await res.json() as { post: { title: string; content: string; category: string; isNotice: boolean; imageUrl: string | null } };
         setTitle(data.post.title);
@@ -136,12 +134,8 @@ export default function AdminEditPostPage({
         if (!uploadRes.ok) throw new Error(uploadData.error ?? '이미지 업로드에 실패했습니다.');
         finalImageUrl = uploadData.url ?? null;
       }
-      const res = await fetch(`/api/villas/${villaId}/posts/${postId}`, {
+      const res = await apiFetch(`/api/villas/${villaId}/posts/${postId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           title: title.trim(),
           content: content.trim(),

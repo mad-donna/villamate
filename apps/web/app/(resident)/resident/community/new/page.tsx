@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Chip } from '@/components/ui/Chip';
+import { apiFetch } from '@/lib/client-api';
 
 type Category = 'GENERAL' | 'ISSUE';
 
@@ -98,12 +99,8 @@ export default function ResidentNewPostPage() {
         if (!uploadRes.ok) throw new Error(uploadData.error ?? '이미지 업로드에 실패했습니다.');
         imageUrl = uploadData.url;
       }
-      const res = await fetch(`/api/villas/${villaId}/posts`, {
+      const res = await apiFetch(`/api/villas/${villaId}/posts`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           title: title.trim(),
           content: content.trim(),

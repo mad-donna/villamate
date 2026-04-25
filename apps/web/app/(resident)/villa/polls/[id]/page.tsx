@@ -4,6 +4,7 @@ import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { apiFetch } from '@/lib/client-api';
 
 interface PollOption {
   id: string;
@@ -63,10 +64,7 @@ export default function ResidentPollDetailPage({
     if (!villaId || !pollId) return;
     setLoading(true);
     setError('');
-    const _token = localStorage.getItem('token') ?? '';
-    fetch(`/api/villas/${villaId}/polls/${pollId}`, {
-      headers: { Authorization: `Bearer ${_token}` },
-    })
+    apiFetch(`/api/villas/${villaId}/polls/${pollId}`)
       .then((res) => {
         if (!res.ok) throw new Error('fetch failed');
         return res.json() as Promise<{
@@ -89,10 +87,8 @@ export default function ResidentPollDetailPage({
     setVoting(true);
     setVoteError('');
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/polls/${pollId}/vote`, {
+      const res = await apiFetch(`/api/villas/${villaId}/polls/${pollId}/vote`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ optionId: selectedOptionId }),
       });
       const data = await res.json() as { error?: string };
@@ -100,9 +96,7 @@ export default function ResidentPollDetailPage({
 
       // 투표 후 서버에서 최신 결과 재조회 (낙관적 업데이트 시 퍼센트 오차 방지)
       setMyVotedOptionId(selectedOptionId);
-      const refreshed = await fetch(`/api/villas/${villaId}/polls/${pollId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const refreshed = await apiFetch(`/api/villas/${villaId}/polls/${pollId}`);
       if (refreshed.ok) {
         const refreshedData = await refreshed.json() as { poll: PollDetail; myVotedOptionId: string | null; isHead: boolean };
         setPoll(refreshedData.poll);

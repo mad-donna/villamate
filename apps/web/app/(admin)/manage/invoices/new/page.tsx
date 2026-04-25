@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { AmountInput } from '@/components/ui/AmountInput';
+import { apiFetch } from '@/lib/client-api';
 
 type InvoiceType = 'FIXED' | 'VARIABLE';
 
@@ -79,9 +80,7 @@ function NewInvoicePageContent() {
     if (!villaId) return;
 
     setCopyLoading(true);
-    fetch(`/api/villas/${villaId}/invoices/${copyId}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
-    })
+    apiFetch(`/api/villas/${villaId}/invoices/${copyId}`)
       .then((res) => res.json())
       .then((data) => {
         const inv = data.invoice;
@@ -175,12 +174,8 @@ function NewInvoicePageContent() {
         }));
       }
 
-      const res = await fetch(`/api/villas/${villaId}/invoices`, {
+      const res = await apiFetch(`/api/villas/${villaId}/invoices`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
-        },
         body: JSON.stringify(body),
       });
 

@@ -6,6 +6,7 @@ import { loadTossPayments } from '@tosspayments/tosspayments-sdk';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useConfirm } from '@/hooks/useConfirm';
+import { apiFetch } from '@/lib/client-api';
 
 type SubscriptionStatus = 'FREE_TRIAL' | 'ACTIVE' | 'EXPIRED';
 
@@ -37,9 +38,6 @@ function getVillaId(): string | null {
   }
 }
 
-function authHeader() {
-  return { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` };
-}
 
 function StatusBadge({ status }: { status: SubscriptionStatus }) {
   const config: Record<SubscriptionStatus, { label: string; className: string }> = {
@@ -125,8 +123,8 @@ export default function SubscriptionPage() {
     if (!villaId) { setFetchError('빌라 정보를 찾을 수 없습니다.'); setLoading(false); return; }
 
     Promise.all([
-      fetch(`/api/villas/${villaId}/subscription`, { headers: authHeader() }).then((r) => r.json()),
-      fetch(`/api/villas/${villaId}/subscription/billing-key`, { headers: authHeader() }).then((r) => r.json()),
+      apiFetch(`/api/villas/${villaId}/subscription`).then((r) => r.json()),
+      apiFetch(`/api/villas/${villaId}/subscription/billing-key`).then((r) => r.json()),
     ])
       .then(([subData, cardData]) => {
         if (subData.error) { setFetchError(subData.error); return; }
@@ -144,9 +142,8 @@ export default function SubscriptionPage() {
 
     setCardLoading(true);
     try {
-      const res = await fetch(`/api/villas/${villaId}/subscription/billing-key`, {
+      const res = await apiFetch(`/api/villas/${villaId}/subscription/billing-key`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ authKey, customerKey }),
       });
       const data = await res.json();
@@ -198,9 +195,8 @@ export default function SubscriptionPage() {
 
     setCardLoading(true);
     try {
-      await fetch(`/api/villas/${villaId}/subscription/billing-key`, {
+      await apiFetch(`/api/villas/${villaId}/subscription/billing-key`, {
         method: 'DELETE',
-        headers: authHeader(),
       });
       setCard(null);
       showToast('자동결제가 해제되었습니다.', 'success');
@@ -220,9 +216,8 @@ export default function SubscriptionPage() {
 
     setCouponLoading(true);
     try {
-      const res = await fetch(`/api/villas/${villaId}/subscription/coupon`, {
+      const res = await apiFetch(`/api/villas/${villaId}/subscription/coupon`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ code: trimmed }),
       });
       const data = await res.json();

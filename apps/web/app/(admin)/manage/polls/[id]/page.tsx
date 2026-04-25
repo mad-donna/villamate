@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { apiFetch } from '@/lib/client-api';
 
 interface PollOption {
   id: string;
@@ -78,7 +79,7 @@ export default function AdminPollDetailPage({
     if (!villaId || !pollId) return;
     setLoading(true);
     setError('');
-    fetch(`/api/villas/${villaId}/polls/${pollId}`)
+    apiFetch(`/api/villas/${villaId}/polls/${pollId}`)
       .then((res) => {
         if (!res.ok) throw new Error('fetch failed');
         return res.json() as Promise<{ poll: PollDetail }>;
@@ -115,13 +116,8 @@ export default function AdminPollDetailPage({
     }
     setSaving(true);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/polls/${pollId}`, {
+      const res = await apiFetch(`/api/villas/${villaId}/polls/${pollId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           title: editTitle.trim(),
           description: editDescription.trim() || null,
@@ -145,10 +141,8 @@ export default function AdminPollDetailPage({
     setReminding(true);
     setRemindResult(null);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/polls/${pollId}/remind`, {
+      const res = await apiFetch(`/api/villas/${villaId}/polls/${pollId}/remind`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
       });
       const data = (await res.json()) as { sent?: number; message?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? '발송에 실패했습니다.');

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { saveToken, getUser as getStoredUser, setUser } from '@/lib/client-auth';
 import type { StoredUser } from '@/lib/client-auth';
+import { apiFetch } from '@/lib/client-api';
 
 interface ManagedVilla {
   id: string;
@@ -39,7 +40,7 @@ export default function MyVillasPage() {
     const user = getStoredUser();
     setCurrentVillaId(user?.villa?.id ?? '');
 
-    fetch('/api/me/villas')
+    apiFetch('/api/me/villas')
       .then((r) => r.json())
       .then((d: { villas?: ManagedVilla[] }) => setVillas(d.villas ?? []))
       .finally(() => setLoading(false));

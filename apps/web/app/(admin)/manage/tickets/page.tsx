@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Chip } from '@/components/ui/Chip';
+import { apiFetch } from '@/lib/client-api';
 
 type TicketStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED';
 type TicketCategory = 'COMMON_FACILITY' | 'PARKING' | 'NOISE_COMPLAINT' | 'ETC';
@@ -72,10 +73,7 @@ export default function TicketsPage() {
     if (!villaId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/tickets`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/tickets`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { tickets: Ticket[] };
       setTickets(data.tickets);
@@ -98,18 +96,10 @@ export default function TicketsPage() {
   async function handleStatusChange(ticket: Ticket, nextStatus: TicketStatus) {
     setUpdatingId(ticket.id);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(
-        `/api/villas/${villaId}/tickets/${ticket.id}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status: nextStatus }),
-        }
-      );
+      const res = await apiFetch(`/api/villas/${villaId}/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      });
       if (!res.ok) {
         const data = await res.json() as { error?: string };
         throw new Error(data.error ?? '상태 변경에 실패했습니다.');

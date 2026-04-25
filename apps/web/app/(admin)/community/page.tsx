@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { apiFetch } from '@/lib/client-api';
 
 interface Author {
   id: string;
@@ -45,10 +46,7 @@ export default function AdminCommunityPage() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/posts`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/posts`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { posts: Post[] };
       setPosts(data.posts);

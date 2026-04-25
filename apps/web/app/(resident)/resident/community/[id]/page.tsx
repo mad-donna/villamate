@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useConfirm } from '@/hooks/useConfirm';
 import { useToast } from '@/hooks/useToast';
+import { apiFetch } from '@/lib/client-api';
 
 interface Author {
   id: string;
@@ -76,10 +77,7 @@ export default function ResidentPostDetailPage({
       setLoading(true);
       setError('');
       try {
-        const token = localStorage.getItem('token') ?? '';
-        const res = await fetch(`/api/villas/${villaId}/posts/${postId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiFetch(`/api/villas/${villaId}/posts/${postId}`);
         if (!res.ok) throw new Error('fetch failed');
         const data = await res.json() as { post: Post; comments: Comment[] };
         setPost(data.post);
@@ -99,13 +97,8 @@ export default function ResidentPostDetailPage({
     setCommentSubmitting(true);
     setCommentError('');
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/posts/${postId}/comments`, {
+      const res = await apiFetch(`/api/villas/${villaId}/posts/${postId}/comments`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ content: commentText.trim() }),
       });
       const data = await res.json() as { comment?: Comment; error?: string };
@@ -133,10 +126,8 @@ export default function ResidentPostDetailPage({
 
     setDeleting(true);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/posts/${postId}`, {
+      const res = await apiFetch(`/api/villas/${villaId}/posts/${postId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         const data = await res.json() as { error?: string };
@@ -154,10 +145,8 @@ export default function ResidentPostDetailPage({
     if (!post || !villaId || liking) return;
     setLiking(true);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/posts/${postId}/like`, {
+      const res = await apiFetch(`/api/villas/${villaId}/posts/${postId}/like`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json() as { liked?: boolean; likeCount?: number };
       if (res.ok && data.likeCount !== undefined) {

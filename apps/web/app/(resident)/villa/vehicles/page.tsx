@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { apiFetch } from '@/lib/client-api';
 
 interface Vehicle {
   id: string;
@@ -56,10 +57,7 @@ export default function VehiclesPage() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/vehicles`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/vehicles`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { vehicles: Vehicle[] };
       setVehicles(data.vehicles);
@@ -79,10 +77,7 @@ export default function VehiclesPage() {
     setSearching(true);
     setSearchResults(null);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/vehicles?plate=${encodeURIComponent(searchPlate.trim())}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/vehicles?plate=${encodeURIComponent(searchPlate.trim())}`);
       if (!res.ok) throw new Error('search failed');
       const data = await res.json() as { vehicles: Vehicle[] };
       setSearchResults(data.vehicles);
@@ -99,10 +94,8 @@ export default function VehiclesPage() {
     if (!formPlate.trim()) { setFormError('번호판을 입력해주세요.'); return; }
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/vehicles`, {
+      const res = await apiFetch(`/api/villas/${villaId}/vehicles`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           plateNumber: formPlate.trim(),
           modelName: formModel.trim() || undefined,
@@ -125,10 +118,8 @@ export default function VehiclesPage() {
   async function handleDelete(vehicleId: string) {
     if (!villaId) return;
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/vehicles/${vehicleId}`, {
+      const res = await apiFetch(`/api/villas/${villaId}/vehicles/${vehicleId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('삭제에 실패했습니다.');
       setVehicles((prev) => prev.filter((v) => v.id !== vehicleId));

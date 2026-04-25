@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { apiFetch } from '@/lib/client-api';
 
 export default function AdminNewPollPage() {
   const router = useRouter();
@@ -58,9 +59,8 @@ export default function AdminNewPollPage() {
     setSubmitting(true);
     setSubmitError('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/polls`, {
+      const res = await apiFetch(`/api/villas/${villaId}/polls`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || undefined,

@@ -1,10 +1,8 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-
 export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
   const token =
     typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

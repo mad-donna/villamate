@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { getUser, getToken, saveToken, saveUser, type StoredUser } from '@/lib/client-auth';
+import { apiFetch } from '@/lib/client-api';
 
 const BANKS = [
   '국민은행', '신한은행', '우리은행', '하나은행', '농협은행',
@@ -89,13 +90,8 @@ export default function OnboardingPage() {
     setLoading(true);
 
     try {
-      const token = getToken();
-      const res = await fetch('/api/villas', {
+      const res = await apiFetch('/api/villas', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: JSON.stringify({
           name: villaName.trim(),
           address: address.trim(),

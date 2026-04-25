@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { ImageViewer } from '@/components/ui/ImageViewer';
+import { apiFetch } from '@/lib/client-api';
 
 interface LedgerTransaction {
   id: string;
@@ -87,11 +88,7 @@ export default function AdminLedgerPage() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(
-        `/api/villas/${villaId}/ledger?year=${year}&month=${month}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const res = await apiFetch(`/api/villas/${villaId}/ledger?year=${year}&month=${month}`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as {
         transactions: LedgerTransaction[];
@@ -230,13 +227,8 @@ export default function AdminLedgerPage() {
 
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/ledger`, {
+      const res = await apiFetch(`/api/villas/${villaId}/ledger`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           type: formType,
           amount: parsedAmount,

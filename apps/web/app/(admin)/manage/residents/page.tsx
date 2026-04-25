@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { useConfirm } from '@/hooks/useConfirm';
+import { apiFetch } from '@/lib/client-api';
 
 interface ResidentUser {
   id: string;
@@ -57,10 +58,7 @@ export default function ResidentsPage() {
     if (!villaId) return;
     async function fetchRooms() {
       try {
-        const token = localStorage.getItem('token') ?? '';
-        const res = await fetch(`/api/villas/${villaId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiFetch(`/api/villas/${villaId}`);
         if (!res.ok) return;
         const data = await res.json() as { roomNumbers?: string[] };
         setRoomNumbers(data.roomNumbers ?? []);
@@ -76,11 +74,9 @@ export default function ResidentsPage() {
     setLoading(true);
     try {
       // APPROVED 목록과 PENDING 목록을 병렬로 조회
-      const token = localStorage.getItem('token') ?? '';
-      const headers = { Authorization: `Bearer ${token}` };
       const [approvedRes, pendingRes] = await Promise.all([
-        fetch(`/api/villas/${villaId}/residents`, { headers }),
-        fetch(`/api/villas/${villaId}/residents?status=PENDING`, { headers }),
+        apiFetch(`/api/villas/${villaId}/residents`),
+        apiFetch(`/api/villas/${villaId}/residents?status=PENDING`),
       ]);
 
       if (!approvedRes.ok) throw new Error('fetch failed');
@@ -154,13 +150,8 @@ export default function ResidentsPage() {
     if (!villaId) return;
     setSavingRooms(true);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}`, {
+      const res = await apiFetch(`/api/villas/${villaId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ roomNumbers }),
       });
       if (!res.ok) {
@@ -181,13 +172,8 @@ export default function ResidentsPage() {
   async function handleApproval(resident: Resident, status: 'APPROVED' | 'REJECTED') {
     setApprovingId(resident.id);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/residents/${resident.id}`, {
+      const res = await apiFetch(`/api/villas/${villaId}/residents/${resident.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ status }),
       });
 
@@ -216,10 +202,8 @@ export default function ResidentsPage() {
 
     setDeletingId(resident.id);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/residents/${resident.id}`, {
+      const res = await apiFetch(`/api/villas/${villaId}/residents/${resident.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         const data = await res.json() as { error?: string };

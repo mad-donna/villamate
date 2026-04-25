@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { apiFetch } from '@/lib/client-api';
 
 type TicketCategory = 'COMMON_FACILITY' | 'PARKING' | 'NOISE_COMPLAINT' | 'ETC';
 type TicketStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED';
@@ -60,10 +61,7 @@ export default function TicketsPage() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/tickets`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/tickets`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { tickets: Ticket[] };
       setTickets(data.tickets);

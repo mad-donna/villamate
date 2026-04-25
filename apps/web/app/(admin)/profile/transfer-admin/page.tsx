@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearAuth } from '@/lib/client-auth';
 import { useConfirm } from '@/hooks/useConfirm';
+import { apiFetch } from '@/lib/client-api';
 
 interface Resident {
   id: string;
@@ -31,7 +32,7 @@ export default function TransferAdminPage() {
 
   useEffect(() => {
     if (!villaId) return;
-    fetch(`/api/villas/${villaId}/residents`)
+    apiFetch(`/api/villas/${villaId}/residents`)
       .then((r) => r.json())
       .then((d: { residents?: Resident[] }) => {
         // HEAD(세대주)만 후보로 표시
@@ -54,9 +55,8 @@ export default function TransferAdminPage() {
     setTransferring(true);
     setError('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/transfer-admin`, {
+      const res = await apiFetch(`/api/villas/${villaId}/transfer-admin`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newAdminId: selected.userId }),
       });
       const data = await res.json() as { error?: string; message?: string };

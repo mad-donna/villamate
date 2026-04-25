@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ImageViewer } from '@/components/ui/ImageViewer';
+import { apiFetch } from '@/lib/client-api';
 
 type Category = 'REPAIR' | 'INSPECTION' | 'CONTRACT' | 'CLEANING' | 'ETC';
 
@@ -68,11 +69,8 @@ export default function ResidentBuildingPage() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token') ?? '';
       const category = filterCategory !== 'ALL' ? `?category=${filterCategory}` : '';
-      const res = await fetch(`/api/villas/${villaId}/building-events${category}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/building-events${category}`);
       if (!res.ok) throw new Error('fetch failed');
       const data = (await res.json()) as BuildingEvent[];
       setEvents(data);

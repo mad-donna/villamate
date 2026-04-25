@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/Badge';
+import { apiFetch } from '@/lib/client-api';
 
 interface Post {
   id: string;
@@ -38,10 +39,7 @@ export default function MyPostsPage() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/posts/my`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/posts/my`);
       if (!res.ok) throw new Error('fetch failed');
       const data = await res.json() as { posts: Post[] };
       setPosts(data.posts);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/client-api';
 
 interface EnergyUsage {
   id: string;
@@ -57,10 +58,7 @@ export default function AdminEnergyPage() {
   async function fetchUsages() {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token') ?? '';
-      const res = await fetch(`/api/villas/${villaId}/energy?year=${year}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/villas/${villaId}/energy?year=${year}`);
       const data = await res.json() as { usages?: EnergyUsage[] };
       setUsages(data.usages ?? []);
     } finally {
@@ -91,9 +89,8 @@ export default function AdminEnergyPage() {
     setSubmitting(true);
     setSubmitMsg('');
     try {
-      const res = await fetch(`/api/villas/${villaId}/energy`, {
+      const res = await apiFetch(`/api/villas/${villaId}/energy`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           year,
           month: formMonth,

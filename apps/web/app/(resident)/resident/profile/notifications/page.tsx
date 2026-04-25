@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { NotificationList } from '@/components/ui/NotificationList';
+import { apiFetch } from '@/lib/client-api';
 
 type PushState = 'unsupported' | 'denied' | 'prompt' | 'subscribed' | 'loading';
 
@@ -35,10 +36,8 @@ function usePushState(): { state: PushState; toggle: () => Promise<void> } {
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
         await sub.unsubscribe();
-        const token = localStorage.getItem('token') ?? '';
-        await fetch('/api/push/subscribe', {
+          await apiFetch('/api/push/subscribe', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ endpoint: sub.endpoint }),
         });
       }
@@ -57,10 +56,8 @@ function usePushState(): { state: PushState; toggle: () => Promise<void> } {
       applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     });
 
-    const token = localStorage.getItem('token') ?? '';
-    await fetch('/api/push/subscribe', {
+    await apiFetch('/api/push/subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(sub.toJSON()),
     });
 
