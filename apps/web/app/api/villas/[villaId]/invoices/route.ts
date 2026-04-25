@@ -95,9 +95,9 @@ export async function POST(
       return err('해당 월 청구서가 이미 존재합니다.', 409);
     }
 
-    // HEAD 세대 수 조회
+    // HEAD 세대 수 조회 (승인된 입주민만)
     const headResidents = await prisma.residentRecord.findMany({
-      where: { villaId, residentType: 'HEAD' },
+      where: { villaId, residentType: 'HEAD', status: 'APPROVED' },
       select: { id: true, roomNumber: true },
     });
     const headCount = headResidents.length;

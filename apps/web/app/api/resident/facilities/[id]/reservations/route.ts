@@ -31,6 +31,12 @@ export async function POST(
     return err('날짜를 올바르게 입력해주세요. (YYYY-MM-DD)');
   }
 
+  // 과거 날짜 예약 방지 (KST 기준)
+  const todayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (body.date < todayKST) {
+    return err('과거 날짜에는 예약할 수 없습니다.');
+  }
+
   // 당일 예약 횟수 제한 확인
   const todayCount = await prisma.facilityReservation.count({
     where: { facilityId, userId: user.sub, date: body.date },

@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    // HEAD 세대 조회 (roomNumber 포함)
+    // HEAD 세대 조회 (승인된 입주민만, roomNumber 포함)
     const headResidents = await prisma.residentRecord.findMany({
-      where: { villaId: villa.id, residentType: 'HEAD' },
+      where: { villaId: villa.id, residentType: 'HEAD', status: 'APPROVED' },
       select: { id: true, roomNumber: true },
     });
 

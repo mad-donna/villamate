@@ -29,22 +29,22 @@ export async function PATCH(
     if (billing.villaId !== villaId) return err('해당 빌라의 청구서가 아닙니다.', 403);
     if (billing.status === 'COMPLETED') return err('이미 완료된 청구서입니다.', 400);
 
-    const updated = await prisma.externalBilling.update({
-      where: { id: billId },
-      data: { status: 'COMPLETED' },
-    });
-
-    // 장부 자동 기록
-    await prisma.ledgerTransaction.create({
-      data: {
-        villaId,
-        type: 'INCOME',
-        amount: Number(billing.amount),
-        description: `외부청구 수납 - ${billing.targetName} (${billing.description})`,
-        transactionDate: new Date(),
-        createdBy: 'system',
-      },
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.externalBilling.update({
+        where: { id: billId },
+        data: { status: 'COMPLETED' },
+      }),
+      prisma.ledgerTransaction.create({
+        data: {
+          villaId,
+          type: 'INCOME',
+          amount: Number(billing.amount),
+          description: `외부청구 수납 - ${billing.targetName} (${billing.description})`,
+          transactionDate: new Date(),
+          createdBy: 'system',
+        },
+      }),
+    ]);
 
     return ok({ billing: updated });
   } catch {
