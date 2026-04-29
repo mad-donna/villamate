@@ -1095,3 +1095,23 @@ Sprint 12 백로그 High 3건, Medium 5건, Design 3건, Low 3건 전체 수정 
 **미들웨어 보호 대상 엔드포인트 확인**:
 - 공개 예외: `/api/auth/`, `/api/cron/`, `/api/pay/`, `/api/backoffice/auth/`, visitor QR 경로
 - 위 경로 외 모든 `/api/*`는 JWT 필수
+
+---
+
+## 2026-04-29 — F-93 소프트 넛지 QA
+
+### 검증 항목
+
+| 항목 | 결과 |
+|------|------|
+| TypeScript 타입 오류 | ✅ 없음 (`npx tsc --noEmit`) |
+| `next build` 빌드 성공 | ✅ |
+| ADMIN role 가드 | ✅ `user.role !== 'ADMIN'` → 403 |
+| villa 소유권 검증 | ✅ `villa.adminId !== user.sub` → 403 |
+| 1일 1회 쿨타임 | ✅ 오늘 00:00 UTC 이후 SYSTEM 타입 알림 DB 조회 후 429 반환 |
+| 미납 세대 없을 시 UI 숨김 | ✅ `stats.unpaidCount > 0` 조건부 렌더링 |
+| 발송 실패 시 에러 토스트 | ✅ `useToast` error 변형 |
+
+### 잠재적 리스크
+
+- **쿨타임 기준 시간대**: `todayStart.setHours(0,0,0,0)`은 서버 로컬 시간(UTC) 기준. KST 기준 자정과 최대 9시간 오차 가능. 실사용 임팩트는 낮으나, 추후 KST offset 보정(`-9 * 60 * 60 * 1000`) 고려 가능.

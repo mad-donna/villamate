@@ -910,3 +910,24 @@ facilities 관리, vendors 관리 페이지의 삭제·편집 버튼:
 #### 일관성 원칙
 
 time picker 쌍 패턴은 관리자·입주민 양쪽 동일하게 `flex items-center gap-2` + 중간 `~` 텍스트 구조 사용.
+
+---
+
+## 2026-04-29 — 소프트 넛지 카드 UI
+
+### 넛지 카드 컴포넌트 (admin home)
+
+관리자 홈 화면에 조건부 카드 추가. 미납 세대(`unpaidCount > 0`) 시에만 노출.
+
+```
+bg-primary-50 border border-primary-100 rounded-2xl p-4
+flex items-center justify-between gap-3
+
+좌측: [납부 안내 공지 보내기] (text-sm font-semibold text-primary-800)
+      [전체 입주민에게 부드럽게 납부를 안내합니다.] (text-xs text-primary-600)
+우측: [공지 발송] Button variant=primary size=sm (loading state 지원)
+```
+
+**위젯 배치 순서**: 요약 위젯(2열) → 최근 공지 → **넛지 카드** → 바로가기 → 수금 인사이트
+
+**설계 원칙**: 독촉(error 계열 색상)이 아닌 안내(primary 계열 색상)로 시각적으로 구분. 동대표가 "압박"이 아닌 "서비스"를 보내는 느낌을 주도록 primary-50 배경 사용.

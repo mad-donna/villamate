@@ -2431,3 +2431,40 @@ H-1(과거 날짜 예약): 클라이언트 `min={today}` 있어도 API에서 반
 
 **클라이언트 raw fetch 잔존 위험**:
 새 페이지 추가 시 `fetch('/api/...')` 직접 사용 금지 — 반드시 `apiFetch` 사용. 예외는 FormData 업로드뿐.
+
+---
+
+## 2026-04-29 — F-93 소프트 넛지 전체 공지 푸시 버튼
+
+### 구현 내용
+
+**신규 파일**:
+- `app/api/villas/[villaId]/nudge/route.ts` — ADMIN 전용 POST 엔드포인트
+
+**수정 파일**:
+- `app/(admin)/home/page.tsx` — 넛지 카드 섹션 + `handleNudge` 핸들러 + `useToast` 추가
+
+### 구현 패턴
+
+**API**: 기존 `createNotificationForVilla` 함수 재활용. `NotificationType.SYSTEM` 사용.
+
+1일 1회 쿨타임 로직:
+```ts
+const todayStart = new Date();
+todayStart.setHours(0, 0, 0, 0);
+const existing = await prisma.notification.findFirst({
+  where: { villaId, type: 'SYSTEM', title: '관리비 납부 안내', createdAt: { gte: todayStart } },
+});
+if (existing) return err('오늘 이미 납부 안내 공지를 발송했습니다.', 429);
+```
+
+**UI 노출 조건**: `stats.unpaidCount > 0` 시에만 카드 렌더링.
+
+**피드백**: `useToast` 훅 — 성공(`success`), 에러/쿨타임(`error`) 토스트.
+
+### 반복 패턴 메모
+
+새 전체 알림 기능 추가 시:
+1. `createNotificationForVilla` 함수 재사용
+2. 쿨타임 필요 시 `prisma.notification.findFirst` + `todayStart` 패턴
+3. 클라이언트 피드백은 `useToast` 훅 사용

@@ -478,7 +478,7 @@ app/
 | 2026-04-21 | Sprint 10 — QA D-01~D-04 전체 해소(Button loading/Badge 테두리/터치 타깃/Cron 주석). 신규 기능 4종: 관리자 수금 인사이트(`GET /api/admin/insights`, InsightsSection 컴포넌트), 입주민 납부 히스토리(`GET /api/resident/payments/history`), 공용시설 예약(Facility/FacilityReservation 모델 신규, 관리자 CRUD + 입주민 예약), 외부 업체 연락처(Vendor/VendorCategory 모델 신규, CRUD + tel 링크). 버그 수정: 신규 바텀시트 z-50→z-60, 관리자 프로필 pb-10→pb-24, 기존 관리자 듀얼 모드 활성화 경로 추가(프로필 "등록" 버튼). 신규 테이블 Supabase 수동 적용 필요(운영 블로커). |
 | 2026-04-23 | Sprint 11 — 백오피스 라우팅 버그 수정. `(backoffice)` route group 실제 URL(`/dashboard`, `/villas` 등) 확정 및 코드 전반 경로 수정. `bo_session` 쿠키 path `/backoffice`→`/` 수정(로그인 루프 버그 해소). `middleware.ts` matcher에 백오피스 페이지 경로 명시 추가. SUPER_ADMIN 계정 DB 생성. `prisma db seed` 실행(햇살 빌라 데모 데이터 반영). |
 | 2026-04-24~25 | Sprint 12 — 보안·기능 QA 전수 수정(H×3, M×5, D×3, L×3). Toast/useToast 컴포넌트 신규. window.alert/confirm 완전 제거. Badge 납부 상태 시맨틱 교정. 터치 타깃 표준화. 고정 관리비 자동 발행(fixedFee) 기능 구현: `Villa.fixedFee Int?` 추가, PATCH API 지원, publish-invoices 크론 금액 자동 설정, AutoPublishCard UI. |
-| 2026-04-29 | PM 평가 기반 Phase 4 기능적 요구사항 등록 — F-91(AI 영수증 OCR), F-92(O2O 안내문 자동 생성), F-93(소프트 넛지 전체 푸시). Phase 4 로드맵 섹션 신규 추가. |
+| 2026-04-29 | PM 평가 기반 Phase 4 기능적 요구사항 등록 — F-91(AI 영수증 OCR), F-92(O2O 안내문 자동 생성), F-93(소프트 넛지 전체 푸시). Phase 4 로드맵 섹션 신규 추가. F-93 당일 구현 완료 — `POST /api/villas/[villaId]/nudge`, 관리자 홈 넛지 카드 UI. |
 
 ---
 
