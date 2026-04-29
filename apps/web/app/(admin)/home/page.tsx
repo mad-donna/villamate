@@ -7,6 +7,7 @@ import { WidgetCard } from '@/components/ui/WidgetCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { InsightsSection } from '@/components/InsightsSection';
+import { useToast } from '@/hooks/useToast';
 
 // ---------- 타입 ----------
 
@@ -116,6 +117,8 @@ export default function AdminHomePage() {
   const [fetchError, setFetchError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [multiVillaCount, setMultiVillaCount] = useState(0);
+  const [nudgeSending, setNudgeSending] = useState(false);
+  const { toast, toastEl } = useToast();
 
   useEffect(() => {
     const storedUser = getStoredUser();
@@ -152,6 +155,29 @@ export default function AdminHomePage() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  async function handleNudge() {
+    if (!data) return;
+    const token = getToken();
+    setNudgeSending(true);
+    try {
+      const res = await fetch(`/api/villas/${data.villa.id}/nudge`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 429) {
+        toast('오늘 이미 납부 안내 공지를 발송했습니다.', 'error');
+      } else if (!res.ok) {
+        toast('발송에 실패했습니다. 다시 시도해 주세요.', 'error');
+      } else {
+        toast('전체 입주민에게 납부 안내 공지를 발송했습니다.', 'success');
+      }
+    } catch {
+      toast('발송에 실패했습니다. 다시 시도해 주세요.', 'error');
+    } finally {
+      setNudgeSending(false);
+    }
+  }
+
   if (loading) return <DashboardSkeleton />;
   if (fetchError) return (
     <main className="px-4 pt-12 flex flex-col items-center text-center gap-4">
@@ -177,6 +203,7 @@ export default function AdminHomePage() {
 
   return (
     <>
+      {toastEl}
       {/* 구독 만료 배너 */}
       {isExpired && (
         <div className="bg-red-500 text-white text-sm px-4 py-3 flex items-center justify-between min-h-[44px]">
@@ -264,6 +291,29 @@ export default function AdminHomePage() {
             </div>
           )}
         </section>
+
+        {/* 소프트 넛지 */}
+        {stats.unpaidCount > 0 && (
+          <section aria-label="납부 안내 공지">
+            <div className="bg-primary-50 border border-primary-100 rounded-2xl p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-primary-800">납부 안내 공지 보내기</p>
+                <p className="text-xs text-primary-600 mt-0.5">
+                  전체 입주민에게 부드럽게 납부를 안내합니다.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleNudge}
+                loading={nudgeSending}
+                className="shrink-0"
+              >
+                공지 발송
+              </Button>
+            </div>
+          </section>
+        )}
 
         {/* 바로가기 메뉴 */}
         <section aria-label="바로가기">
