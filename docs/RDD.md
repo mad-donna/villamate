@@ -165,6 +165,7 @@ app/
 | F-13 | 세대 호수 관리 (등록 후 수정) | 1 | ✅ | residents 페이지 BottomSheet |
 | F-14 | 멀티 빌라 관리 (동대표 2개 이상 빌라 전환 UI) | 3 | ✅ | 2026-04-14 완료. GET /api/me/villas, POST /api/auth/switch-villa, /profile/my-villas 페이지 |
 | F-15 | 동대표 교체 / 권한 위임 | 3 | ✅ | 2026-04-14 완료. prisma.$transaction 역할 이양 (ADMIN→RESIDENT, 신규 ADMIN), 기존 동대표 자동 로그아웃 |
+| F-99 | 다중 빌라 퀵스위치 드롭다운 | 5 | ✅ | 2026-05-05 완료. 관리자 홈 헤더에 빌라명 탭 → Bottom Sheet 드롭다운 즉시 전환. 단일 빌라 시 텍스트만 표시 |
 
 ### 4-3. 입주민 가입 및 관리
 
@@ -174,6 +175,7 @@ app/
 | F-17 | 빌라 이름/주소 검색 → 입주 신청 (관리자 승인) | 2 | ✅ | ResidentStatus PENDING/APPROVED/REJECTED |
 | F-18 | 입주민 목록 조회 (세대주/세입자 구분) | 1 | ✅ | |
 | F-19 | 입주민 전출 처리 | 1 | ✅ | SetNull + roomNumber 이력 보존 |
+| F-95 | 전출 정산 일할 계산기 | 5 | ✅ | 2026-05-05 완료. 이사일 입력 → Math.ceil(fixedFee × usedDays / totalDays) → ExternalBilling 생성 → /pay/[id] 결제 링크 복사 |
 | F-20 | 초대 코드 복사 | 1 | ✅ | `navigator.clipboard`, 2초 토스트 |
 | F-21 | 입주민 검색 및 필터 | 2 | ✅ | |
 | F-22 | 세대주(HEAD) vs 세입자(MEMBER) 자동 판별 | 1 | ✅ | 선입주자 여부 분기 |
@@ -256,7 +258,7 @@ app/
 | F-63 | 수입·지출 내역 등록 (동대표) | 2 | ✅ | 2026-04-11 완료 |
 | F-64 | 영수증 첨부 (Supabase Storage) | 2 | ✅ | 2026-04-11 완료 |
 | F-65 | 에너지 사용량 시각화 (전기/수도 월별 그래프) | 3 | ✅ | 2026-04-14 완료. EnergyUsage 모델 @@unique([villaId,year,month]), 관리자 입력·차트, 입주민 탭 차트·연간 합계 |
-| F-91 | AI 영수증 자동 인식 (OCR 장부 기입) | 4 | ⬜ | 영수증 사진 업로드 → Vision API로 결제 일자·사용처·금액 자동 추출 → 장부 입력 폼 자동 채우기. 5060 동대표 타이핑 허들 제거 목적 |
+| F-91 | AI 영수증 자동 인식 (OCR 장부 기입) | 4 | ✅ | 2026-05-05 완료. Google Vision TEXT_DETECTION API. 월 900건 OcrUsageLog DB 카운터 한도. 날짜·금액·설명 정규식 추출 → 장부 입력 폼 자동 채우기 |
 
 ### 4-11. 건물 이력 및 계약 관리
 
@@ -266,6 +268,7 @@ app/
 | F-67 | 카테고리별 이력 분류 (하자보수/정기점검/유지계약/청소/기타) | 2 | ✅ | `BuildingEventCategory` enum 필터 |
 | F-68 | 사진 첨부 (Supabase Storage) | 2 | ✅ | `/api/upload` 연동, photoUrl 저장 |
 | F-69 | 계약서/영수증 풀스크린 이미지 뷰어 | 2 | ✅ | `ImageViewer` 공통 컴포넌트 (createPortal) |
+| F-96 | 순환형 공동 당번 + 정기 점검 스케줄러 | 5 | ✅ | 2026-05-05 완료. DutySchedule(주간/격주 순환)+DutyRule(점검 주기) 모델 신규. /manage/duty 관리 UI. duty-reminder Cron: 당번 교체일 세대 알림 + D-30/D-7 관리자 리마인더 |
 
 ### 4-12. 주차 관리
 
@@ -274,6 +277,7 @@ app/
 | F-70 | 차량 등록 (일반/방문, 모델명, 출차 예정) | 2 | ✅ | 2026-04-11 완료 |
 | F-71 | 번호판 검색 → 호수·이름·방문여부 표시 | 2 | ✅ | 2026-04-11 완료. ?plate= 부분 일치 검색 |
 | F-72 | QR 스캔 방문 차량 임시 등록 | 3 | ✅ | 2026-04-14 완료. JWT QR 토큰 발급, /qr-vehicle 비로그인 공개 페이지, Vehicle.visitorName 필드 추가 |
+| F-94 | 차량 이동 요청 푸시 (이중주차 안심 연락망) | 5 | ✅ | 2026-05-05 완료. 차량 목록 → "이동 요청" 버튼 → 소유 입주민 Web Push + 알림함. 익명 처리. 1시간 쿨타임 (Vehicle.lastNudgedAt). 방문 차량 차단 |
 
 ### 4-13. SaaS 구독 모델
 
@@ -297,7 +301,7 @@ app/
 | F-83 | 관리자 가이드 라이브러리 CRUD (Tiptap 편집기) | 2 | ✅ | 2026-04-12 완료. DOMPurify XSS 방어, 카테고리 6종 |
 | F-84 | 빌라별 청구서/납부 현황 조회 | 3 | ✅ | 2026-04-14 완료. /backoffice/billing — 월 필터, 납부율 프로그레스 바, 수납 집계 카드 |
 | F-85 | 구독 현황 및 MRR 모니터링 | 3 | ✅ | 2026-04-14 완료. /backoffice/mrr — MRR/ARR 지표, 12개월 바차트, 만료 임박 빌라 목록 |
-| F-92 | O2O 오프라인 안내문 자동 생성 (PDF/이미지) | 4 | ⬜ | ADMIN 대시보드에서 빌라 이름·초대코드·QR이 포함된 '빌라메이트 도입 안내문' PDF/이미지 자동 생성 → 출력해 엘리베이터·1층 게시판 부착. 신규 입주민의 스미싱 오해 방지 및 오프라인 신뢰도 확보 목적 |
+| F-92 | O2O 오프라인 안내문 자동 생성 (PDF/이미지) | 4 | ✅ | 2026-05-05 완료. qrcode 패키지 + window.print() @media print 방식. 외부 PDF 라이브러리 없이 브라우저 인쇄 기능 활용. /manage/notice 페이지 |
 
 ### 4-15. 사용자 프로필 및 설정
 
@@ -430,19 +434,29 @@ app/
 
 ---
 
-### Phase 4 — UX 도약 (Delight Layer)
+### Phase 4 — UX 도약 (Delight Layer) ✅ 완료
 **목표**: 핵심 사용자(5060 동대표)의 진입 장벽을 극단적으로 낮추고, 오프라인 신뢰도 확보와 자발적 납부 문화를 형성.
 
-| 카테고리 | 포함 기능 |
-|---------|-----------|
-| 재무 장부 | F-91 (AI 영수증 OCR 자동 인식) |
-| 운영 도구 | F-92 (O2O 오프라인 안내문 자동 생성) |
-| 납부 독촉 | F-93 (소프트 넛지 전체 공지 푸시 버튼) |
+| 카테고리 | 포함 기능 | 상태 |
+|---------|-----------|------|
+| 재무 장부 | F-91 (AI 영수증 OCR 자동 인식) | ✅ 2026-05-05 |
+| 운영 도구 | F-92 (O2O 오프라인 안내문 자동 생성) | ✅ 2026-05-05 |
+| 납부 독촉 | F-93 (소프트 넛지 전체 공지 푸시 버튼) | ✅ 2026-04-29 |
 
-**성공 기준**
-- 장부 항목 입력 시 OCR 사용률 50% 이상
-- 안내문 생성 후 신규 초대코드 입주율 증가 (대조군 대비)
-- 소프트 넛지 발송 후 24h 내 자발 납부율 10%p 이상 향상
+---
+
+### Phase 5 — Retention & Pain Point 해소
+**목표**: 반복 사용 동기 강화, 생활 밀착 기능으로 이탈률 감소.
+
+| 카테고리 | 포함 기능 | 상태 |
+|---------|-----------|------|
+| 주차 관리 | F-94 (차량 이동 요청 — 이중주차 안심 연락망) | ✅ 2026-05-05 |
+| 입주민 관리 | F-95 (전출 정산 일할 계산기) | ✅ 2026-05-05 |
+| 건물 관리 | F-96 (순환형 공동 당번 + 정기 점검 스케줄러) | ✅ 2026-05-05 |
+| 운영 도구 | F-97 (AI 공지사항 초안 어시스턴트 — Claude API) | ⬜ Claude API 키 필요 |
+| 업체 관리 | F-98 (수리 수첩 — 업체 작업 이력 아카이빙) | ⬜ VendorHistory 모델 필요 |
+| 빌라 전환 | F-99 (다중 빌라 퀵스위치 드롭다운) | ✅ 2026-05-05 |
+| 커뮤니티 | F-100 (반려동물 프로필 + 야간 소음 넛지) | ⬜ petInfo 모델 + opt-out 정책 필요 |
 
 ---
 
@@ -479,6 +493,7 @@ app/
 | 2026-04-23 | Sprint 11 — 백오피스 라우팅 버그 수정. `(backoffice)` route group 실제 URL(`/dashboard`, `/villas` 등) 확정 및 코드 전반 경로 수정. `bo_session` 쿠키 path `/backoffice`→`/` 수정(로그인 루프 버그 해소). `middleware.ts` matcher에 백오피스 페이지 경로 명시 추가. SUPER_ADMIN 계정 DB 생성. `prisma db seed` 실행(햇살 빌라 데모 데이터 반영). |
 | 2026-04-24~25 | Sprint 12 — 보안·기능 QA 전수 수정(H×3, M×5, D×3, L×3). Toast/useToast 컴포넌트 신규. window.alert/confirm 완전 제거. Badge 납부 상태 시맨틱 교정. 터치 타깃 표준화. 고정 관리비 자동 발행(fixedFee) 기능 구현: `Villa.fixedFee Int?` 추가, PATCH API 지원, publish-invoices 크론 금액 자동 설정, AutoPublishCard UI. |
 | 2026-04-29 | PM 평가 기반 Phase 4 기능적 요구사항 등록 — F-91(AI 영수증 OCR), F-92(O2O 안내문 자동 생성), F-93(소프트 넛지 전체 푸시). Phase 4 로드맵 섹션 신규 추가. F-93 당일 구현 완료 — `POST /api/villas/[villaId]/nudge`, 관리자 홈 넛지 카드 UI. |
+| 2026-05-05 | Sprint 15 — F-91(AI OCR, Google Vision, 월 900건 OcrUsageLog 카운터), F-92(O2O 안내문 window.print), M-6(insights API DB groupBy 교체), L-5(장부 전체 공개 정책 확정). Sprint 16 — F-94(차량 이동 요청 넛지, 1h 쿨타임), F-95(전출 일할 정산, ExternalBilling 재활용), F-96(공동 당번 + 정기 점검, DutySchedule/DutyRule 모델 신규, duty-reminder Cron), F-99(다중 빌라 퀵스위치). Phase 5 로드맵 신규 정의. DutyInterval enum + DutySchedule/DutyRule/OcrUsageLog 모델 + Vehicle.lastNudgedAt 추가. vercel.json Cron 7개로 확장. |
 
 ---
 

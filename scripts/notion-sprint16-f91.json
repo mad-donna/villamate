@@ -1,0 +1,11 @@
+{
+  "기능명": "F-91 AI 영수증 OCR 자동 인식",
+  "reqId": "F-91",
+  "sprint": "Phase 4",
+  "상태": "완료",
+  "구현일": "2026-05-05",
+  "요약": "영수증 사진 업로드 → Google Vision TEXT_DETECTION API → 결제 일자·금액·설명 자동 추출 → 장부 입력 폼 자동 채우기. 월 900건 OcrUsageLog DB 카운터 한도",
+  "수정된파일": "app/api/villas/[villaId]/ledger/ocr/route.ts (신규), app/(admin)/manage/ledger/page.tsx (OCR 버튼 추가), prisma/schema.prisma (OcrUsageLog 모델 신규)",
+  "스펙편차": "GCP Quota 대신 앱 레벨 DB 카운터(OcrUsageLog)로 한도 관리. 900건 초과 시 사용자 친화적 429 에러 반환",
+  "비고": "GOOGLE_VISION_API_KEY Vercel 환경변수 등록 필요 (운영 블로커). 날짜/금액 정규식 파싱"
+}

@@ -1,0 +1,11 @@
+{
+  "기능명": "F-92 O2O 오프라인 안내문 자동 생성",
+  "reqId": "F-92",
+  "sprint": "Phase 4",
+  "상태": "완료",
+  "구현일": "2026-05-05",
+  "요약": "관리 메뉴 > 안내문 생성 → 빌라명·초대코드·QR 코드 포함 인쇄용 안내문 렌더링 → 브라우저 window.print()로 PDF 저장 또는 인쇄",
+  "수정된파일": "app/(admin)/manage/notice/page.tsx (신규), app/(admin)/manage/page.tsx (메뉴 추가)",
+  "스펙편차": "외부 PDF 라이브러리 없이 window.print() + @media print CSS로 구현. 의존성 증가 없음. qrcode npm 패키지(기존 도입) 재활용",
+  "비고": "엘리베이터·1층 게시판 부착용 안내문. 스미싱 오해 방지 및 오프라인 신뢰도 확보 목적"
+}

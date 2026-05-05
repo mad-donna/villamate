@@ -2929,3 +2929,78 @@ PM 외부 평가 기반으로 Phase 4 기능적 요구사항 3종 공식 등록:
 ### 기술 부채 현황 (2026-04-29)
 
 변동 없음. F-93은 기존 인프라 재활용으로 신규 부채 미발생.
+
+---
+
+## 2026-05-05 — Sprint 15~16: F-91~F-92, F-94~F-96, F-99 구현
+
+### 아키텍처 변경점
+
+**외부 API 통합 (F-91 — Google Vision OCR)**
+- `POST /api/villas/[villaId]/ledger/ocr`: Google Vision API TEXT_DETECTION 연동
+- 월 900건 한도를 `OcrUsageLog` DB 카운터로 관리 (GCP Quota 대신 앱 레벨 제어)
+- `GOOGLE_VISION_API_KEY` 환경변수 필요
+
+**O2O 안내문 인쇄 (F-92 — window.print() 패턴)**
+- 외부 PDF 라이브러리 없이 `window.print()` + `@media print` CSS 사용
+- 의존성 증가 없이 QR 코드 포함 인쇄 구현
+
+**다중 빌라 퀵스위치 (F-99 — 클라이언트 UX 개선)**
+- `/api/me/villas` 기존 API 재활용, UI 레이어만 변경
+- 관리자 홈 헤더에 Bottom Sheet 드롭다운 추가
+
+**차량 이동 요청 (F-94 — 쿨타임 DB 패턴)**
+- `Vehicle.lastNudgedAt DateTime?` 필드로 1시간 쿨타임 구현 (Redis/메모리 없이 DB만 사용)
+- 요청자 익명 보장: body에 발신자 식별 정보 미포함
+
+**전출 정산 일할 계산 (F-95 — ExternalBilling 재활용)**
+- 신규 모델 없이 기존 `ExternalBilling` 모델 재활용
+- 계산식: `Math.ceil(monthlyFee × usedDays / totalDaysInMonth)`
+- fixedFee 없을 시 해당 월 `InvoicePayment`에서 금액 폴백 조회
+
+**공동 당번 + 정기 점검 스케줄러 (F-96 — 신규 도메인)**
+- `DutySchedule`, `DutyRule` 두 모델 신규 추가
+- 당번 계산 로직: `Math.floor(daysSinceStart / intervalDays) % units.length` (서버리스 stateless 계산, 별도 상태 저장 없음)
+- Cron 방식: 매일 당번 교체일 여부 체크 후 조건부 발송 (불필요한 알림 0건 보장)
+- 정기 점검 D-30/D-7 패턴: Cron에서 `daysUntil` 계산 후 정확히 두 시점에만 발송
+
+### API 변경
+
+| 엔드포인트 | 변경 유형 | 설명 |
+|-----------|---------|------|
+| `POST /api/villas/[villaId]/ledger/ocr` | 신규 | 영수증 이미지 → Google Vision OCR → 날짜·금액·설명 추출. 월 900건 한도 |
+| `POST /api/villas/[villaId]/vehicles/[vehicleId]/nudge` | 신규 | 차량 이동 요청 Web Push. 1시간 쿨타임 (lastNudgedAt 기준). 방문 차량 차단 |
+| `POST /api/villas/[villaId]/residents/[residentId]/prorata` | 신규 | 이사일 입력 → 일할 계산 → ExternalBilling 생성 → 결제 링크 반환 |
+| `GET/POST /api/villas/[villaId]/duty-schedules` | 신규 | 공동 당번 스케줄 CRUD. POST 시 기존 활성 스케줄 자동 비활성화 |
+| `DELETE /api/villas/[villaId]/duty-schedules/[scheduleId]` | 신규 | 당번 스케줄 삭제 |
+| `GET/POST /api/villas/[villaId]/duty-rules` | 신규 | 정기 점검 규칙 CRUD |
+| `PATCH/DELETE /api/villas/[villaId]/duty-rules/[ruleId]` | 신규 | 점검 완료 기록 (lastInspectedAt 갱신) / 삭제 |
+| `POST /api/cron/duty-reminder` | 신규 | 당번 교체일 세대 푸시 + D-30/D-7 점검 리마인더 관리자 발송 |
+
+### 데이터 모델 변경
+
+**신규 Enum**
+- `DutyInterval { WEEKLY, BIWEEKLY }`
+
+**신규 모델**
+- `OcrUsageLog`: yearMonth(unique), count — 월별 Vision API 호출 카운터
+- `DutySchedule`: villaId, units(String[]), startDate, interval(DutyInterval), isActive
+- `DutyRule`: villaId, name, intervalDays, lastInspectedAt?, isActive
+
+**기존 모델 필드 추가**
+- `Vehicle.lastNudgedAt DateTime?` — 차량 이동 요청 쿨타임용
+
+**Villa 관계 추가**
+- `Villa.dutySchedules DutySchedule[]`
+- `Villa.dutyRules DutyRule[]`
+
+### 기술 부채 현황 (2026-05-05)
+
+| 항목 | 위험도 | 상태 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 등록 | Critical | 미완료 |
+| 기존 평문 빌링키 마이그레이션 | High | 미완료 |
+| PortOne 운영 MID 전환 | High | 미완료 |
+| M-6: 인사이트 API DB groupBy | Medium | **완료** (Sprint 15) |
+| L-5: 장부 입주민 노출 정책 | Low | **확정** (전체 공개 유지) |
+| `GOOGLE_VISION_API_KEY` Vercel 등록 | Medium | 미완료 — F-91 OCR 운영 블로커 |

@@ -1115,3 +1115,55 @@ Sprint 12 백로그 High 3건, Medium 5건, Design 3건, Low 3건 전체 수정 
 ### 잠재적 리스크
 
 - **쿨타임 기준 시간대**: `todayStart.setHours(0,0,0,0)`은 서버 로컬 시간(UTC) 기준. KST 기준 자정과 최대 9시간 오차 가능. 실사용 임팩트는 낮으나, 추후 KST offset 보정(`-9 * 60 * 60 * 1000`) 고려 가능.
+
+---
+
+## 2026-05-05 — Sprint 15~16 QA
+
+### 빌드 검증
+
+| 항목 | 결과 |
+|------|------|
+| `next build` 빌드 성공 | ✅ 오류 없음 (112개 페이지 생성) |
+| TypeScript 타입 오류 | ✅ 없음 |
+| `prisma db push` 적용 | ✅ DutySchedule, DutyRule, OcrUsageLog, Vehicle.lastNudgedAt 정상 반영 |
+
+### 기능별 검증 항목
+
+**F-91 AI OCR**:
+- ADMIN role 가드 ✅ (403)
+- 월 900건 한도 카운터 — OcrUsageLog upsert + 한도 초과 시 429 ✅
+- base64 이미지 파싱 → Google Vision API 요청 ✅
+- 날짜·금액·설명 정규식 추출 ✅
+
+**F-92 안내문 생성**:
+- window.print() @media print 클래스 토글 ✅
+- qrcode npm으로 캔버스 QR 렌더 ✅
+
+**F-94 차량 이동 요청**:
+- ADMIN 전용 403 ✅
+- 방문 차량(`isVisitor:true`) 400 ✅
+- 1시간 쿨타임 (`lastNudgedAt` 기준) 429 + 남은 시간(분) 응답 ✅
+- 소유자에게 익명 SYSTEM 알림 + `lastNudgedAt` 갱신 원자 처리 ✅
+
+**F-95 일할 정산**:
+- fixedFee 없을 때 InvoicePayment 폴백 ✅
+- 월별 실제 일수 계산 (`new Date(year, month, 0).getDate()`) ✅
+- `Math.ceil` 올림 정책 ✅
+- ExternalBilling 생성 → `/pay/[id]` 링크 ✅
+
+**F-96 당번 스케줄러**:
+- 2개 미만 세대 400 ✅
+- POST 시 기존 활성 스케줄 자동 비활성화 ✅
+- Cron: 당번 교체일 여부 정확 판정 (`daysSinceStart % intervalDays === 0`) ✅
+- Cron: D-30/D-7 점검 리마인더 정확 발송 ✅
+
+**F-99 다중 빌라 퀵스위치**:
+- 단일 빌라 시 텍스트만 표시 (드롭다운 미표시) ✅
+- 전환 성공 시 localStorage 토큰·user 갱신 + reload ✅
+
+### 잠재적 리스크
+
+- **F-91 OCR 키 미등록**: `GOOGLE_VISION_API_KEY` Vercel 환경변수 미설정 시 OCR 기능 동작 안 함 — 관리자가 Vercel Dashboard에서 직접 등록 필요
+- **F-96 Cron UTC 기준**: duty-reminder Cron은 15:00 UTC (KST 00:00) 실행. `isDutyStartDay`의 오늘 날짜 계산이 UTC 기준 — KST 사용자에게 "오늘" 당번 교체 알림이 실제로는 전날 자정에 발송될 수 있음. 낮은 임팩트지만 추후 KST 기준 보정 검토
+- **F-95 fixedFee null 케이스**: 빌라에 fixedFee가 없고 해당 월 청구서도 없으면 422 반환 — UI에서 명확한 안내 필요

@@ -52,7 +52,7 @@
 | 푸시 알림 | Web Push (VAPID) + Service Worker | `lib/notify.ts`, PushSubscription 모델 |
 | 소셜 로그인 | 카카오 + 구글 OAuth 2.0 PKCE | SocialAccount 모델 |
 | 테스트 | Jest 30 + ts-jest | API routes 32개 케이스 |
-| 배포 | Vercel (단일) | Cron Jobs 6개 (15:00 UTC 일일) |
+| 배포 | Vercel (단일) | Cron Jobs 7개 (15:00 UTC 일일) |
 
 ## 5. 아키텍처 결정 사항 (중요 결정 로그)
 
@@ -66,6 +66,10 @@
 | JWT HttpOnly 쿠키 교환 | 소셜 로그인 콜백 → `/api/auth/exchange-token` | URL 노출 방지 |
 | `window.confirm/alert` 전면 제거 | `useConfirm` 훅 + `ConfirmDialog` 컴포넌트 | 디자인 일관성, 접근성 |
 | 장부 자동 기록 | 관리비 납부/외부청구 완료 시 LedgerTransaction 자동 생성 (`createdBy:'system'`) | 수작업 누락 방지 |
+| OCR 월 한도 — DB 카운터 방식 | Google Vision API 호출을 GCP Quota 대신 `OcrUsageLog` 테이블 카운터로 제한 (월 900건) | 사용자에게 명확한 오류 메시지 제공, GCP 초과 과금 방지 |
+| 일할 계산 올림 정책 | 전출 정산 시 `Math.ceil(fee × usedDays / totalDays)` — 소수점 이하 올림 | 관리자 불이익 방지, 정수 금액만 청구 |
+| 당번 교체 stateless 계산 | `DutySchedule.startDate` 기준 일수 차이로 현재 당번 세대 매번 재계산 — 별도 상태 저장 없음 | Serverless 환경 최적, DB 쓰기 최소화 |
+| ExternalBilling 재활용 (전출 정산) | 전출 정산 전용 모델 없이 기존 `ExternalBilling` + `/pay/[id]` 결제 페이지 재사용 | 신규 모델 없이 동일 결제 플로우 활용 |
 
 ## 6. 잔여 기술 부채
 
@@ -77,4 +81,4 @@
 | PortOne 운영 MID 전환 | 현재 테스트 MID(`INIpayTest`) 사용 중 — 실결제 전 교체 필요 | 높음 |
 | `BILLING_ENCRYPTION_KEY` Vercel 등록 | 64자 hex 키 Vercel 환경변수 미등록 — 자동결제 운영 블로커 | Critical |
 | 기존 평문 빌링키 마이그레이션 | `decryptBillingKey()` 호환 one-time 스크립트 미실행 | 높음 |
-| 인사이트 API 집계 최적화 | `GET /api/admin/insights` 월별 집계를 JS에서 처리 → DB `groupBy` 교체 권장 (M-6) | 낮음 |
+| `GOOGLE_VISION_API_KEY` Vercel 등록 | F-91 OCR 기능 운영 블로커 — Vercel 환경변수 미등록 시 OCR 동작 안 함 | Medium |

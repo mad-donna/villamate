@@ -2468,3 +2468,76 @@ if (existing) return err('오늘 이미 납부 안내 공지를 발송했습니�
 1. `createNotificationForVilla` 함수 재사용
 2. 쿨타임 필요 시 `prisma.notification.findFirst` + `todayStart` 패턴
 3. 클라이언트 피드백은 `useToast` 훅 사용
+
+---
+
+## 2026-05-05 — Sprint 15~16: F-91, F-92, F-94, F-95, F-96, F-99
+
+### 구현 내용
+
+**신규 파일**:
+- `app/api/villas/[villaId]/ledger/ocr/route.ts` — F-91 Google Vision OCR
+- `app/(admin)/manage/notice/page.tsx` — F-92 O2O 안내문 생성 (window.print)
+- `app/api/villas/[villaId]/vehicles/[vehicleId]/nudge/route.ts` — F-94 차량 이동 요청
+- `app/api/villas/[villaId]/residents/[residentId]/prorata/route.ts` — F-95 일할 정산
+- `app/api/villas/[villaId]/duty-schedules/route.ts` — F-96 당번 스케줄 CRUD
+- `app/api/villas/[villaId]/duty-schedules/[scheduleId]/route.ts` — F-96 삭제
+- `app/api/villas/[villaId]/duty-rules/route.ts` — F-96 점검 규칙 CRUD
+- `app/api/villas/[villaId]/duty-rules/[ruleId]/route.ts` — F-96 완료 기록/삭제
+- `app/(admin)/manage/duty/page.tsx` — F-96 당번·점검 관리 UI
+- `app/api/cron/duty-reminder/route.ts` — F-96 당번/점검 Cron
+
+**수정 파일**:
+- `app/(admin)/manage/residents/page.tsx` — F-95 "정산" 버튼 + 일할 정산 BottomSheet
+- `app/(admin)/home/page.tsx` — F-99 다중 빌라 퀵스위치 드롭다운
+- `app/(admin)/manage/page.tsx` — F-96 "당번·점검 관리" 메뉴 + F-92 "안내문 생성" 메뉴
+- `app/(admin)/manage/ledger/page.tsx` — F-91 OCR 버튼 + 영수증 자동 인식 UI
+- `app/api/admin/insights/route.ts` — M-6 JS 집계 → DB groupBy 교체
+- `prisma/schema.prisma` — OcrUsageLog, DutySchedule, DutyRule, DutyInterval enum, Vehicle.lastNudgedAt, Villa relations
+- `vercel.json` — duty-reminder cron 추가
+
+### 구현 패턴
+
+**Google Vision OCR (F-91)**:
+```ts
+const response = await fetch(
+  `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+  { method: 'POST', body: JSON.stringify({ requests: [{ image: { content: base64 }, features: [{ type: 'TEXT_DETECTION' }] }] }) }
+);
+// 날짜: \d{4}[-./]\d{1,2}[-./]\d{1,2} 패턴, 금액: [0-9,]+원 패턴
+```
+
+**일할 계산 (F-95)**:
+```ts
+const usedDays = moveOut.getDate();
+const totalDays = new Date(year, month, 0).getDate(); // 월 실제 일수
+const proratedAmount = Math.ceil(monthlyFee * usedDays / totalDays);
+```
+
+**당번 순환 계산 (F-96)**:
+```ts
+const daysSinceStart = Math.floor((today - startDate) / 86400000);
+const currentUnit = units[Math.floor(daysSinceStart / intervalDays) % units.length];
+```
+
+**Cron 조건부 발송 (F-96)**:
+```ts
+// 당번 교체일 여부: daysSinceStart % intervalDays === 0
+function isDutyStartDay(startDate, intervalDays): boolean
+```
+
+**DB prisma db push 사용**:
+- `prisma migrate dev`는 기존 스키마 drift로 실패 → `prisma db push`로 직접 DDL 적용
+- 신규 테이블 2개(DutySchedule, DutyRule) + OcrUsageLog 정상 적용 확인
+
+### 반복 패턴 메모
+
+**새 Cron 기능 추가 시**:
+1. `app/api/cron/[name]/route.ts` 생성 — `CRON_SECRET` Bearer 검증 필수
+2. `vercel.json`의 `crons` 배열에 등록 (`"schedule": "0 15 * * *"`)
+
+**일할 정산 링크 공유 패턴**:
+- `ExternalBilling` 생성 → 결제 링크 `/pay/[billing.id]` → 클립보드 복사
+- 기존 외부 청구 플로우 완전 재활용
+
+**prisma db push 후 prisma generate 자동 실행됨** — Vercel 빌드 시 `postinstall`에서도 자동 실행
