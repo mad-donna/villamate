@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getUser as getStoredUser, getToken } from '@/lib/client-auth';
+import type { StoredUser } from '@/lib/client-auth';
 import { WidgetCard } from '@/components/ui/WidgetCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
@@ -37,6 +38,14 @@ interface AdminDashboardData {
   role: 'ADMIN';
   villa: VillaInfo;
   stats: AdminStats;
+}
+
+interface ManagedVilla {
+  id: string;
+  name: string;
+  address: string;
+  subscriptionStatus: string;
+  inviteCode: string;
 }
 
 // ---------- 구독 배지 ----------
@@ -120,6 +129,11 @@ export default function AdminHomePage() {
   const [nudgeSending, setNudgeSending] = useState(false);
   const { toast, toastEl } = useToast();
 
+  // F-99: 빌라 퀵스위치
+  const [showVillaPicker, setShowVillaPicker] = useState(false);
+  const [villas, setVillas] = useState<ManagedVilla[]>([]);
+  const [switching, setSwitching] = useState<string | null>(null);
+
   useEffect(() => {
     const storedUser = getStoredUser();
     const token = getToken();
@@ -140,7 +154,10 @@ export default function AdminHomePage() {
       }),
       fetch('/api/me/villas', { headers: { Authorization: `Bearer ${token}` } })
         .then((r) => r.json())
-        .then((d: { villas?: unknown[] }) => d.villas?.length ?? 0)
+        .then((d: { villas?: ManagedVilla[] }) => {
+          setVillas(d.villas ?? []);
+          return d.villas?.length ?? 0;
+        })
         .catch(() => 0),
     ])
       .then(([json, villaCount]) => {
@@ -154,6 +171,31 @@ export default function AdminHomePage() {
       .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [router]);
+
+  async function handleSwitchVilla(villaId: string) {
+    if (switching) return;
+    setSwitching(villaId);
+    try {
+      const token = getToken();
+      const res = await fetch('/api/auth/switch-villa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ villaId }),
+      });
+      const d = await res.json() as { token?: string; villa?: StoredUser['villa'] };
+      if (!res.ok || !d.token) throw new Error();
+      const { saveToken, setUser: saveUser } = await import('@/lib/client-auth');
+      saveToken(d.token);
+      const currentUser = getStoredUser();
+      if (currentUser && d.villa) saveUser({ ...currentUser, villa: d.villa });
+      setShowVillaPicker(false);
+      window.location.reload();
+    } catch {
+      toast('빌라 전환에 실패했습니다.', 'error');
+    } finally {
+      setSwitching(null);
+    }
+  }
 
   async function handleNudge() {
     if (!data) return;
@@ -224,24 +266,25 @@ export default function AdminHomePage() {
           <p className="text-sm text-neutral-500">안녕하세요,</p>
           <h1 className="text-xl font-bold text-neutral-900">{userName}님 👋</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <p className="text-sm text-neutral-500">{villa.name}</p>
+            {multiVillaCount > 1 ? (
+              <button
+                type="button"
+                onClick={() => setShowVillaPicker(true)}
+                className="flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-700 transition-colors"
+              >
+                {villa.name}
+                <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            ) : (
+              <p className="text-sm text-neutral-500">{villa.name}</p>
+            )}
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${subscriptionBadgeClass[villa.subscriptionStatus]}`}
             >
               {subscriptionLabel[villa.subscriptionStatus]}
             </span>
-            {multiVillaCount > 1 && (
-              <button
-                type="button"
-                onClick={() => router.push('/profile/my-villas')}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-                빌라 전환
-              </button>
-            )}
           </div>
         </header>
 
@@ -338,6 +381,62 @@ export default function AdminHomePage() {
         {/* 수금 인사이트 */}
         <InsightsSection />
       </main>
+
+      {/* F-99: 빌라 퀵스위치 바텀시트 */}
+      {showVillaPicker && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-end"
+          onClick={() => setShowVillaPicker(false)}
+        >
+          <div
+            className="bg-white rounded-t-3xl w-full p-5 space-y-3 max-h-[70vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-base font-bold text-neutral-900">빌라 전환</h2>
+              <button
+                type="button"
+                onClick={() => setShowVillaPicker(false)}
+                className="p-1 text-neutral-400 hover:text-neutral-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {villas.map((v) => {
+              const isCurrent = v.id === villa.id;
+              return (
+                <div
+                  key={v.id}
+                  className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-colors ${isCurrent ? 'border-primary-400 bg-primary-50' : 'border-neutral-100 bg-white'}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-neutral-900 truncate">{v.name}</p>
+                      {isCurrent && (
+                        <span className="text-[10px] font-semibold text-primary-600 bg-primary-100 px-2 py-0.5 rounded-full shrink-0">현재</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-neutral-400 truncate mt-0.5">{v.address}</p>
+                  </div>
+                  {!isCurrent && (
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchVilla(v.id)}
+                      disabled={!!switching}
+                      className="ml-3 text-sm font-semibold text-white bg-primary-600 px-3 py-2 rounded-xl disabled:opacity-50 shrink-0"
+                    >
+                      {switching === v.id ? '전환 중' : '전환'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            <div className="pb-safe" />
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -375,6 +375,7 @@ model Vehicle {
   isVisitor         Boolean  @default(false)
   visitorName       String?  // QR 등록 방문자 이름
   expectedDeparture String?
+  lastNudgedAt      DateTime?
   createdAt         DateTime @default(now())
 
   @@unique([plateNumber, villaId])

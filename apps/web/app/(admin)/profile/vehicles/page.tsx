@@ -45,6 +45,10 @@ export default function AdminVehiclesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // 이동 요청
+  const [nudging, setNudging] = useState<string | null>(null);
+  const [nudgeToast, setNudgeToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
     const user = JSON.parse(raw) as { villa?: { id?: string } };
@@ -87,6 +91,25 @@ export default function AdminVehiclesPage() {
       method: 'DELETE',
     });
     fetchVehicles();
+  }
+
+  async function handleNudge(vehicleId: string) {
+    if (nudging) return;
+    setNudging(vehicleId);
+    try {
+      const res = await apiFetch(`/api/villas/${villaId}/vehicles/${vehicleId}/nudge`, { method: 'POST' });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) {
+        setNudgeToast({ msg: data.error ?? '요청에 실패했습니다.', type: 'err' });
+      } else {
+        setNudgeToast({ msg: '이동 요청을 보냈습니다.', type: 'ok' });
+      }
+    } catch {
+      setNudgeToast({ msg: '요청에 실패했습니다.', type: 'err' });
+    } finally {
+      setNudging(null);
+      setTimeout(() => setNudgeToast(null), 2500);
+    }
   }
 
   async function handleRegister(e: React.FormEvent) {
@@ -261,13 +284,23 @@ export default function AdminVehiclesPage() {
                         {v.modelName ? ` · ${v.modelName}` : ''}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(v.id)}
-                      className="text-xs text-neutral-400 hover:text-error-500 transition-colors p-1"
-                    >
-                      삭제
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleNudge(v.id)}
+                        disabled={nudging === v.id}
+                        className="text-xs font-semibold text-primary-600 bg-primary-50 hover:bg-primary-100 disabled:opacity-50 px-2.5 py-1.5 rounded-lg transition-colors"
+                      >
+                        {nudging === v.id ? '전송 중' : '이동 요청'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(v.id)}
+                        className="text-xs text-neutral-400 hover:text-error-500 transition-colors p-1"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -275,6 +308,13 @@ export default function AdminVehiclesPage() {
           </div>
         )}
       </div>
+
+      {/* 이동 요청 토스트 */}
+      {nudgeToast && (
+        <div className={`fixed bottom-20 left-0 right-0 mx-auto w-fit px-5 py-3 text-sm font-medium rounded-2xl shadow-lg z-50 ${nudgeToast.type === 'ok' ? 'bg-neutral-800 text-white' : 'bg-error-500 text-white'}`}>
+          {nudgeToast.msg}
+        </div>
+      )}
 
       {/* QR 코드 모달 */}
       {showQr && (
