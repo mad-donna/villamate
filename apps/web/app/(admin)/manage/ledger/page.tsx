@@ -71,6 +71,10 @@ export default function AdminLedgerPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
+  // OCR 상태
+  const [ocring, setOcring] = useState(false);
+  const [ocrError, setOcrError] = useState('');
+
   // 이미지 뷰어
   const [viewerSrc, setViewerSrc] = useState<string | null>(null);
 
@@ -139,6 +143,31 @@ export default function AdminLedgerPage() {
     setReceiptUrl(null);
     setReceiptPreview(null);
     setUploadError('');
+    setOcrError('');
+  }
+
+  async function handleOcr() {
+    if (!receiptUrl || !villaId) return;
+    setOcring(true);
+    setOcrError('');
+    try {
+      const res = await apiFetch(`/api/villas/${villaId}/ledger/ocr`, {
+        method: 'POST',
+        body: JSON.stringify({ imageUrl: receiptUrl }),
+      });
+      const data = await res.json() as { date?: string; description?: string; amount?: number; error?: string };
+      if (!res.ok) {
+        setOcrError(data.error ?? 'OCR 인식에 실패했습니다.');
+        return;
+      }
+      if (data.date) setFormDate(data.date);
+      if (data.description) setFormDescription(data.description);
+      if (data.amount) setFormAmount(String(data.amount));
+    } catch {
+      setOcrError('OCR 인식 중 오류가 발생했습니다.');
+    } finally {
+      setOcring(false);
+    }
   }
 
   function handleOpenForm() {
@@ -457,7 +486,35 @@ export default function AdminLedgerPage() {
                 <p className="text-xs text-red-500 mt-1">{uploadError}</p>
               )}
               {receiptUrl && !uploading && (
-                <p className="text-xs text-green-600 mt-1 font-medium">업로드 완료</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <p className="text-xs text-green-600 font-medium">업로드 완료</p>
+                  <button
+                    type="button"
+                    onClick={handleOcr}
+                    disabled={ocring}
+                    className="flex items-center gap-1 text-xs font-semibold text-primary-600 bg-primary-50 hover:bg-primary-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-2.5 py-1 transition-colors"
+                  >
+                    {ocring ? (
+                      <>
+                        <svg className="animate-spin w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        인식 중...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                        </svg>
+                        OCR 자동 인식
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+              {ocrError && (
+                <p className="text-xs text-red-500 mt-1">{ocrError}</p>
               )}
             </div>
 

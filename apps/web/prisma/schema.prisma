@@ -536,3 +536,12 @@ model Vendor {
 
   @@index([villaId])
 }
+
+model OcrUsageLog {
+  id        String   @id @default(uuid())
+  yearMonth String   // "YYYY-MM"
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([yearMonth])
+}
