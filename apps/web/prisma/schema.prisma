@@ -98,6 +98,11 @@ enum VendorCategory {
   ETC
 }
 
+enum DutyInterval {
+  WEEKLY
+  BIWEEKLY
+}
+
 model User {
   id              String           @id @default(uuid())
   email           String           @unique
@@ -154,6 +159,8 @@ model Villa {
   energyUsages       EnergyUsage[]
   facilities         Facility[]
   vendors            Vendor[]
+  dutySchedules      DutySchedule[]
+  dutyRules          DutyRule[]
 }
 
 model SocialAccount {
@@ -545,4 +552,30 @@ model OcrUsageLog {
   updatedAt DateTime @updatedAt
 
   @@unique([yearMonth])
+}
+
+model DutySchedule {
+  id        String       @id @default(uuid())
+  villaId   String
+  villa     Villa        @relation(fields: [villaId], references: [id])
+  units     String[]     // 순환 세대 호수 목록 (순서 유지)
+  startDate DateTime     // 첫 번째 세대 당번 시작일
+  interval  DutyInterval @default(WEEKLY)
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+
+  @@index([villaId])
+}
+
+model DutyRule {
+  id              String    @id @default(uuid())
+  villaId         String
+  villa           Villa     @relation(fields: [villaId], references: [id])
+  name            String    // 점검 항목명 (소화기 점검 등)
+  intervalDays    Int       // 점검 주기 (일 단위)
+  lastInspectedAt DateTime? // 마지막 점검일
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  @@index([villaId])
 }

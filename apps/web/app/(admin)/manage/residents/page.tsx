@@ -37,6 +37,13 @@ export default function ResidentsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const { confirm: confirmMoveOut, dialog: confirmDialog } = useConfirm();
 
+  // 일할 정산 BottomSheet 상태
+  const [prorataResident, setProrataResident] = useState<Resident | null>(null);
+  const [prorataDate, setProrataDate] = useState('');
+  const [prorataResult, setProrataResult] = useState<{ billingId: string; amount: number; usedDays: number; totalDays: number } | null>(null);
+  const [prorataLoading, setProrataLoading] = useState(false);
+  const [prorataError, setProrataError] = useState('');
+
   // 호수 관리 BottomSheet 상태
   const [sheetOpen, setSheetOpen] = useState(false);
   const [roomNumbers, setRoomNumbers] = useState<string[]>([]);
@@ -216,6 +223,32 @@ export default function ResidentsPage() {
     } finally {
       setDeletingId(null);
     }
+  }
+
+  async function handleProrata() {
+    if (!prorataResident || !prorataDate || !villaId) return;
+    setProrataLoading(true);
+    setProrataError('');
+    try {
+      const res = await apiFetch(`/api/villas/${villaId}/residents/${prorataResident.id}/prorata`, {
+        method: 'POST',
+        body: JSON.stringify({ moveOutDate: prorataDate }),
+      });
+      const data = await res.json() as { billing?: { id: string }; proratedAmount?: number; usedDays?: number; totalDays?: number; error?: string };
+      if (!res.ok) throw new Error(data.error ?? '정산 요청에 실패했습니다.');
+      setProrataResult({ billingId: data.billing!.id, amount: data.proratedAmount!, usedDays: data.usedDays!, totalDays: data.totalDays! });
+    } catch (e) {
+      setProrataError(e instanceof Error ? e.message : '정산 요청에 실패했습니다.');
+    } finally {
+      setProrataLoading(false);
+    }
+  }
+
+  function closeProrataSheet() {
+    setProrataResident(null);
+    setProrataDate('');
+    setProrataResult(null);
+    setProrataError('');
   }
 
   return (
@@ -400,16 +433,26 @@ export default function ResidentsPage() {
                     {resident.residentType === 'HEAD' ? '세대주' : '세입자'}
                   </Badge>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  loading={deletingId === resident.id}
-                  disabled={deletingId !== null}
-                  onClick={() => handleMoveOut(resident)}
-                  className="text-error-500 hover:bg-red-50 shrink-0 ml-2"
-                >
-                  전출 처리
-                </Button>
+                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setProrataResident(resident); setProrataDate(''); setProrataResult(null); setProrataError(''); }}
+                    className="text-primary-600 hover:bg-primary-50"
+                  >
+                    정산
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    loading={deletingId === resident.id}
+                    disabled={deletingId !== null}
+                    onClick={() => handleMoveOut(resident)}
+                    className="text-error-500 hover:bg-red-50"
+                  >
+                    전출
+                  </Button>
+                </div>
               </div>
               <p className="text-sm text-neutral-600 mt-1.5 truncate">
                 {resident.user.name}
@@ -510,6 +553,90 @@ export default function ResidentsPage() {
               >
                 저장
               </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 일할 정산 BottomSheet */}
+      {prorataResident && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-70" onClick={closeProrataSheet} />
+          <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white rounded-t-3xl shadow-2xl z-80 flex flex-col">
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-neutral-200" />
+            </div>
+            <div className="flex items-center justify-between px-5 pb-3 pt-2">
+              <h2 className="text-lg font-bold text-neutral-900">
+                {prorataResident.roomNumber}호 일할 정산
+              </h2>
+              <button
+                type="button"
+                onClick={closeProrataSheet}
+                className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100"
+                aria-label="닫기"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-5 pb-4 space-y-4">
+              {!prorataResult ? (
+                <>
+                  <p className="text-sm text-neutral-500">
+                    이사 날짜를 입력하면 당월 관리비 일할 금액을 계산해 정산 링크를 생성합니다.
+                  </p>
+                  <Input
+                    type="date"
+                    label="이사 날짜"
+                    value={prorataDate}
+                    onChange={(e) => setProrataDate(e.target.value)}
+                    error={prorataError}
+                  />
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    loading={prorataLoading}
+                    disabled={!prorataDate}
+                    onClick={handleProrata}
+                  >
+                    정산 링크 생성
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="bg-primary-50 rounded-2xl p-4 text-center">
+                    <p className="text-xs text-neutral-500 mb-1">
+                      일할 계산 ({prorataResult.usedDays}/{prorataResult.totalDays}일)
+                    </p>
+                    <p className="text-2xl font-bold text-primary-700">
+                      {prorataResult.amount.toLocaleString('ko-KR')}원
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    size="lg"
+                    onClick={async () => {
+                      const url = `${window.location.origin}/pay/${prorataResult.billingId}`;
+                      await navigator.clipboard.writeText(url);
+                      showToast('정산 링크가 복사되었습니다.');
+                    }}
+                  >
+                    정산 링크 복사
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full"
+                    size="lg"
+                    onClick={closeProrataSheet}
+                  >
+                    닫기
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </>
