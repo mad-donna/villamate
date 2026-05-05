@@ -24,6 +24,7 @@
 | Sprint 12 | 2026-04-24~25 | 보안·기능 QA 전수 수정 (H×3, M×5, D×3, L×3), Toast 컴포넌트 신규, fixedFee 고정 관리비 자동 발행 |
 | Sprint 13 | 2026-04-25 | 공용시설 예약 구조 개선 (openTime/closeTime/maxConcurrent + 인터벌 오버랩), apiFetch 전수 전환 (32개 파일), 인증 버그 전체 해소 |
 | Sprint 14 | 2026-04-29 | PM 평가 반영 (F-91·F-92·F-93 Phase 4 등록), F-93 소프트 넛지 전체 공지 푸시 버튼 구현 |
+| Sprint 15 | 2026-05-05 | F-91 AI 영수증 OCR (Google Vision, 월 900회 한도), F-92 O2O 안내문 생성 (QR+초대코드 인쇄), M-6 insights DB groupBy 최적화, L-5 장부 정책 확정 |
 
 ---
 
@@ -33,8 +34,8 @@
 
 | # | 기능 | 요구사항 요약 | 상태 | 선행 조건 |
 |---|------|------------|------|-----------|
-| F-91 | AI 영수증 OCR 자동 인식 | 영수증 사진 업로드 → Vision API(Google/AWS/Azure) 연동 → 결제 일자·사용처·금액 자동 추출 → 장부 입력 폼 자동 채우기 | ⬜ | Vision API 사업자 계정 및 과금 모델 결정 |
-| F-92 | O2O 오프라인 안내문 자동 생성 | ADMIN 대시보드 → 빌라명·초대코드·QR 포함 PDF/이미지 자동 생성 → 브라우저 다운로드 | ⬜ | 안내문 디자인 시안 확정 (`docs/DESIGN_SYSTEM.md` 연계) |
+| F-91 | AI 영수증 OCR 자동 인식 | 영수증 사진 업로드 → Vision API(Google/AWS/Azure) 연동 → 결제 일자·사용처·금액 자동 추출 → 장부 입력 폼 자동 채우기 | ✅ | Google Vision API, 월 900회 DB 카운터 한도 |
+| F-92 | O2O 오프라인 안내문 자동 생성 | ADMIN 대시보드 → 빌라명·초대코드·QR 포함 PDF/이미지 자동 생성 → 브라우저 다운로드 | ✅ | qrcode 패키지, window.print() PDF 저장 |
 
 ---
 
@@ -44,13 +45,13 @@
 
 | # | 파일 | 내용 | 상태 |
 |---|------|------|------|
-| M-6 | `app/api/admin/insights/route.ts` | 월별 집계를 JS에서 처리 → DB `groupBy`로 교체 권장 | ⬜ |
+| M-6 | `app/api/admin/insights/route.ts` | 월별 집계를 JS에서 처리 → DB `groupBy`로 교체 권장 | ✅ |
 
 ### 🔵 Low
 
 | # | 내용 | 상태 |
 |---|------|------|
-| L-5 | 장부 API — 입주민에게 전체 내역 노출 여부 정책 확인 필요 | 🔄 현재 입주민에게 전체 내역 노출 중. 제한이 필요하면 `assertVillaAccess` 수정 필요 |
+| L-5 | 장부 API — 입주민에게 전체 내역 노출 여부 정책 확인 필요 | ✅ 정책 확정: 장부 전체 공개 유지 (빌라메이트 투명성 차별점, `assertVillaAccess` 현행 유지) |
 
 ---
 
