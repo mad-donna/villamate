@@ -105,8 +105,9 @@ export default function PayPage() {
     const impSuccess = params.get('imp_success');
     if (impUid) {
       if (impSuccess === 'false') {
+        // 취소/실패여도 청구서 데이터는 로드해야 납부 버튼을 다시 표시할 수 있음
         setPayError(params.get('error_msg') ?? '결제가 취소되었습니다.');
-        setLoading(false);
+        fetchBilling();
         return;
       }
       fetchBilling().then(() => confirmPayment(impUid));

@@ -20,9 +20,12 @@ export async function POST(req: NextRequest) {
   const month = String(nowKST.getUTCMonth() + 1).padStart(2, '0');
   const billingMonth = `${year}-${month}`;
 
-  // autoPublishDay가 오늘인 빌라 조회
+  // autoPublishDay가 오늘이고 구독 활성 상태인 빌라 조회
   const villas = await prisma.villa.findMany({
-    where: { autoPublishDay: day },
+    where: {
+      autoPublishDay: day,
+      subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] },
+    },
     select: { id: true, name: true, adminId: true, fixedFee: true },
   });
 

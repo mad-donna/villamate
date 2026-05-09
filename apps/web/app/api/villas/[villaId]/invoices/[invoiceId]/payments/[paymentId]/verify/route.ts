@@ -84,30 +84,46 @@ export async function POST(
     }
 
     // 검증 통과 — 납부 상태 갱신 + 장부 기록 원자적 처리
+    // updateMany + status 조건으로 동시 결제 race condition 방지
     const now = new Date();
-    const [updated] = await prisma.$transaction([
-      prisma.invoicePayment.update({
-        where: { id: paymentId },
-        data: {
-          status: 'PAID',
-          paidAt: now,
-          impUid: imp_uid.trim(),
-          pgProvider: portOnePayment.pg_provider,
-        },
-      }),
-      prisma.ledgerTransaction.create({
-        data: {
-          villaId,
-          type: 'INCOME',
-          amount: Number(payment.amount),
-          description: `${payment.invoice.billingMonth} 관리비 수납 - ${payment.roomNumber}호`,
-          transactionDate: now,
-          createdBy: 'system',
-        },
-      }),
-    ]);
+    let updatedPayment;
+    try {
+      updatedPayment = await prisma.$transaction(async (tx) => {
+        const result = await tx.invoicePayment.updateMany({
+          where: { id: paymentId, status: 'PENDING' },
+          data: {
+            status: 'PAID',
+            paidAt: now,
+            impUid: imp_uid.trim(),
+            pgProvider: portOnePayment.pg_provider,
+          },
+        });
 
-    return ok({ payment: updated }, 200);
+        if (result.count === 0) {
+          throw new Error('ALREADY_PAID');
+        }
+
+        await tx.ledgerTransaction.create({
+          data: {
+            villaId,
+            type: 'INCOME',
+            amount: Number(payment.amount),
+            description: `${payment.invoice.billingMonth} 관리비 수납 - ${payment.roomNumber}호`,
+            transactionDate: now,
+            createdBy: 'system',
+          },
+        });
+
+        return tx.invoicePayment.findUnique({ where: { id: paymentId } });
+      });
+    } catch (e) {
+      if (e instanceof Error && e.message === 'ALREADY_PAID') {
+        return err('이미 납부 완료된 청구서입니다.', 400);
+      }
+      return err('서버 오류가 발생했습니다.', 500);
+    }
+
+    return ok({ payment: updatedPayment }, 200);
   } catch {
     return err('서버 오류가 발생했습니다.', 500);
   }

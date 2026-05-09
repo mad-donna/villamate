@@ -45,6 +45,7 @@ export async function PATCH(
 
     const wasPaid = existing.status === 'PAID';
     const becomesPaid = status === 'PAID' && !wasPaid;
+    const becomesUnpaid = wasPaid && status !== 'PAID';
     const now = new Date();
 
     const [payment] = await prisma.$transaction([
@@ -63,6 +64,20 @@ export async function PATCH(
                 type: 'INCOME',
                 amount: Number(existing.amount),
                 description: `${existing.invoice.billingMonth} 관리비 수납 - ${existing.roomNumber}호`,
+                transactionDate: now,
+                createdBy: 'system',
+              },
+            }),
+          ]
+        : []),
+      ...(becomesUnpaid
+        ? [
+            prisma.ledgerTransaction.create({
+              data: {
+                villaId,
+                type: 'EXPENSE',
+                amount: Number(existing.amount),
+                description: `${existing.invoice.billingMonth} 관리비 수납 취소 - ${existing.roomNumber}호`,
                 transactionDate: now,
                 createdBy: 'system',
               },
