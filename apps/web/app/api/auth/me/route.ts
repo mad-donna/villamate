@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   if (!dbUser) return err('사용자를 찾을 수 없습니다.', 404);
 
   let villaId: string | undefined;
+  let roomNumber: string | undefined;
   let villa = null;
 
   if (dbUser.role === 'ADMIN') {
@@ -26,12 +27,12 @@ export async function GET(req: NextRequest) {
   } else if (dbUser.role === 'RESIDENT') {
     const r = await prisma.residentRecord.findFirst({
       where: { userId: dbUser.id, status: 'APPROVED' },
-      select: { villaId: true, villa: { select: { id: true, name: true, address: true, inviteCode: true, subscriptionStatus: true } } },
+      select: { villaId: true, roomNumber: true, villa: { select: { id: true, name: true, address: true, inviteCode: true, subscriptionStatus: true } } },
     });
-    if (r) { villaId = r.villaId; villa = r.villa; }
+    if (r) { villaId = r.villaId; roomNumber = r.roomNumber; villa = r.villa; }
   }
 
-  return ok({ user: { ...dbUser, villaId, villa } });
+  return ok({ user: { ...dbUser, villaId, ...(roomNumber ? { roomNumber } : {}), villa } });
 }
 
 /**
@@ -73,6 +74,9 @@ export async function DELETE(req: NextRequest) {
 
     // 랜덤 비밀번호 해시 — 재로그인 차단
     const fakePassword = await bcrypt.hash(crypto.randomUUID(), 10);
+
+    // 소셜 계정 연결 해제 — 삭제된 계정으로 소셜 재로그인 차단
+    await prisma.socialAccount.deleteMany({ where: { userId: user.sub } });
 
     await prisma.user.update({
       where: { id: user.sub },

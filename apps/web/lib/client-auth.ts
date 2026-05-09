@@ -6,6 +6,7 @@ export interface StoredUser {
   name: string;
   email: string;
   role: 'ADMIN' | 'RESIDENT' | 'SUPER_ADMIN';
+  roomNumber?: string;
   villa?: {
     id: string;
     name: string;

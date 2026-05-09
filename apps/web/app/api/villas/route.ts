@@ -16,7 +16,7 @@ async function generateUniqueInviteCode(): Promise<string> {
   }
 
   // 극히 드물지만 모두 충돌 시 타임스탬프 기반 폴백
-  return Date.now().toString(36).substring(-6).toUpperCase();
+  return Date.now().toString(36).slice(-6).toUpperCase();
 }
 
 // POST: 빌라 등록

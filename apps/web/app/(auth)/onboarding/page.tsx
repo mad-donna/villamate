@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { getUser, getToken, saveToken, saveUser, type StoredUser } from '@/lib/client-auth';
+import { getUser, saveToken, saveUser, type StoredUser } from '@/lib/client-auth';
 import { apiFetch } from '@/lib/client-api';
 
 const BANKS = [
@@ -136,6 +136,9 @@ export default function OnboardingPage() {
             ...villaInfo,
             roomNumber: normalizedRoom,
           };
+        } else {
+          const joinData = await joinRes.json().catch(() => ({})) as { error?: string };
+          setError(joinData.error ?? '입주민 등록에 실패했습니다. 빌라 홈에서 다시 시도해주세요.');
         }
       }
 

@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     }
 
     let villaId: string | undefined;
+    let roomNumber: string | undefined;
     let villaData: {
       id: string;
       name: string;
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
       });
       if (record) {
         villaId = record.villaId;
+        roomNumber = record.roomNumber;
         villaData = {
           id: record.villa.id,
           name: record.villa.name,
@@ -113,6 +115,7 @@ export async function POST(req: NextRequest) {
         phone: safeUser.phone,
         role: safeUser.role,
         villaId,
+        ...(roomNumber ? { roomNumber } : {}),
         ...(villaData ? { villa: villaData } : {}),
         ...(residentVillaData ? { residentVilla: residentVillaData } : {}),
       },
