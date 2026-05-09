@@ -75,6 +75,8 @@
 | `GOOGLE_VISION_API_KEY` Vercel 등록 | **Medium** | F-91 OCR 기능 운영 블로커. Vercel 환경변수 미설정 시 OCR 동작 안 함 |
 | 기존 평문 빌링키 DB 마이그레이션 | High | `decryptBillingKey()` 호환을 위한 one-time 마이그레이션 스크립트 |
 | PortOne 운영 MID 전환 | High | 현재 테스트 MID(`INIpayTest`) 사용 중 — 실결제 전 교체 필요 |
+| 미납 리마인더 중복 방지 개선 | Low | `cron/invoice-reminder`: 알림 body regex 파싱으로 중복 체크 중. 문구 변경 시 중복 발송 위험. `Notification.referenceId` 컬럼 추가로 해소 가능. 문구 수정 시 regex도 반드시 함께 수정할 것 |
+| auto-payment 배치 처리 전환 | Low | `cron/auto-payment`: 빌라 수가 200개를 초과하면 순차 처리가 Vercel 300초 제한에 걸릴 수 있음. 규모 확장 시 `Promise.allSettled` + 배치 처리로 전환 필요 |
 
 ---
 
