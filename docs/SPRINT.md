@@ -77,6 +77,8 @@
 | PortOne 운영 MID 전환 | High | 현재 테스트 MID(`INIpayTest`) 사용 중 — 실결제 전 교체 필요 |
 | 미납 리마인더 중복 방지 개선 | Low | `cron/invoice-reminder`: 알림 body regex 파싱으로 중복 체크 중. 문구 변경 시 중복 발송 위험. `Notification.referenceId` 컬럼 추가로 해소 가능. 문구 수정 시 regex도 반드시 함께 수정할 것 |
 | auto-payment 배치 처리 전환 | Low | `cron/auto-payment`: 빌라 수가 200개를 초과하면 순차 처리가 Vercel 300초 제한에 걸릴 수 있음. 규모 확장 시 `Promise.allSettled` + 배치 처리로 전환 필요 |
+| 전출 처리 소프트 삭제 전환 | High | `DELETE /residents/[id]`: 납부 이력 있는 입주민은 FK 제약으로 삭제 불가 → 현재 관리자에게 409 반환. `ResidentRecord.status`에 `MOVED_OUT` 값 추가하는 소프트 삭제 방식으로 전환 필요. DB migration + API + UI 전체 수정 필요 |
+| prorata 중복 생성 방지 | Low | `POST /residents/[id]/prorata`: API 레벨 중복 방지 없음. 같은 입주민에게 여러 번 호출하면 ExternalBilling이 여러 개 생성됨. UI에서 1회 제한되지만 API 직접 호출 시 우회 가능 |
 
 ---
 

@@ -36,6 +36,15 @@ export async function POST(
     const moveOut = new Date(body.moveOutDate);
     if (isNaN(moveOut.getTime())) return err('유효하지 않은 날짜입니다.', 400);
 
+    const now = new Date();
+    const oneYearAgo = new Date(now);
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const oneMonthLater = new Date(now);
+    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+    if (moveOut < oneYearAgo || moveOut > oneMonthLater) {
+      return err('이사 날짜는 1년 이내 과거 또는 1개월 이내 미래만 입력할 수 있습니다.', 400);
+    }
+
     const year = moveOut.getFullYear();
     const month = moveOut.getMonth() + 1;
     const usedDays = moveOut.getDate();

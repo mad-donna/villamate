@@ -7,6 +7,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { useConfirm } from '@/hooks/useConfirm';
 import { apiFetch } from '@/lib/client-api';
+import { getUser } from '@/lib/client-auth';
 
 interface ResidentUser {
   id: string;
@@ -35,6 +36,7 @@ export default function ResidentsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { confirm: confirmMoveOut, dialog: confirmDialog } = useConfirm();
 
   // 일할 정산 BottomSheet 상태
@@ -54,10 +56,9 @@ export default function ResidentsPage() {
 
   // localStorage에서 user 정보 로드 및 목록 fetch
   useEffect(() => {
-    const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { villa?: { id?: string; inviteCode?: string } };
-    setVillaId(user.villa?.id ?? '');
-    setInviteCode(user.villa?.inviteCode ?? '');
+    const user = getUser();
+    setVillaId(user?.villa?.id ?? '');
+    setInviteCode(user?.villa?.inviteCode ?? '');
   }, []);
 
   // 호수 목록 로드 (villaId 세팅 이후)
@@ -118,8 +119,9 @@ export default function ResidentsPage() {
   });
 
   function showToast(message: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(message);
-    setTimeout(() => setToast(null), 2000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 2000);
   }
 
   async function handleCopyInviteCode() {

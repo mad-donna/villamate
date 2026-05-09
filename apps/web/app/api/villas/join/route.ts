@@ -33,25 +33,30 @@ export async function POST(req: NextRequest) {
       return err('유효하지 않은 초대 코드입니다.', 404);
     }
 
-    // 해당 villaId + roomNumber에 이미 다른 입주민 있는지 확인
+    // 해당 villaId + roomNumber에 이미 다른 입주민 있는지 확인 (PENDING/APPROVED만)
     const roomTaken = await prisma.residentRecord.findFirst({
-      where: { villaId: villa.id, roomNumber: normalizedRoom, userId: { not: user.sub } },
+      where: {
+        villaId: villa.id,
+        roomNumber: normalizedRoom,
+        userId: { not: user.sub },
+        status: { in: ['PENDING', 'APPROVED'] },
+      },
     });
     if (roomTaken) {
       return err('이미 등록된 호수입니다.', 409);
     }
 
-    // 동일 빌라에 이미 가입한 사용자 확인
+    // 동일 빌라에 이미 가입 중이거나 승인된 사용자 확인 (REJECTED는 재신청 허용)
     const alreadyJoined = await prisma.residentRecord.findFirst({
-      where: { villaId: villa.id, userId: user.sub },
+      where: { villaId: villa.id, userId: user.sub, status: { in: ['PENDING', 'APPROVED'] } },
     });
     if (alreadyJoined) {
       return err('이미 가입된 빌라입니다.', 409);
     }
 
-    // HEAD/MEMBER 판별: 해당 roomNumber에 HEAD가 이미 있으면 MEMBER
+    // HEAD/MEMBER 판별: 해당 roomNumber에 APPROVED HEAD가 이미 있으면 MEMBER
     const existingHead = await prisma.residentRecord.findFirst({
-      where: { villaId: villa.id, roomNumber: normalizedRoom, residentType: 'HEAD' },
+      where: { villaId: villa.id, roomNumber: normalizedRoom, residentType: 'HEAD', status: 'APPROVED' },
     });
     const residentType = existingHead ? 'MEMBER' : 'HEAD';
 
