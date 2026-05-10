@@ -1167,3 +1167,126 @@ Sprint 12 백로그 High 3건, Medium 5건, Design 3건, Low 3건 전체 수정 
 - **F-91 OCR 키 미등록**: `GOOGLE_VISION_API_KEY` Vercel 환경변수 미설정 시 OCR 기능 동작 안 함 — 관리자가 Vercel Dashboard에서 직접 등록 필요
 - **F-96 Cron UTC 기준**: duty-reminder Cron은 15:00 UTC (KST 00:00) 실행. `isDutyStartDay`의 오늘 날짜 계산이 UTC 기준 — KST 사용자에게 "오늘" 당번 교체 알림이 실제로는 전날 자정에 발송될 수 있음. 낮은 임팩트지만 추후 KST 기준 보정 검토
 - **F-95 fixedFee null 케이스**: 빌라에 fixedFee가 없고 해당 월 청구서도 없으면 422 반환 — UI에서 명확한 안내 필요
+
+---
+
+## QA 세션 기록 — 2026-05-09
+
+### QA-1: 인증 / 온보딩 ✅ 완료
+
+**수정 파일**: `auth/login/route.ts`, `auth/me/route.ts`, `villas/route.ts`, `(auth)/join/page.tsx`, `(auth)/onboarding/page.tsx`
+
+**발견 및 수정 사항**:
+
+- **RESIDENT roomNumber 유실**: 로그인 API가 roomNumber를 응답에 포함하지 않아 재로그인 시 유실 → `login/route.ts`에서 RESIDENT의 roomNumber를 조회해 응답에 포함, `StoredUser` 인터페이스에 `roomNumber?: string` 추가
+- **`me` API roomNumber 누락**: GET `/api/auth/me`도 동일 문제 → RESIDENT 분기에서 roomNumber 포함
+- **회원 탈퇴 시 socialAccount FK 오류**: `User` 삭제 전 `SocialAccount` 미삭제로 FK 제약 위반 → `socialAccount.deleteMany` 선행 추가
+- **invite code substring 버그**: `Date.now().toString(36).substring(-6)` → JS에서 -6은 0으로 처리되어 전체 문자열 반환 → `.slice(-6)`으로 수정
+- **`join/page.tsx` setTimeout 클린업 없음**: async 핸들러 내 setTimeout이 컴포넌트 언마운트 후에도 실행 → `useEffect`로 분리해 cleanup 처리
+- **`onboarding/page.tsx` 미사용 import**: `getToken` import 제거, 관리자 자기 빌라 가입 실패 시 에러 메시지 표시 추가
+
+**잔존 위험**:
+- `roomNumber` 저장이 localStorage 의존 — 서버 세션 방식으로의 전환은 추후 검토
+
+---
+
+### QA-2: 결제 흐름 (청구서 → PortOne → Toss) ✅ 완료
+
+**수정 파일**: `pay/[billId]/page.tsx`, `invoices/[id]/payments/[id]/verify/route.ts`, `invoices/[id]/payments/[id]/route.ts`, `cron/publish-invoices/route.ts`, `pay/[billId]/confirm/route.ts`
+
+**발견 및 수정 사항**:
+
+- **모바일 결제 취소 시 빈 화면**: `imp_success=false` 분기에서 `fetchBilling()` 미호출 → billing=null로 에러 화면 깨짐 → `fetchBilling()` 추가
+- **결제 이중 처리 경쟁 조건**: 두 요청이 동시에 `status !== 'PAID'` 통과 가능 → `prisma.$transaction` + `updateMany({where: {status: 'PENDING'}})` + `count === 0` 체크로 원자적 처리
+- **결제 취소 시 장부 역분개 누락**: PAID→미납 상태 변경 시 LedgerTransaction 생성 없음 → `becomesUnpaid` 조건으로 EXPENSE 역분개 트랜잭션 자동 생성
+- **비활성 구독 빌라에 청구서 자동 발행**: `publish-invoices` cron이 구독 상태 무관하게 모든 빌라에 발행 → `subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] }` 필터 추가
+- **서버리스 환경 무의미한 in-memory rate limit**: `pay/confirm`의 `rateLimitMap`은 Vercel 인스턴스 분산으로 실효성 없음 → 제거
+
+**의사결정 기록**:
+- `pay/confirm`은 merchant_uid·금액·imp_uid 3중 검증이 이미 PortOne 서버에서 수행되므로 별도 rate limit 불필요 → 제거 결정
+- Toss 자동결제 실패 시 재시도는 현재 미구현 — 운영 이슈로 별도 검토 예정
+
+---
+
+### QA-3: 입주민 관리 (등록·전출·정산) ✅ 완료
+
+**수정 파일**: `villas/join/route.ts`, `residents/[id]/prorata/route.ts`, `(admin)/manage/residents/page.tsx`
+
+**발견 및 수정 사항**:
+
+- **REJECTED 입주민 재신청 불가**: `villas/join`의 중복 체크가 REJECTED 상태도 차단 → `status: { in: ['PENDING', 'APPROVED'] }`로 수정 (3곳: roomTaken, alreadyJoined, HEAD 체크)
+- **전출 일할 계산 날짜 검증 없음**: 임의의 날짜 입력 가능 → 1년 이내 과거 또는 1개월 이내 미래만 허용하는 범위 검증 추가
+- **`residents/page.tsx` localStorage 직접 파싱**: `JSON.parse(localStorage.getItem('user'))` 패턴 → `getUser()` 헬퍼로 통일
+- **Toast 타이머 미정리**: `toastTimerRef` + `clearTimeout`으로 메모리 누수 방지
+
+**기술 부채 (미해결)**:
+- `DELETE /residents/[id]`: 납부 이력 있는 입주민은 FK 제약으로 삭제 불가 → 소프트 삭제(`MOVED_OUT` 상태) 전환 필요 (High)
+- `POST /residents/[id]/prorata`: API 레벨 중복 방지 없음 → `ExternalBilling` 여러 개 생성 가능 (Low)
+
+---
+
+## QA 세션 기록 — 2026-05-10
+
+### QA-4: 공지/투표 ✅ 완료
+
+**수정 파일**: `(admin)/community/...`, `(resident)/resident/community/...`, `cron/poll-reminder/route.ts`, `villas/[villaId]/polls/...`, `posts/...`
+
+**발견 및 수정 사항**:
+
+- **PENDING 입주민 콘텐츠 접근**: 미승인 입주민이 게시글 조회(`posts/my`), 댓글 작성, 투표 상세 접근 가능 → 3곳에 `status: 'APPROVED'` 조건 추가
+- **PATCH로 공지 3개 제한 우회**: `isNotice` 승격 시 PATCH 핸들러에 공지 개수 재검증 추가
+- **poll-reminder Cron 중복 알림**: 알림 전 오늘 발송 여부 DB 조회로 중복 방지
+- **게시글 목록 HTML 태그 노출**: `replace(/<[^>]*>/g, '')` 처리 (admin/resident 양쪽)
+- **비작성자 수정 URL 직접 접근**: `author.id !== user.id` 확인 후 `router.back()` 처리
+- **투표 종료일 UI/API 불일치**: UI는 내일 이후, API는 현재 이후 → API에 최소 1시간 후 제한 추가
+
+---
+
+### QA-5: 차량/티켓/점검/F-99 ✅ 완료
+
+**수정 파일**: `lib/auth.ts`, `vehicles/...`, `duty-reminder/route.ts`, `duty-rules/route.ts`, `duty-schedules/route.ts`, `tickets/route.ts`, `prorata/route.ts`, `(admin)/profile/...`
+
+**발견 및 수정 사항**:
+
+- **[Critical] QR 토큰 하드코딩 시크릿**: `qr-token`, `qr-verify`, `visitor` 3개 파일에서 폴백 시크릿 하드코딩 → `lib/auth.ts`에서 `secret` export 후 재사용
+- **[High] 당번 Cron UTC/KST 날짜 판정 오류**: `new Date()` 직접 사용 → `getTodayKST()` 함수 정의 후 KST 기준으로 통일
+- **[High] 당번 Cron try/catch 없음**: 빌라 단위 에러가 전체 Cron 실패로 전파 → 루프 내 try/catch 추가
+- **티켓 GET RESIDENT 빌라 소속 검증 누락**: `villaId` 조건 누락 → 추가, try/catch 없음 → 추가
+- **Nudge 알림+DB 비원자**: 알림 발송 후 DB 갱신 → 알림 실패 시에도 쿨타임 갱신 안 됨 → DB 갱신 먼저 처리
+- **일할 정산 중복 ExternalBilling 생성**: API 레벨 중복 체크 없음 → `description` 기반 409 처리 추가 (기술 부채 해소)
+- **switch-villa raw fetch**: Authorization 헤더 누락 → `apiFetch`로 교체
+- **duty-rules intervalDays 부동소수점**: 정수 검증 없음 → `Number.isInteger()` 추가
+- **DutySchedule 비원자 업데이트**: updateMany + create 분리 → `$transaction` 원자화
+
+---
+
+### QA-6: 크론 잡 ✅ 완료
+
+**수정 파일**: `cron/duty-reminder/route.ts`, `cron/expire-subscriptions/route.ts`, `cron/publish-invoices/route.ts`, `cron/subscription-reminder/route.ts`
+
+**발견 및 수정 사항**:
+
+- **expire-subscriptions 알림 루프 예외 처리 없음**: 단일 알림 발송 실패 시 전체 Cron 중단 → `.catch` 추가
+- **subscription-reminder D-7/D-3/D-1 중복 발송**: 조건 중복 체크 없음 → 오늘 발송 여부 사전 DB 조회로 방지
+- **publish-invoices 알림 예외로 인한 크래시**: 알림 실패 시 청구서 발행 전체 롤백 → `.catch` 분리
+- **duty-reminder BIWEEKLY 문구 오류**: "이번 주" → "이번 격주"
+- **duty-reminder 당번/점검 알림 중복**: 오늘 발송 여부 사전 확인 로직 추가
+
+---
+
+### QA-7: 백오피스 ✅ 완료
+
+**수정 파일**: `(backoffice)/billing/page.tsx`, `(backoffice)/content/faqs/page.tsx`, `(backoffice)/content/guides/page.tsx`, `(backoffice)/content/notices/page.tsx`, `(backoffice)/villas/[id]/page.tsx`, `(backoffice)/villas/page.tsx`, `api/backoffice/villas/[id]/route.ts`
+
+**발견 및 수정 사항**:
+
+- **billing TYPE_LABEL 오타**: `MANAGEMENT` → `FIXED`, `EXTRA` → `VARIABLE` 수정
+- **백오피스 콘텐츠 3곳 `confirm()/alert()` 사용**: notices, faqs, guides → `useConfirm` 훅 전환, guides 수정 실패 시 인라인 에러 표시
+- **백오피스 빌라 상세 페이지 미구현**: 빌라명 클릭 시 빈 스텁 → 전면 구현 (설계-5 B안)
+  - `GET /api/backoffice/villas/[id]`: 빌라 상세 + 입주민 목록 + 최근 청구서 6개
+  - 구독 상태 배지, 통계 카드 4개, 관리자 정보, 입주민 테이블, 청구서 납부율 테이블
+  - `EditSubscriptionModal`: PATCH `/api/backoffice/villas/[id]`로 구독 정보 수정
+
+**잠재적 리스크**:
+
+- `EditSubscriptionModal`의 `subscriptionExpiry` 입력이 `datetime-local` → KST 변환 없이 UTC로 저장. 사용 빈도 낮아 실사용 영향 미미하나 추후 KST offset 보정 검토 가능.

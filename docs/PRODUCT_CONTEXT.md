@@ -70,6 +70,10 @@
 | 일할 계산 올림 정책 | 전출 정산 시 `Math.ceil(fee × usedDays / totalDays)` — 소수점 이하 올림 | 관리자 불이익 방지, 정수 금액만 청구 |
 | 당번 교체 stateless 계산 | `DutySchedule.startDate` 기준 일수 차이로 현재 당번 세대 매번 재계산 — 별도 상태 저장 없음 | Serverless 환경 최적, DB 쓰기 최소화 |
 | ExternalBilling 재활용 (전출 정산) | 전출 정산 전용 모델 없이 기존 `ExternalBilling` + `/pay/[id]` 결제 페이지 재사용 | 신규 모델 없이 동일 결제 플로우 활용 |
+| 결제 경쟁 조건 — updateMany + count 패턴 | 결제 verify 엔드포인트에서 `$transaction` + `updateMany({where:{status:'PENDING'}})` + `count===0` 체크 | in-memory check는 TOCTOU 취약 — DB 원자적 업데이트로 이중 처리 방지 |
+| Vercel 서버리스 in-memory 상태 사용 금지 | `pay/confirm`의 rateLimitMap 제거 — PortOne 3중 검증(merchant_uid·금액·paid 상태)으로 충분 | 서버리스 인스턴스 분산으로 in-memory 상태 공유 불가 |
+| cron 구독 상태 명시적 필터 | 모든 cron 작업의 villa 조회에 `subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] }` 필터 필수 | 비활성 빌라에 청구서 자동 발행 방지 |
+| `hasUsedTrial` 플래그 방식 무료 체험 중복 방지 | `User.hasUsedTrial Boolean @default(false)` — 계정당 1회 30일 체험. 빌라 이양 후에도 초기화 안 함 | 동일 계정이 빌라 재등록으로 혜택 재수령 방지. count 기반은 이양 후 count=0 우회 가능 |
 
 ## 6. 잔여 기술 부채
 
@@ -82,3 +86,5 @@
 | `BILLING_ENCRYPTION_KEY` Vercel 등록 | 64자 hex 키 Vercel 환경변수 미등록 — 자동결제 운영 블로커 | Critical |
 | 기존 평문 빌링키 마이그레이션 | `decryptBillingKey()` 호환 one-time 스크립트 미실행 | 높음 |
 | `GOOGLE_VISION_API_KEY` Vercel 등록 | F-91 OCR 기능 운영 블로커 — Vercel 환경변수 미등록 시 OCR 동작 안 함 | Medium |
+| 전출 소프트 삭제 미구현 | `DELETE /residents/[id]`: 납부 이력 있는 입주민은 FK 제약으로 삭제 불가 → `ResidentRecord.status = MOVED_OUT` 소프트 삭제 전환 필요. DB migration + API + UI 전체 수정 | 높음 |
+| 미납 리마인더 regex 취약 | `cron/invoice-reminder`가 알림 본문 regex로 중복 체크 — 문구 변경 시 중복 발송. `Notification.referenceId` 컬럼으로 해소 가능 | 낮음 |

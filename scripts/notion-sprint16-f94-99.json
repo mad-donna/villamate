@@ -1,0 +1,11 @@
+{
+  "기능명": "F-94/95/96/99 차량 넛지·일할 정산·공동 당번·퀵스위치",
+  "reqId": "F-94, F-95, F-96, F-99",
+  "sprint": "Sprint 16",
+  "상태": "완료",
+  "구현일": "2026-05-05",
+  "요약": "F-94 차량 이동 요청 넛지 (1h 쿨타임, lastNudgedAt DB), F-95 전출 정산 일할 계산기 (Math.ceil, ExternalBilling 재활용), F-96 순환형 공동 당번 + 정기 점검 스케줄러 (DutySchedule/DutyRule 신규 모델), F-99 다중 빌라 퀵스위치 드롭다운",
+  "수정된파일": "api/villas/[villaId]/vehicles/[vehicleId]/nudge/route.ts, api/villas/[villaId]/residents/[residentId]/prorata/route.ts, api/villas/[villaId]/duty-schedules/route.ts, api/villas/[villaId]/duty-rules/route.ts, api/cron/duty-reminder/route.ts, (admin)/manage/duty/page.tsx, (admin)/home/page.tsx, prisma/schema.prisma, vercel.json",
+  "스펙편차": "F-95: 전용 모델 없이 기존 ExternalBilling 재활용 (신규 모델 최소화). F-96 당번 계산: stateless 재계산 방식 (별도 상태 저장 없음)",
+  "비고": "prisma db push로 스키마 적용 (migrate dev는 기존 drift로 불가)"
+}

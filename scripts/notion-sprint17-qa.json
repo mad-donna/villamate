@@ -1,0 +1,11 @@
+{
+  "기능명": "전체 QA 세션 완료 (QA-1 ~ QA-7)",
+  "reqId": "QA-1~7",
+  "sprint": "Sprint 17",
+  "상태": "완료",
+  "구현일": "2026-05-10",
+  "요약": "인증/결제/입주민/공지·투표/차량·점검/크론잡/백오피스 전 영역 QA — 총 31건 버그 수정. Critical: QR 토큰 하드코딩 시크릿 수정. High: 결제 이중처리 원자화, 당번 KST 날짜 오류. Medium: prorata 중복 방지, switch-villa 헤더 누락 등",
+  "수정된파일": "lib/auth.ts, pay/[billId]/page.tsx, payments/.../verify/route.ts, villas/join/route.ts, posts/..., polls/..., duty-reminder/route.ts, tickets/route.ts, vehicles/nudge/route.ts, cron/subscription-reminder/route.ts, cron/expire-subscriptions/route.ts, cron/publish-invoices/route.ts, (backoffice)/billing/page.tsx, (backoffice)/content/notices+faqs+guides/page.tsx",
+  "스펙편차": "결제 confirm rate limit 완전 제거 (Vercel 서버리스 in-memory 무의미). 빌라 이양 후 무료 체험 재수령 가능한 버그 발견 → hasUsedTrial 플래그로 해소",
+  "비고": "모든 QA 단계 완료. RDD.md에 상세 버그 목록 기록됨"
+}

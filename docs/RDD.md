@@ -494,6 +494,7 @@ app/
 | 2026-04-24~25 | Sprint 12 — 보안·기능 QA 전수 수정(H×3, M×5, D×3, L×3). Toast/useToast 컴포넌트 신규. window.alert/confirm 완전 제거. Badge 납부 상태 시맨틱 교정. 터치 타깃 표준화. 고정 관리비 자동 발행(fixedFee) 기능 구현: `Villa.fixedFee Int?` 추가, PATCH API 지원, publish-invoices 크론 금액 자동 설정, AutoPublishCard UI. |
 | 2026-04-29 | PM 평가 기반 Phase 4 기능적 요구사항 등록 — F-91(AI 영수증 OCR), F-92(O2O 안내문 자동 생성), F-93(소프트 넛지 전체 푸시). Phase 4 로드맵 섹션 신규 추가. F-93 당일 구현 완료 — `POST /api/villas/[villaId]/nudge`, 관리자 홈 넛지 카드 UI. |
 | 2026-05-05 | Sprint 15 — F-91(AI OCR, Google Vision, 월 900건 OcrUsageLog 카운터), F-92(O2O 안내문 window.print), M-6(insights API DB groupBy 교체), L-5(장부 전체 공개 정책 확정). Sprint 16 — F-94(차량 이동 요청 넛지, 1h 쿨타임), F-95(전출 일할 정산, ExternalBilling 재활용), F-96(공동 당번 + 정기 점검, DutySchedule/DutyRule 모델 신규, duty-reminder Cron), F-99(다중 빌라 퀵스위치). Phase 5 로드맵 신규 정의. DutyInterval enum + DutySchedule/DutyRule/OcrUsageLog 모델 + Vehicle.lastNudgedAt 추가. vercel.json Cron 7개로 확장. |
+| 2026-05-09 | QA-1 인증/온보딩 — RESIDENT roomNumber 유실 수정(login·me·join·onboarding), socialAccount FK 선삭제, invite code substring(-6)→slice(-6) 버그 수정, join 페이지 useEffect 클린업 패턴 적용. QA-2 결제 흐름 — 모바일 결제 취소 시 fetchBilling() 호출 추가, 결제 이중 처리 경쟁 조건 $transaction+updateMany 원자적 처리, PAID→미납 전환 시 역분개 LedgerTransaction 자동 생성, publish-invoices cron 구독 상태 필터 추가(ACTIVE/FREE_TRIAL), pay/confirm in-memory rateLimitMap 제거. QA-3 입주민 관리 — REJECTED 입주민 재신청 허용(join 3곳 status 조건 수정), prorata 날짜 범위 검증 추가(1년이내/1개월이내), residents/page localStorage 직접 파싱→getUser() 헬퍼 전환, toast 타이머 클린업. 기술 부채 신규 등록: 전출 소프트 삭제(High), prorata 중복 방지(Low), 미납 리마인더 regex(Low). |
 
 ---
 
@@ -596,3 +597,88 @@ app/
 | - | `PATCH /api/villas/[villaId]`에서 `fixedFee` 저장 지원 | ✅ | `autoPublishDay`와 동일 패턴 |
 | - | `publish-invoices` 크론 — `fixedFee` 기반 청구서 금액 설정 | ✅ | 미설정 시 0원(하위 호환) |
 | - | `AutoPublishCard` UI — 발행일 + 세대당 관리비 설정 카드 | ✅ | `manage/invoices/page.tsx` 상단 |
+
+---
+
+## 2026-05-09~10 완료 항목 (전체 QA 세션)
+
+### QA-1: 인증/온보딩 ✅
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| RESIDENT roomNumber 유실 | `auth/login/route.ts`, `auth/me/route.ts`, `client-auth.ts` | 로그인 API에 roomNumber 포함, StoredUser 인터페이스 확장 |
+| 회원 탈퇴 FK 오류 | `auth/me/route.ts` | SocialAccount 선삭제 후 User 삭제 |
+| invite code substring 버그 | `villas/route.ts` | `.substring(-6)` → `.slice(-6)` |
+| join setTimeout 클린업 누락 | `(auth)/join/page.tsx` | useEffect로 분리해 cleanup 처리 |
+
+### QA-2: 결제 흐름 ✅
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| 모바일 결제 취소 시 빈 화면 | `pay/[billId]/page.tsx` | 취소 분기에 fetchBilling() 추가 |
+| 결제 이중 처리 경쟁 조건 | `payments/.../verify/route.ts` | `$transaction` + `updateMany` + `count === 0` 원자 처리 |
+| 결제 취소 시 장부 역분개 누락 | `payments/.../route.ts` | PAID→미납 시 EXPENSE 역분개 자동 생성 |
+| 비활성 빌라 청구서 자동 발행 | `cron/publish-invoices/route.ts` | `subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] }` 필터 |
+| in-memory rate limit 제거 | `pay/[billId]/confirm/route.ts` | 서버리스 무의미 — PortOne 3중 검증으로 충분 |
+
+### QA-3: 입주민 관리 ✅
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| REJECTED 재신청 불가 | `villas/join/route.ts` | 중복 체크에서 REJECTED 제외 (3곳) |
+| 일할 정산 날짜 검증 없음 | `residents/[id]/prorata/route.ts` | 1년 이내 과거/1개월 이내 미래 범위 검증 |
+| localStorage 직접 파싱 | `(admin)/manage/residents/page.tsx` | getUser() 헬퍼로 통일 |
+
+### QA-4: 공지/투표 ✅
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| PENDING 입주민 콘텐츠 접근 | `posts/my`, `comments`, `polls/[id]` | `status: 'APPROVED'` 조건 3곳 추가 |
+| PATCH로 공지 3개 제한 우회 | `posts/[postId]/route.ts` | 승격 시 개수 재검증 |
+| poll-reminder Cron 중복 알림 | `cron/poll-reminder/route.ts` | 오늘 발송 여부 DB 조회 후 스킵 |
+| 게시글 목록 HTML 태그 노출 | `community/page.tsx` (admin/resident) | `replace(/<[^>]*>/g, '')` strip |
+| 비작성자 수정 URL 직접 접근 | `community/[id]/edit/page.tsx` | author.id 확인 후 router.back() |
+| 투표 종료일 UI/API 불일치 | `polls/route.ts` | API에 최소 1시간 후 제한 추가 |
+
+### QA-5: 차량/티켓/점검/F-99 ✅
+
+| 항목 | 심각도 | 파일 | 내용 |
+|------|--------|------|------|
+| QR 토큰 하드코딩 시크릿 | Critical | `qr-token`, `qr-verify`, `visitor` | `lib/auth.ts` secret export 후 재사용 |
+| 당번 Cron UTC/KST 오류 | High | `cron/duty-reminder/route.ts` | getTodayKST() 함수로 통일 |
+| 당번 Cron try/catch 없음 | High | `cron/duty-reminder/route.ts` | 루프 내 try/catch 추가 |
+| 티켓 빌라 소속 검증 누락 | High | `tickets/route.ts` | villaId 조건 + try/catch 추가 |
+| Nudge 알림+DB 비원자 | High | `vehicles/[id]/nudge/route.ts` | DB 갱신 먼저 → 알림 발송 순서 변경 |
+| 일할 정산 중복 생성 | Medium | `residents/[id]/prorata/route.ts` | description 기반 409 체크 추가 |
+| switch-villa Authorization 누락 | Medium | `(admin)/profile/my-villas/page.tsx` | raw fetch → apiFetch 교체 |
+| duty-rules 부동소수점 허용 | Medium | `duty-rules/route.ts` | Number.isInteger() 검증 추가 |
+| DutySchedule 비원자 업데이트 | Medium | `duty-schedules/route.ts` | $transaction 원자화 |
+
+### QA-6: 크론 잡 ✅
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| 알림 루프 예외 처리 누락 | `expire-subscriptions`, `publish-invoices` | .catch 추가 |
+| subscription-reminder 중복 발송 | `cron/subscription-reminder/route.ts` | 오늘 발송 여부 사전 확인 |
+| duty-reminder 문구 오류 | `cron/duty-reminder/route.ts` | "이번 주" → "이번 격주" |
+| duty-reminder 중복 발송 | `cron/duty-reminder/route.ts` | 오늘 발송 여부 사전 확인 |
+
+### QA-7: 백오피스 ✅
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| TYPE_LABEL 오타 | `(backoffice)/billing/page.tsx` | MANAGEMENT→FIXED, EXTRA→VARIABLE |
+| confirm/alert 미교체 | `content/notices`, `faqs`, `guides` | useConfirm 훅 전환 |
+| 빌라 상세 페이지 미구현 | `(backoffice)/villas/[id]/page.tsx` | 전면 구현 (설계-5 B안) |
+| 빌라 상세 GET API 없음 | `api/backoffice/villas/[id]/route.ts` | GET 핸들러 신규 추가 |
+
+---
+
+## 2026-05-10 신규 기능
+
+| # | 기능 | 상태 | 비고 |
+|---|------|------|------|
+| 설계-3 | 관리자 이용 가이드 페이지 | ✅ | `/profile/guide`, `/profile/guide/[id]` (DOMPurify) |
+| 설계-5 | 백오피스 빌라 상세 페이지 | ✅ | B안: 통계 카드 + 입주민 + 청구서 테이블 |
+| - | 무료 체험 hasUsedTrial 정책 | ✅ | 계정당 1회, 빌라 이양 후에도 유지 |
+| - | 운영 정책 문서 POLICY.md | ✅ | 구독·결제·계정 등 11개 영역 |

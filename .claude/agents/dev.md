@@ -2541,3 +2541,158 @@ function isDutyStartDay(startDate, intervalDays): boolean
 - 기존 외부 청구 플로우 완전 재활용
 
 **prisma db push 후 prisma generate 자동 실행됨** — Vercel 빌드 시 `postinstall`에서도 자동 실행
+
+---
+
+## 개발 기록 — 2026-05-09 (QA-1~3 버그 수정)
+
+### 수정된 파일 목록
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `lib/client-auth.ts` | `StoredUser` 인터페이스에 `roomNumber?: string` 추가 |
+| `app/api/auth/login/route.ts` | RESIDENT 로그인 시 roomNumber 포함하여 응답 |
+| `app/api/auth/me/route.ts` | GET: roomNumber 포함; DELETE: socialAccount 선행 삭제 |
+| `app/api/villas/route.ts` | invite code 생성 `.substring(-6)` → `.slice(-6)` 버그 수정 |
+| `app/(auth)/join/page.tsx` | setTimeout 클린업 useEffect 분리, roomNumber localStorage 저장 |
+| `app/(auth)/onboarding/page.tsx` | 미사용 import 제거, 에러 표시 추가 |
+| `app/pay/[billId]/page.tsx` | 모바일 결제 취소 시 fetchBilling() 호출 추가 |
+| `app/api/.../payments/.../verify/route.ts` | 경쟁 조건 방지: $transaction + updateMany count 체크 |
+| `app/api/.../payments/.../route.ts` | PAID→미납 전환 시 역분개 LedgerTransaction 생성 |
+| `app/api/cron/publish-invoices/route.ts` | 구독 상태 필터 추가 (ACTIVE/FREE_TRIAL만) |
+| `app/api/pay/[billId]/confirm/route.ts` | 실효성 없는 in-memory rate limit 제거 |
+| `app/api/villas/join/route.ts` | REJECTED 재신청 허용: 3곳 status 조건 수정 |
+| `app/api/.../residents/.../prorata/route.ts` | 날짜 범위 검증 추가 (1년 이내 과거, 1개월 이내 미래) |
+| `app/(admin)/manage/residents/page.tsx` | localStorage 직접 파싱 → getUser() 헬퍼 사용, toast 타이머 정리 |
+
+### 재사용 가능한 패턴
+
+**상태 전환 경쟁 조건 방지 패턴**:
+```typescript
+// 원자적 상태 전환 — count === 0이면 이미 처리됨
+const result = await tx.model.updateMany({
+  where: { id, status: 'PENDING' },  // 현재 상태 조건 필수
+  data: { status: 'COMPLETED', ... },
+});
+if (result.count === 0) throw new Error('ALREADY_PROCESSED');
+```
+
+**`useEffect` cleanup 패턴 (setTimeout)**:
+```typescript
+useEffect(() => {
+  if (!condition) return;
+  const timer = setTimeout(() => { /* action */ }, delay);
+  return () => clearTimeout(timer);  // 언마운트 시 자동 정리
+}, [condition]);
+```
+
+**localStorage 파싱 금지 패턴**:
+```typescript
+// ❌ 직접 파싱 금지
+const user = JSON.parse(localStorage.getItem('user') ?? '{}');
+// ✅ 헬퍼 사용
+import { getUser } from '@/lib/client-auth';
+const user = getUser();
+```
+
+### 주의 사항
+
+- **Vercel 서버리스 메모리**: in-memory 상태(Map, Set 등)는 인스턴스 간 공유되지 않음 — rate limit, 중복 방지 등은 반드시 DB 레벨에서 처리
+- **JS `substring` 음수 인자**: `str.substring(negative)` = `str.substring(0)` — 음수 오프셋이 필요하면 반드시 `.slice()` 사용
+- **`socialAccount` 삭제 순서**: `User` 삭제 전 FK를 가진 `SocialAccount` 반드시 선삭제
+- **cron 구독 가드**: 모든 cron 작업의 villa 조회에 `subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] }` 필터 적용
+
+---
+
+## 개발 기록 — 2026-05-10 (QA-4~7 + 신규 기능)
+
+### 수정된 파일 목록
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `app/(admin)/community/[id]/edit/page.tsx` | 비작성자 접근 시 `router.back()` 추가 |
+| `app/(admin)/community/page.tsx` | 게시글 본문 HTML 태그 strip |
+| `app/(resident)/resident/community/[id]/edit/page.tsx` | 동일 수정 |
+| `app/(resident)/resident/community/page.tsx` | HTML strip |
+| `app/api/cron/poll-reminder/route.ts` | 오늘 발송 여부 DB 조회로 중복 방지 |
+| `app/api/villas/[villaId]/polls/[pollId]/route.ts` | `status: 'APPROVED'` 조건 추가 |
+| `app/api/villas/[villaId]/polls/route.ts` | 투표 종료일 최소 1시간 후 검증 |
+| `app/api/villas/[villaId]/posts/[postId]/comments/route.ts` | APPROVED 조건 추가 |
+| `app/api/villas/[villaId]/posts/[postId]/route.ts` | 공지 승격 시 개수 재검증 + APPROVED 조건 |
+| `app/api/villas/[villaId]/posts/my/route.ts` | APPROVED 조건 추가 |
+| `app/(admin)/manage/duty/page.tsx` | 삭제 useConfirm 추가 |
+| `app/(admin)/profile/my-villas/page.tsx` | alert → useToast |
+| `app/(admin)/profile/vehicles/page.tsx` | confirm/alert → useConfirm/toast |
+| `app/api/cron/duty-reminder/route.ts` | getTodayKST() + 중복 방지 + try/catch + BIWEEKLY 문구 수정 |
+| `app/api/villas/[villaId]/duty-rules/route.ts` | intervalDays 정수 검증 |
+| `app/api/villas/[villaId]/duty-schedules/route.ts` | $transaction 원자화 |
+| `app/api/villas/[villaId]/residents/[residentId]/prorata/route.ts` | 중복 생성 409 체크 |
+| `app/api/villas/[villaId]/tickets/route.ts` | villaId 소속 검증 + try/catch |
+| `app/api/villas/[villaId]/vehicles/[vehicleId]/nudge/route.ts` | DB 갱신 → 알림 순서 변경 |
+| `app/api/villas/[villaId]/vehicles/qr-token/route.ts` | lib/auth.ts secret 재사용 |
+| `app/api/villas/[villaId]/vehicles/qr-verify/route.ts` | 동일 |
+| `app/api/villas/[villaId]/vehicles/visitor/route.ts` | 동일 |
+| `lib/auth.ts` | `secret` export 추가 |
+| `app/api/cron/expire-subscriptions/route.ts` | 알림 루프 .catch 추가 |
+| `app/api/cron/publish-invoices/route.ts` | 알림 .catch 추가 |
+| `app/api/cron/subscription-reminder/route.ts` | 오늘 발송 여부 사전 확인으로 중복 방지 |
+| `app/(backoffice)/billing/page.tsx` | TYPE_LABEL 오타 수정 (FIXED/VARIABLE) |
+| `app/(backoffice)/content/faqs/page.tsx` | confirm → useConfirm |
+| `app/(backoffice)/content/guides/page.tsx` | alert/confirm → useConfirm + 인라인 에러 |
+| `app/(backoffice)/content/notices/page.tsx` | confirm → useConfirm |
+| `app/(backoffice)/villas/[id]/page.tsx` | 빌라 상세 페이지 전면 구현 (설계-5 B안) |
+| `app/(backoffice)/villas/page.tsx` | 빌라명 → 상세 페이지 Link |
+| `app/api/backoffice/villas/[id]/route.ts` | GET 핸들러 신규 추가 |
+| `app/(admin)/profile/guide/page.tsx` | 스텁 → 전체 목록 구현 (카테고리 필터) |
+| `app/(resident)/resident/guide/page.tsx` | Array.isArray 방어 추가 |
+| `middleware.ts` | `/api/guides` PUBLIC_API 추가 |
+| `app/api/villas/route.ts` | hasUsedTrial 무료 체험 정책 로직 |
+| `prisma/schema.prisma` | `User.hasUsedTrial Boolean @default(false)` 추가 |
+
+### 신규 파일
+
+| 파일 | 내용 |
+|------|------|
+| `app/(admin)/profile/guide/[id]/page.tsx` | 관리자용 이용 가이드 상세 페이지 (DOMPurify XSS 방어) |
+| `docs/POLICY.md` | 구독·결제·계정·정책 문서 (11개 섹션) |
+| `scripts/create-superadmin.ts` | SUPER_ADMIN 계정 생성 스크립트 (운영 DB용) |
+
+### 반복 패턴 메모
+
+**PENDING 입주민 콘텐츠 접근 차단 패턴**:
+```ts
+const record = await prisma.residentRecord.findFirst({
+  where: { villaId, userId: user.sub, status: 'APPROVED' },
+});
+if (!record) return err('승인된 입주민만 접근 가능합니다.', 403);
+```
+
+**Cron 중복 발송 방지 패턴 (오늘 발송 DB 조회)**:
+```ts
+const todayStart = new Date();
+todayStart.setHours(0, 0, 0, 0);
+const alreadySent = await prisma.notification.findFirst({
+  where: { villaId, type: 'SYSTEM', title: '...', createdAt: { gte: todayStart } },
+});
+if (alreadySent) continue;
+```
+
+**hasUsedTrial 무료 체험 정책**:
+```ts
+const dbUser = await prisma.user.findUnique({ where: { id: user.sub }, select: { hasUsedTrial: true } });
+const eligible = !dbUser?.hasUsedTrial;
+// 빌라 생성 후
+if (eligible) {
+  await prisma.user.update({ where: { id: user.sub }, data: { hasUsedTrial: true } });
+}
+```
+
+**KST 날짜 판정 (Cron 내부)**:
+```ts
+function getTodayKST(): Date {
+  const now = new Date();
+  now.setHours(now.getHours() + 9); // UTC → KST
+  now.setHours(0, 0, 0, 0);
+  return now;
+}
+```

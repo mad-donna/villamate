@@ -3004,3 +3004,115 @@ PM 외부 평가 기반으로 Phase 4 기능적 요구사항 3종 공식 등록:
 | M-6: 인사이트 API DB groupBy | Medium | **완료** (Sprint 15) |
 | L-5: 장부 입주민 노출 정책 | Low | **확정** (전체 공개 유지) |
 | `GOOGLE_VISION_API_KEY` Vercel 등록 | Medium | 미완료 — F-91 OCR 운영 블로커 |
+
+---
+
+## 아키텍처 변경 기록 — 2026-05-09 (QA-1~3)
+
+### 인터페이스 변경
+
+**`StoredUser` 인터페이스 확장** (`lib/client-auth.ts`):
+- `roomNumber?: string` 필드 추가
+- RESIDENT가 로그인·재접속 시 호수 정보를 localStorage에서 복원하기 위함
+- 기존의 `residentVilla.roomNumber`는 ADMIN 전용 — RESIDENT는 별도 최상위 필드 사용
+
+### API 계층 의사결정
+
+**결제 confirm 엔드포인트 rate limit 제거** (`pay/[billId]/confirm/route.ts`):
+- 이유: Vercel 서버리스는 인스턴스가 분산되어 in-memory Map이 실효성 없음
+- 대안: PortOne 서버 3중 검증(merchant_uid 포함 + 금액 + paid 상태)으로 충분
+- 결론: 오해를 주는 코드 제거, 실질적 보안 수준 유지
+
+**청구서 자동 발행 구독 상태 필터 추가** (`cron/publish-invoices/route.ts`):
+- 비활성(`EXPIRED`, `CANCELED`) 빌라에 청구서가 자동 발행되는 문제
+- `subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] }` 필터로 가드
+- 아키텍처 원칙: cron 작업은 항상 구독 상태를 명시적으로 체크해야 함
+
+### 동시성 패턴
+
+**결제 이중 처리 방지** (`invoices/.../payments/.../verify/route.ts`):
+- `updateMany({ where: { status: 'PENDING' } })` + `count === 0` 체크 패턴 도입
+- `$transaction` 내부에서 원자적 처리 → TOCTOU 경쟁 조건 해소
+- 이 패턴을 향후 상태 변경이 있는 모든 결제 관련 엔드포인트에 적용할 것
+
+### 기술 부채 (신규, 2026-05-09)
+
+| 항목 | 위험도 | 설명 |
+|------|--------|------|
+| 전출 소프트 삭제 미구현 | High | FK 제약으로 납부 이력 있는 입주민 삭제 불가 → `ResidentRecord.status = MOVED_OUT` 필요 |
+| prorata API 중복 방지 없음 | Low | 같은 입주민 대상 여러 번 호출 시 `ExternalBilling` 중복 생성 |
+| 미납 리마인더 regex 취약 | Low | 알림 본문 regex로 중복 체크 — 문구 변경 시 중복 발송 위험 |
+| auto-payment 배치 처리 미비 | Low | 빌라 200개 초과 시 Vercel 300s 제한 도달 가능성 |
+
+---
+
+## 아키텍처 변경 기록 — 2026-05-10 (QA-4~7 + 신규 기능)
+
+### 아키텍처 변경점
+
+**구독 정책: hasUsedTrial 플래그 도입**
+- `User.hasUsedTrial Boolean @default(false)` 필드 추가 — 계정 생애 최초 빌라 생성 시에만 30일 무료 체험 부여
+- 플래그는 한 번 `true`로 설정되면 빌라 삭제·이양 후에도 초기화되지 않음 → 동일 계정이 빌라 재등록으로 무료 체험 재수령 불가
+- 기존 count 기반 접근 대비 관리자 이양(adminId 변경)에도 안전한 방식
+
+**`/api/guides` PUBLIC_API 예외 처리**
+- `middleware.ts`의 `PUBLIC_API` 배열에 `/api/guides` 추가
+- 이용 가이드는 인증 없이 조회 가능한 공개 콘텐츠로 분류
+- 기존: 가이드 API 호출 시 미인증으로 401 반환 → `t.map is not a function` 클라이언트 에러 발생
+
+**백오피스 빌라 상세 GET 엔드포인트 신규**
+- `GET /api/backoffice/villas/[id]`: 빌라 상세 + 입주민 목록 + 최근 청구서 6개월 합산 응답
+- `Promise.all` 병렬 조회로 N+1 쿼리 방지
+
+### API 변경
+
+| 엔드포인트 | 변경 유형 | 설명 |
+|-----------|---------|------|
+| `GET /api/backoffice/villas/[id]` | 신규 | 빌라 상세 + 입주민 목록 + 최근 청구서 6개 납부율 |
+
+### 데이터 모델 변경
+
+**기존 모델 필드 추가**
+- `User.hasUsedTrial Boolean @default(false)` — 계정당 무료 체험 1회 플래그
+
+### QA 세션 버그 수정 요약 (2026-05-10)
+
+**QA-4: 공지/투표 (5건)**
+- PENDING 입주민이 게시글·댓글·투표 상세 접근 가능 → `status: 'APPROVED'` 조건 추가 (3곳)
+- PATCH로 공지 3개 제한 우회 가능 → 승격 시 카운트 재검증
+- `poll-reminder` Cron 중복 알림 → 오늘 발송 여부 DB 조회 후 스킵
+- 게시글 목록 HTML 태그 노출 → `replace(/<[^>]*>/g, '')` strip 처리
+- 비작성자 수정 URL 직접 접근 → `author.id` 확인 후 `router.back()`
+- 투표 종료일 UI/API 불일치 → API에 최소 1시간 후 제한 추가
+
+**QA-5: 차량/티켓/점검/F-99 (11건)**
+- QR 토큰 3곳에서 하드코딩 폴백 시크릿 → `lib/auth.ts`에서 `secret` export 후 재사용 (Critical)
+- 티켓 GET RESIDENT 빌라 소속 검증 누락 + try/catch 없음 → 수정
+- 당번 Cron UTC/KST 날짜 판정 오류 → `getTodayKST()` 함수로 통일 (High)
+- Nudge 알림+DB 비원자 → DB 갱신 먼저 후 알림 발송
+- 일할 정산 중복 `ExternalBilling` 생성 → description 기반 409 체크 추가
+- `switch-villa` raw fetch → `apiFetch`로 교체 (Authorization 헤더 자동 주입)
+- `duty-rules` `intervalDays` 부동소수점 허용 → `Number.isInteger()` 검증
+- `DutySchedule` updateMany+create 비원자 → `$transaction` 원자화
+
+**QA-6: 크론 잡 (4건)**
+- `expire-subscriptions`, `publish-invoices`: 알림 루프 예외 처리 누락 → `.catch` 추가
+- `subscription-reminder`: D-7/D-3/D-1 중복 발송 → 오늘 발송 여부 사전 확인
+- `duty-reminder`: BIWEEKLY 알림 문구 오류 ("이번 주" → "이번 격주") + 중복 방지 추가
+
+**QA-7: 백오피스 (4건)**
+- `billing/page.tsx` TYPE_LABEL 오타 (MANAGEMENT→FIXED, EXTRA→VARIABLE)
+- 백오피스 콘텐츠 관리 3곳 `confirm()/alert()` → `useConfirm` 훅 전환
+
+### 기술 부채 현황 (2026-05-10)
+
+| 항목 | 위험도 | 상태 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 등록 | Critical | 미완료 |
+| 기존 평문 빌링키 마이그레이션 | High | 미완료 |
+| PortOne 운영 MID 전환 | High | 미완료 |
+| `GOOGLE_VISION_API_KEY` Vercel 등록 | Medium | 미완료 |
+| 전출 소프트 삭제 전환 | High | 미완료 |
+| prorata API 중복 방지 | Low | **완료** (QA-5: description 기반 409 체크) |
+| 미납 리마인더 regex 취약 | Low | 미완료 |
+| 본인 인증 (SMS/PASS) | 낮음 | 보류 결정 (유료) |
