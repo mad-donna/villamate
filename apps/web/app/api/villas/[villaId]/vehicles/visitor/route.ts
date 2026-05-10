@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
 import { ok, err } from '@/lib/api';
+import { secret } from '@/lib/auth';
 
 // POST: QR 스캔 방문 차량 등록 (비로그인, 토큰 검증)
 export async function POST(
@@ -22,10 +23,6 @@ export async function POST(
     if (!body.token) return err('토큰이 필요합니다.', 400);
 
     // JWT 토큰 검증
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET ?? 'villamate-secret-key',
-    );
-
     let payload: { villaId?: string; purpose?: string };
     try {
       const { payload: p } = await jwtVerify(body.token, secret);

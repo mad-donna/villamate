@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { prisma } from '@/lib/prisma';
 import { ok, err } from '@/lib/api';
+import { secret } from '@/lib/auth';
 
 /**
  * GET /api/villas/[villaId]/vehicles/qr-verify?token=...
@@ -18,10 +19,6 @@ export async function GET(
     const token = req.nextUrl.searchParams.get('token');
 
     if (!token) return err('토큰이 필요합니다.', 400);
-
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET ?? 'villamate-secret-key',
-    );
 
     let payload: { villaId?: string; purpose?: string };
     try {

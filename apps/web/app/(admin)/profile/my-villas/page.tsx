@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { saveToken, getUser as getStoredUser, setUser } from '@/lib/client-auth';
 import type { StoredUser } from '@/lib/client-auth';
 import { apiFetch } from '@/lib/client-api';
+import { useToast } from '@/hooks/useToast';
 
 interface ManagedVilla {
   id: string;
@@ -31,6 +32,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function MyVillasPage() {
   const router = useRouter();
+  const { toast, toastEl } = useToast();
   const [villas, setVillas] = useState<ManagedVilla[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentVillaId, setCurrentVillaId] = useState('');
@@ -50,9 +52,8 @@ export default function MyVillasPage() {
     if (villa.id === currentVillaId || switching) return;
     setSwitching(villa.id);
     try {
-      const res = await fetch('/api/auth/switch-villa', {
+      const res = await apiFetch('/api/auth/switch-villa', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ villaId: villa.id }),
       });
       const data = await res.json() as { token?: string; villa?: StoredUser['villa']; error?: string };
@@ -67,7 +68,7 @@ export default function MyVillasPage() {
       setCurrentVillaId(villa.id);
       router.push('/home');
     } catch (e) {
-      alert(e instanceof Error ? e.message : '빌라 전환에 실패했습니다.');
+      toast(e instanceof Error ? e.message : '빌라 전환에 실패했습니다.', 'error');
     } finally {
       setSwitching(null);
     }
@@ -75,6 +76,7 @@ export default function MyVillasPage() {
 
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
+      {toastEl}
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 pt-6 pb-4">
         <div className="flex items-center gap-3">

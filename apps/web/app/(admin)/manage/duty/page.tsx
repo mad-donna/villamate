@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { apiFetch } from '@/lib/client-api';
 import { Chip } from '@/components/ui/Chip';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface DutySchedule {
   id: string;
@@ -49,6 +50,7 @@ export default function DutyPage() {
   const [villaId, setVillaId] = useState('');
   const [tab, setTab] = useState<'schedule' | 'inspection'>('schedule');
   const [toast, setToast] = useState<string | null>(null);
+  const { confirm: confirmDialog, dialog: confirmEl } = useConfirm();
 
   // 당번 스케줄
   const [schedules, setSchedules] = useState<DutySchedule[]>([]);
@@ -132,6 +134,8 @@ export default function DutyPage() {
   }
 
   async function handleDeleteSchedule(id: string) {
+    const ok = await confirmDialog({ title: '당번 스케줄 삭제', description: '삭제하면 복구할 수 없습니다. 계속하시겠습니까?', variant: 'destructive', confirmLabel: '삭제' });
+    if (!ok) return;
     setDeletingSchedId(id);
     try {
       const res = await apiFetch(`/api/villas/${villaId}/duty-schedules/${id}`, { method: 'DELETE' });
@@ -192,6 +196,7 @@ export default function DutyPage() {
 
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
+      {confirmEl}
       <div className="px-4 pt-6 pb-4">
         <h1 className="text-xl font-bold text-neutral-900">당번 · 점검 관리</h1>
         <p className="text-sm text-neutral-500 mt-1">공동 당번 순환 및 정기 점검 리마인더를 설정하세요.</p>

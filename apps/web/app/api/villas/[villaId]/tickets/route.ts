@@ -6,33 +6,41 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ villaId: string }> }
 ) {
-  const user = await getUser(req);
-  if (!user) return err('Unauthorized', 401);
+  try {
+    const user = await getUser(req);
+    if (!user) return err('Unauthorized', 401);
 
-  const { villaId } = await params;
+    const { villaId } = await params;
 
-  if (user.role === 'ADMIN') {
     const villa = await prisma.villa.findUnique({
       where: { id: villaId },
       select: { adminId: true },
     });
-    if (!villa || villa.adminId !== user.sub) return err('권한이 없습니다.', 403);
+    if (!villa) return err('빌라를 찾을 수 없습니다.', 404);
+
+    const isAdmin = villa.adminId === user.sub;
+
+    if (!isAdmin) {
+      const resident = await prisma.residentRecord.findFirst({
+        where: { villaId, userId: user.sub, status: 'APPROVED' },
+      });
+      if (!resident) return err('접근 권한이 없습니다.', 403);
+    }
+
+    const where = isAdmin ? { villaId } : { villaId, reporterId: user.sub };
+
+    const tickets = await prisma.ticket.findMany({
+      where,
+      include: {
+        reporter: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return ok({ tickets });
+  } catch {
+    return err('서버 오류가 발생했습니다.', 500);
   }
-
-  const where =
-    user.role === 'ADMIN'
-      ? { villaId }
-      : { villaId, reporterId: user.sub };
-
-  const tickets = await prisma.ticket.findMany({
-    where,
-    include: {
-      reporter: { select: { id: true, name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  return ok({ tickets });
 }
 
 export async function POST(

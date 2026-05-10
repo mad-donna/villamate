@@ -46,7 +46,9 @@ export async function POST(
     const body = await req.json() as { name?: string; intervalDays?: number; lastInspectedAt?: string };
 
     if (!body.name?.trim()) return err('점검 항목명을 입력해주세요.', 400);
-    if (!body.intervalDays || body.intervalDays < 1) return err('유효한 점검 주기를 입력해주세요.', 400);
+    if (!body.intervalDays || body.intervalDays < 1 || !Number.isInteger(body.intervalDays)) {
+      return err('유효한 점검 주기를 입력해주세요. (1 이상의 정수)', 400);
+    }
 
     const lastInspectedAt = body.lastInspectedAt ? new Date(body.lastInspectedAt) : null;
     if (lastInspectedAt && isNaN(lastInspectedAt.getTime())) return err('유효하지 않은 날짜입니다.', 400);

@@ -72,13 +72,19 @@ export async function POST(
     const proratedAmount = Math.ceil(monthlyFee * usedDays / totalDays);
     const dueDate = new Date(year, month - 1, totalDays); // 월말 기한
 
+    const duplicateDescription = `${billingMonth} 관리비 일할 정산 (${resident.roomNumber}호, ${usedDays}/${totalDays}일)`;
+    const existing = await prisma.externalBilling.findFirst({
+      where: { villaId, description: duplicateDescription },
+    });
+    if (existing) return err('이미 해당 월 일할 정산이 생성되어 있습니다.', 409);
+
     const billing = await prisma.externalBilling.create({
       data: {
         villaId,
         targetName: resident.user.name,
         phoneNumber: resident.user.phone ?? '-',
         amount: proratedAmount,
-        description: `${billingMonth} 관리비 일할 정산 (${resident.roomNumber}호, ${usedDays}/${totalDays}일)`,
+        description: duplicateDescription,
         dueDate,
       },
     });

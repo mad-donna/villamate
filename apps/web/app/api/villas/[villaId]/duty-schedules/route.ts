@@ -52,17 +52,17 @@ export async function POST(
     const startDate = new Date(body.startDate);
     if (isNaN(startDate.getTime())) return err('유효하지 않은 날짜입니다.', 400);
 
-    // 기존 활성 스케줄 비활성화
-    await prisma.dutySchedule.updateMany({ where: { villaId, isActive: true }, data: { isActive: false } });
-
-    const schedule = await prisma.dutySchedule.create({
-      data: {
-        villaId,
-        units: body.units,
-        startDate,
-        interval: body.interval as 'WEEKLY' | 'BIWEEKLY',
-      },
-    });
+    const [, schedule] = await prisma.$transaction([
+      prisma.dutySchedule.updateMany({ where: { villaId, isActive: true }, data: { isActive: false } }),
+      prisma.dutySchedule.create({
+        data: {
+          villaId,
+          units: body.units,
+          startDate,
+          interval: body.interval as 'WEEKLY' | 'BIWEEKLY',
+        },
+      }),
+    ]);
 
     return ok({ schedule }, 201);
   } catch {

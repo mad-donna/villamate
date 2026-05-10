@@ -2,10 +2,15 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createNotification } from '@/lib/notify';
 
+function getTodayKST(): Date {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function getCurrentDutyUnit(units: string[], startDate: Date, intervalDays: number): string | null {
   if (!units.length) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getTodayKST();
   const start = new Date(startDate);
   start.setHours(0, 0, 0, 0);
   const daysSinceStart = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
@@ -15,8 +20,7 @@ function getCurrentDutyUnit(units: string[], startDate: Date, intervalDays: numb
 }
 
 function isDutyStartDay(startDate: Date, intervalDays: number): boolean {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getTodayKST();
   const start = new Date(startDate);
   start.setHours(0, 0, 0, 0);
   const daysSinceStart = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
@@ -39,26 +43,30 @@ export async function POST(req: NextRequest) {
   });
 
   for (const schedule of schedules) {
-    const intervalDays = schedule.interval === 'WEEKLY' ? 7 : 14;
-    if (!isDutyStartDay(schedule.startDate, intervalDays)) continue;
+    try {
+      const intervalDays = schedule.interval === 'WEEKLY' ? 7 : 14;
+      if (!isDutyStartDay(schedule.startDate, intervalDays)) continue;
 
-    const currentUnit = getCurrentDutyUnit(schedule.units, schedule.startDate, intervalDays);
-    if (!currentUnit) continue;
+      const currentUnit = getCurrentDutyUnit(schedule.units, schedule.startDate, intervalDays);
+      if (!currentUnit) continue;
 
-    const residents = await prisma.residentRecord.findMany({
-      where: { villaId: schedule.villaId, roomNumber: currentUnit, status: 'APPROVED' },
-      select: { userId: true },
-    });
-
-    for (const resident of residents) {
-      await createNotification({
-        userId: resident.userId,
-        villaId: schedule.villaId,
-        type: 'SYSTEM',
-        title: '이번 주 당번 안내',
-        body: `${currentUnit}호가 이번 주 공동 당번입니다. 공용 공간 청소 등 당번 활동을 부탁드립니다.`,
+      const residents = await prisma.residentRecord.findMany({
+        where: { villaId: schedule.villaId, roomNumber: currentUnit, status: 'APPROVED' },
+        select: { userId: true },
       });
-      dutySent++;
+
+      for (const resident of residents) {
+        await createNotification({
+          userId: resident.userId,
+          villaId: schedule.villaId,
+          type: 'SYSTEM',
+          title: '이번 주 당번 안내',
+          body: `${currentUnit}호가 이번 주 공동 당번입니다. 공용 공간 청소 등 당번 활동을 부탁드립니다.`,
+        });
+        dutySent++;
+      }
+    } catch {
+      // 단일 빌라 오류가 전체 Cron을 멈추지 않도록 스킵
     }
   }
 
@@ -68,27 +76,30 @@ export async function POST(req: NextRequest) {
     include: { villa: { select: { adminId: true } } },
   });
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getTodayKST();
 
   for (const rule of rules) {
-    if (!rule.lastInspectedAt) continue;
+    try {
+      if (!rule.lastInspectedAt) continue;
 
-    const next = new Date(rule.lastInspectedAt);
-    next.setDate(next.getDate() + rule.intervalDays);
-    next.setHours(0, 0, 0, 0);
+      const next = new Date(rule.lastInspectedAt);
+      next.setDate(next.getDate() + rule.intervalDays);
+      next.setHours(0, 0, 0, 0);
 
-    const daysUntil = Math.floor((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const daysUntil = Math.floor((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (daysUntil === 30 || daysUntil === 7) {
-      await createNotification({
-        userId: rule.villa.adminId,
-        villaId: rule.villaId,
-        type: 'SYSTEM',
-        title: `[D-${daysUntil}] ${rule.name} 점검 예정`,
-        body: `${rule.name} 점검일이 ${daysUntil}일 후입니다. 사전 준비를 시작해주세요.`,
-      });
-      inspectionSent++;
+      if (daysUntil === 30 || daysUntil === 7) {
+        await createNotification({
+          userId: rule.villa.adminId,
+          villaId: rule.villaId,
+          type: 'SYSTEM',
+          title: `[D-${daysUntil}] ${rule.name} 점검 예정`,
+          body: `${rule.name} 점검일이 ${daysUntil}일 후입니다. 사전 준비를 시작해주세요.`,
+        });
+        inspectionSent++;
+      }
+    } catch {
+      // 단일 규칙 오류가 전체 Cron을 멈추지 않도록 스킵
     }
   }
 

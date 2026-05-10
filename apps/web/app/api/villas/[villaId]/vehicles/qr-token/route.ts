@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { SignJWT } from 'jose';
 import { prisma } from '@/lib/prisma';
 import { getUser, ok, err } from '@/lib/api';
+import { secret } from '@/lib/auth';
 
 // GET: QR 방문 등록용 단기 토큰 발급 (관리자 전용, 24h 유효)
 export async function GET(
@@ -20,10 +21,6 @@ export async function GET(
     });
     if (!villa) return err('빌라를 찾을 수 없습니다.', 404);
     if (villa.adminId !== user.sub) return err('관리자만 QR 코드를 생성할 수 있습니다.', 403);
-
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET ?? 'villamate-secret-key',
-    );
 
     const token = await new SignJWT({ villaId, purpose: 'visitor-vehicle' })
       .setProtectedHeader({ alg: 'HS256' })

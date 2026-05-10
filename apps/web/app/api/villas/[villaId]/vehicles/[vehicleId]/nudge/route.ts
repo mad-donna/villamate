@@ -35,19 +35,18 @@ export async function POST(
       return err(`${remaining}분 후에 다시 요청할 수 있습니다.`, 429);
     }
 
-    await Promise.all([
-      createNotification({
-        userId: vehicle.ownerId,
-        villaId,
-        type: 'SYSTEM',
-        title: '차량 이동 요청',
-        body: `${vehicle.plateNumber} 차량 이동을 부탁드립니다. (빌라메이트를 통해 전달된 익명 요청입니다)`,
-      }),
-      prisma.vehicle.update({
-        where: { id: vehicleId },
-        data: { lastNudgedAt: new Date() },
-      }),
-    ]);
+    // 쿨타임 갱신을 먼저 처리 — 알림 실패 시에도 중복 발송 방지
+    await prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { lastNudgedAt: new Date() },
+    });
+    await createNotification({
+      userId: vehicle.ownerId,
+      villaId,
+      type: 'SYSTEM',
+      title: '차량 이동 요청',
+      body: `${vehicle.plateNumber} 차량 이동을 부탁드립니다. (빌라메이트를 통해 전달된 익명 요청입니다)`,
+    });
 
     return ok({ message: '이동 요청을 전송했습니다.' });
   } catch {

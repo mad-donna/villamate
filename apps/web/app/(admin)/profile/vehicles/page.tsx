@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { apiFetch } from '@/lib/client-api';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface Vehicle {
   id: string;
@@ -20,6 +21,7 @@ interface Vehicle {
 
 export default function AdminVehiclesPage() {
   const router = useRouter();
+  const { confirm: confirmDialog, dialog: confirmEl } = useConfirm();
   const [villaId, setVillaId] = useState('');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,10 +88,9 @@ export default function AdminVehiclesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('차량을 삭제하시겠습니까?')) return;
-    await apiFetch(`/api/villas/${villaId}/vehicles/${id}`, {
-      method: 'DELETE',
-    });
+    const ok = await confirmDialog({ title: '차량 삭제', description: '차량을 삭제하시겠습니까?', variant: 'destructive', confirmLabel: '삭제' });
+    if (!ok) return;
+    await apiFetch(`/api/villas/${villaId}/vehicles/${id}`, { method: 'DELETE' });
     fetchVehicles();
   }
 
@@ -153,7 +154,8 @@ export default function AdminVehiclesPage() {
       setQrDataUrl(dataUrl);
     } catch {
       setShowQr(false);
-      alert('QR 코드 생성에 실패했습니다.');
+      setNudgeToast({ msg: 'QR 코드 생성에 실패했습니다.', type: 'err' });
+      setTimeout(() => setNudgeToast(null), 2500);
     } finally {
       setQrLoading(false);
     }
@@ -308,6 +310,8 @@ export default function AdminVehiclesPage() {
           </div>
         )}
       </div>
+
+      {confirmEl}
 
       {/* 이동 요청 토스트 */}
       {nudgeToast && (
