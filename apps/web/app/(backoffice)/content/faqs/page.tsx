@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { boAuthHeaders } from '@/lib/backoffice-auth';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface Faq {
   id: string;
@@ -125,6 +126,7 @@ function FaqModal({
 }
 
 export default function FaqsPage() {
+  const { confirm: confirmDialog, dialog: confirmEl } = useConfirm();
   const [faqs, setFaqs] = useState<Faq[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalTarget, setModalTarget] = useState<Faq | null | undefined>(undefined);
@@ -148,7 +150,8 @@ export default function FaqsPage() {
   }, [fetchFaqs]);
 
   async function handleDelete(id: string) {
-    if (!confirm('삭제하시겠습니까?')) return;
+    const ok = await confirmDialog({ title: 'FAQ 삭제', description: '삭제한 FAQ는 복구할 수 없습니다.', variant: 'destructive', confirmLabel: '삭제' });
+    if (!ok) return;
     setDeleting(id);
     try {
       await fetch(`/api/backoffice/faqs/${id}`, { method: 'DELETE', headers: boAuthHeaders() });
@@ -246,6 +249,7 @@ export default function FaqsPage() {
         </div>
       )}
 
+      {confirmEl}
       {modalTarget !== undefined && (
         <FaqModal
           faq={modalTarget}

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { boAuthHeaders } from '@/lib/backoffice-auth';
+import { useConfirm } from '@/hooks/useConfirm';
 
 const CATEGORIES = ['GENERAL', 'ADMIN', 'RESIDENT', 'BILLING', 'POLL', 'COMMUNITY'];
 const CATEGORY_LABEL: Record<string, string> = {
@@ -156,11 +157,13 @@ function GuideModal({
 }
 
 export default function GuidesPage() {
+  const { confirm: confirmDialog, dialog: confirmEl } = useConfirm();
   const [guides, setGuides] = useState<GuideItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalGuide, setModalGuide] = useState<GuideFull | null | undefined>(undefined);
   const [loadingEdit, setLoadingEdit] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editError, setEditError] = useState('');
 
   const fetchGuides = useCallback(async () => {
     setLoading(true);
@@ -181,20 +184,22 @@ export default function GuidesPage() {
 
   async function openEdit(id: string) {
     setLoadingEdit(id);
+    setEditError('');
     try {
       const res = await fetch(`/api/backoffice/guides/${id}`, { headers: boAuthHeaders() });
       if (!res.ok) throw new Error('가이드를 불러올 수 없습니다.');
       const data = (await res.json()) as GuideFull;
       setModalGuide(data);
     } catch (e) {
-      alert(e instanceof Error ? e.message : '불러오기 실패');
+      setEditError(e instanceof Error ? e.message : '불러오기 실패');
     } finally {
       setLoadingEdit(null);
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('삭제하시겠습니까?')) return;
+    const ok = await confirmDialog({ title: '가이드 삭제', description: '삭제한 가이드는 복구할 수 없습니다.', variant: 'destructive', confirmLabel: '삭제' });
+    if (!ok) return;
     setDeleting(id);
     try {
       await fetch(`/api/backoffice/guides/${id}`, { method: 'DELETE', headers: boAuthHeaders() });
@@ -296,6 +301,12 @@ export default function GuidesPage() {
         </div>
       )}
 
+      {editError && (
+        <p className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-500 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-lg z-50">
+          {editError}
+        </p>
+      )}
+      {confirmEl}
       {modalGuide !== undefined && (
         <GuideModal
           guide={modalGuide}

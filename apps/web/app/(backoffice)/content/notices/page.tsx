@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { boAuthHeaders } from '@/lib/backoffice-auth';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface SystemNotice {
   id: string;
@@ -115,6 +116,7 @@ function NoticeModal({
 }
 
 export default function NoticesPage() {
+  const { confirm: confirmDialog, dialog: confirmEl } = useConfirm();
   const [notices, setNotices] = useState<SystemNotice[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalTarget, setModalTarget] = useState<SystemNotice | null | undefined>(undefined); // undefined = 닫힘
@@ -138,7 +140,8 @@ export default function NoticesPage() {
   }, [fetchNotices]);
 
   async function handleDelete(id: string) {
-    if (!confirm('삭제하시겠습니까?')) return;
+    const ok = await confirmDialog({ title: '공지 삭제', description: '삭제한 공지는 복구할 수 없습니다.', variant: 'destructive', confirmLabel: '삭제' });
+    if (!ok) return;
     setDeleting(id);
     try {
       await fetch(`/api/backoffice/notices/${id}`, { method: 'DELETE', headers: boAuthHeaders() });
@@ -236,6 +239,7 @@ export default function NoticesPage() {
         </div>
       )}
 
+      {confirmEl}
       {modalTarget !== undefined && (
         <NoticeModal
           notice={modalTarget}

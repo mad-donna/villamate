@@ -19,8 +19,8 @@ interface InvoiceSummary {
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  MANAGEMENT: '관리비',
-  EXTRA: '추가 청구',
+  FIXED: '고정 관리비',
+  VARIABLE: '변동 관리비',
 };
 
 function formatKRW(n: number) {
