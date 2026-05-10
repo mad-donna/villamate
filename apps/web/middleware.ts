@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from './lib/auth';
 
-const PUBLIC_API = ['/api/auth/', '/api/cron/', '/api/pay/', '/api/backoffice/auth/'];
+const PUBLIC_API = ['/api/auth/', '/api/cron/', '/api/pay/', '/api/backoffice/auth/', '/api/guides'];
 
 // 동적 세그먼트를 포함하는 비로그인 공개 엔드포인트 (prefix matching 불가 경로)
 const PUBLIC_PATH_PATTERNS = [

@@ -35,8 +35,8 @@ export default function GuidePage() {
 
   useEffect(() => {
     fetch('/api/guides')
-      .then((r) => r.json() as Promise<GuideItem[]>)
-      .then(setGuides)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setGuides(data as GuideItem[]); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
