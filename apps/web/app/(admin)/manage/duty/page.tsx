@@ -57,11 +57,11 @@ export default function DutyPage() {
   const [schedLoading, setSchedLoading] = useState(true);
   const [showSchedForm, setShowSchedForm] = useState(false);
   const [schedUnits, setSchedUnits] = useState<string[]>([]);
-  const [schedUnit, setSchedUnit] = useState('');
   const [schedStartDate, setSchedStartDate] = useState('');
   const [schedInterval, setSchedInterval] = useState<'WEEKLY' | 'BIWEEKLY'>('WEEKLY');
   const [schedSaving, setSchedSaving] = useState(false);
   const [deletingSchedId, setDeletingSchedId] = useState<string | null>(null);
+  const [roomNumbers, setRoomNumbers] = useState<string[]>([]);
 
   // 정기 점검
   const [rules, setRules] = useState<DutyRule[]>([]);
@@ -110,9 +110,22 @@ export default function DutyPage() {
     } finally { setRulesLoading(false); }
   }, [villaId]);
 
+  const fetchRoomNumbers = useCallback(async () => {
+    if (!villaId) return;
+    try {
+      const res = await apiFetch(`/api/villas/${villaId}/residents`);
+      if (res.ok) {
+        const data = await res.json() as { residents: Array<{ roomNumber: string }> };
+        const unique = [...new Set(data.residents.map((r) => r.roomNumber).filter(Boolean))];
+        unique.sort((a, b) => a.localeCompare(b, 'ko'));
+        setRoomNumbers(unique);
+      }
+    } catch { /* ignore */ }
+  }, [villaId]);
+
   useEffect(() => {
-    if (villaId) { fetchSchedules(); fetchRules(); }
-  }, [villaId, fetchSchedules, fetchRules]);
+    if (villaId) { fetchSchedules(); fetchRules(); fetchRoomNumbers(); }
+  }, [villaId, fetchSchedules, fetchRules, fetchRoomNumbers]);
 
   async function handleSaveSchedule() {
     if (!villaId || schedUnits.length < 2 || !schedStartDate) return;
@@ -125,7 +138,7 @@ export default function DutyPage() {
       const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? '저장에 실패했습니다.');
       setShowSchedForm(false);
-      setSchedUnits([]); setSchedUnit(''); setSchedStartDate('');
+      setSchedUnits([]); setSchedStartDate('');
       showToast('당번 스케줄이 등록되었습니다.');
       await fetchSchedules();
     } catch (e) {
@@ -277,42 +290,33 @@ export default function DutyPage() {
               <p className="text-sm font-bold text-neutral-900">새 당번 스케줄 등록</p>
               <p className="text-xs text-neutral-400">새 스케줄 등록 시 기존 활성 스케줄은 비활성화됩니다.</p>
 
-              {/* 세대 추가 */}
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Input
-                    placeholder="호수 입력 (예: 101)"
-                    value={schedUnit}
-                    onChange={(e) => setSchedUnit(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && schedUnit.trim()) {
-                        const v = schedUnit.trim().replace(/호$/u, '');
-                        if (!schedUnits.includes(v)) setSchedUnits((p) => [...p, v]);
-                        setSchedUnit('');
-                      }
-                    }}
-                  />
-                </div>
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={() => {
-                    const v = schedUnit.trim().replace(/호$/u, '');
-                    if (v && !schedUnits.includes(v)) setSchedUnits((p) => [...p, v]);
-                    setSchedUnit('');
-                  }}
-                  className="shrink-0 self-start"
-                >
-                  추가
-                </Button>
+              {/* 당번 세대 선택 */}
+              <div>
+                <p className="text-sm font-medium text-neutral-700 mb-2">당번 세대 선택</p>
+                {roomNumbers.length === 0 ? (
+                  <p className="text-xs text-neutral-400">등록된 입주민이 없습니다. 먼저 입주민을 등록해주세요.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {roomNumbers.map((rn) => (
+                      <Chip
+                        key={rn}
+                        label={`${rn}호`}
+                        selected={schedUnits.includes(rn)}
+                        onClick={() => {
+                          setSchedUnits((prev) =>
+                            prev.includes(rn) ? prev.filter((x) => x !== rn) : [...prev, rn]
+                          );
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {schedUnits.length > 0 && (
+                  <p className="text-xs text-neutral-500 mt-2">
+                    선택 순서대로 순환합니다: {schedUnits.join(' → ')}호
+                  </p>
+                )}
               </div>
-              {schedUnits.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {schedUnits.map((u) => (
-                    <Chip key={u} label={`${u}호`} onRemove={() => setSchedUnits((p) => p.filter((x) => x !== u))} />
-                  ))}
-                </div>
-              )}
 
               <Input
                 type="date"
@@ -347,7 +351,7 @@ export default function DutyPage() {
                 >
                   등록
                 </Button>
-                <Button variant="ghost" className="flex-1" onClick={() => { setShowSchedForm(false); setSchedUnits([]); }}>
+                <Button variant="ghost" className="flex-1" onClick={() => { setShowSchedForm(false); setSchedUnits([]); setSchedStartDate(''); }}>
                   취소
                 </Button>
               </div>

@@ -52,6 +52,18 @@ export async function POST(
     const startDate = new Date(body.startDate);
     if (isNaN(startDate.getTime())) return err('유효하지 않은 날짜입니다.', 400);
 
+    // 등록된 호수와 대조 검증
+    const registeredRecords = await prisma.residentRecord.findMany({
+      where: { villaId, status: 'APPROVED' },
+      select: { roomNumber: true },
+      distinct: ['roomNumber'],
+    });
+    const validRoomNumbers = new Set(registeredRecords.map((r) => r.roomNumber));
+    const invalidUnits = body.units.filter((u) => !validRoomNumbers.has(u));
+    if (invalidUnits.length > 0) {
+      return err(`등록되지 않은 호수가 포함되어 있습니다: ${invalidUnits.join(', ')}`, 400);
+    }
+
     const [, schedule] = await prisma.$transaction([
       prisma.dutySchedule.updateMany({ where: { villaId, isActive: true }, data: { isActive: false } }),
       prisma.dutySchedule.create({
