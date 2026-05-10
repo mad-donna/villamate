@@ -23,6 +23,19 @@ export async function POST(req: NextRequest) {
   // D-7, D-3, D-1 기준 날짜 범위 (당일 00:00 ~ 23:59 UTC)
   const reminderDays = [7, 3, 1];
 
+  // 오늘 이미 발송된 구독 만료 리마인더 조회 (Cron 재시도 시 중복 방지)
+  const todayStart = new Date(now);
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const sentToday = await prisma.notification.findMany({
+    where: {
+      type: 'SYSTEM',
+      title: { in: reminderDays.map((d) => `구독 만료 ${d}일 전`) },
+      createdAt: { gte: todayStart },
+    },
+    select: { villaId: true, title: true },
+  });
+  const sentSet = new Set(sentToday.map((n) => `${n.villaId}:${n.title}`));
+
   const notifications: { userId: string; villaId: string; title: string; body: string }[] = [];
 
   for (const daysLeft of reminderDays) {
@@ -42,10 +55,12 @@ export async function POST(req: NextRequest) {
     });
 
     for (const villa of villas) {
+      const title = `구독 만료 ${daysLeft}일 전`;
+      if (sentSet.has(`${villa.id}:${title}`)) continue;
       notifications.push({
         userId: villa.adminId,
         villaId: villa.id,
-        title: `구독 만료 ${daysLeft}일 전`,
+        title,
         body: `${villa.name}의 구독이 ${daysLeft}일 후 만료됩니다. 서비스 중단을 방지하려면 지금 갱신해주세요.`,
       });
     }

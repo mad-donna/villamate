@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       type: 'SYSTEM',
       title: '구독이 만료되었습니다.',
       body: `${villa.name}의 구독이 만료되었습니다. 서비스를 계속 이용하시려면 구독을 갱신해주세요.`,
-    });
+    }).catch((e) => console.error(`[expire-subscriptions] 알림 실패 villaId=${villa.id}`, e));
   }
 
   return Response.json({ ok: true, expired: expiredVillas.length });

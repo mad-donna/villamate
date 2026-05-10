@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       body: fee > 0
         ? `${billingMonth} 고정 관리비 청구서가 자동 발행되었습니다. (세대당 ${fee.toLocaleString('ko-KR')}원)`
         : `${billingMonth} 청구서가 자동 발행되었습니다. 금액을 입력해주세요.`,
-    });
+    }).catch((e) => console.error(`[publish-invoices] 알림 실패 villaId=${villa.id}`, e));
 
     published++;
   }
