@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -249,8 +250,10 @@ export default function VillasPage() {
               {villas.map((villa) => (
                 <tr key={villa.id} className="hover:bg-neutral-50 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-neutral-900">{villa.name}</p>
-                    <p className="text-xs text-neutral-400 truncate max-w-[200px]">{villa.address}</p>
+                    <Link href={`/villas/${villa.id}`} className="hover:underline">
+                      <p className="font-medium text-neutral-900">{villa.name}</p>
+                      <p className="text-xs text-neutral-400 truncate max-w-[200px]">{villa.address}</p>
+                    </Link>
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-neutral-800">{villa.admin.name}</p>
