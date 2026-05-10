@@ -110,6 +110,7 @@ model User {
   name            String
   phone           String?
   role            Role             @default(RESIDENT)
+  hasUsedTrial    Boolean          @default(false)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   villasManaged   Villa[]          @relation("VillaAdmin")

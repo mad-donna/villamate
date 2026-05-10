@@ -51,10 +51,13 @@ export async function POST(req: NextRequest) {
     // 초대 코드 생성 (충돌 방지)
     const inviteCode = await generateUniqueInviteCode();
 
-    // 계정당 최초 빌라만 30일 무료 체험, 이후 빌라는 즉시 만료
-    const existingCount = await prisma.villa.count({ where: { adminId: user.sub } });
-    const isFirstVilla = existingCount === 0;
-    const trialExpiry = isFirstVilla
+    // 계정 생애 최초 빌라만 30일 무료 체험 (이양 후 재생성 방지)
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.sub },
+      select: { hasUsedTrial: true },
+    });
+    const eligible = !dbUser?.hasUsedTrial;
+    const trialExpiry = eligible
       ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       : null;
 
@@ -67,11 +70,18 @@ export async function POST(req: NextRequest) {
         roomNumbers: roomNumbers ?? [],
         accountBank: accountBank ?? null,
         accountNumber: accountNumber ?? null,
-        subscriptionStatus: isFirstVilla ? 'FREE_TRIAL' : 'EXPIRED',
+        subscriptionStatus: eligible ? 'FREE_TRIAL' : 'EXPIRED',
         subscriptionExpiry: trialExpiry,
         adminId: user.sub,
       },
     });
+
+    if (eligible) {
+      await prisma.user.update({
+        where: { id: user.sub },
+        data: { hasUsedTrial: true },
+      });
+    }
 
     // 역할이 ADMIN이 아닌 경우 DB 업데이트 후 새 토큰 발급
     let newToken: string | undefined;
