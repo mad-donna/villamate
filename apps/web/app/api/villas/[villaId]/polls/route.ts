@@ -101,8 +101,9 @@ export async function POST(
     if (validOptions.length < 2) return err('유효한 선택지를 2개 이상 입력해주세요.', 400);
 
     const endDate = new Date(body.endDate);
-    if (isNaN(endDate.getTime()) || endDate <= new Date()) {
-      return err('종료일은 현재 시간 이후여야 합니다.', 400);
+    const minEndDate = new Date(Date.now() + 60 * 60 * 1000);
+    if (isNaN(endDate.getTime()) || endDate < minEndDate) {
+      return err('종료일은 지금으로부터 1시간 이후여야 합니다.', 400);
     }
 
     const poll = await prisma.poll.create({

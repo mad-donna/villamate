@@ -35,16 +35,32 @@ export async function POST(req: NextRequest) {
 
   let totalSent = 0;
 
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
   for (const poll of polls) {
     const votedRooms = new Set(poll.votes.map((v) => v.roomNumber));
 
-    // 미참여 HEAD 세대주
+    // 오늘 이미 이 투표 알림을 받은 유저 필터링
+    const alreadyNotified = await prisma.notification.findMany({
+      where: {
+        villaId: poll.villaId,
+        type: 'POLL',
+        createdAt: { gte: todayStart },
+        body: { contains: `"${poll.title}"` },
+      },
+      select: { userId: true },
+    });
+    const alreadyNotifiedIds = new Set(alreadyNotified.map((n) => n.userId));
+
+    // 미참여 HEAD 세대주 (오늘 이미 알림 받은 유저 제외)
     const nonVoters = await prisma.residentRecord.findMany({
       where: {
         villaId: poll.villaId,
         residentType: 'HEAD',
         status: 'APPROVED',
-        roomNumber: { notIn: [...votedRooms] },
+        ...(votedRooms.size > 0 ? { roomNumber: { notIn: [...votedRooms] } } : {}),
+        ...(alreadyNotifiedIds.size > 0 ? { userId: { notIn: [...alreadyNotifiedIds] } } : {}),
       },
       select: { userId: true },
     });

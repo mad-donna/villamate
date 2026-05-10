@@ -24,7 +24,7 @@ export async function POST(
     const isAdmin = villa.adminId === user.sub;
     if (!isAdmin) {
       const resident = await prisma.residentRecord.findFirst({
-        where: { villaId, userId: user.sub },
+        where: { villaId, userId: user.sub, status: 'APPROVED' },
         select: { id: true },
       });
       if (!resident) return err('접근 권한이 없습니다.', 403);

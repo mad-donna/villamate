@@ -24,6 +24,7 @@ export default function AdminEditPostPage({
   const router = useRouter();
 
   const [villaId, setVillaId] = useState('');
+  const [userId, setUserId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [category, setCategory] = useState<Category>('GENERAL');
@@ -45,8 +46,9 @@ export default function AdminEditPostPage({
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { villa?: { id?: string }; role?: string };
+    const user = JSON.parse(raw) as { villa?: { id?: string }; role?: string; id?: string };
     setVillaId(user.villa?.id ?? '');
+    setUserId(user.id ?? '');
     setIsAdmin(user.role === 'ADMIN');
   }, []);
 
@@ -56,7 +58,11 @@ export default function AdminEditPostPage({
       try {
         const res = await apiFetch(`/api/villas/${villaId}/posts/${postId}`);
         if (!res.ok) throw new Error('fetch failed');
-        const data = await res.json() as { post: { title: string; content: string; category: string; isNotice: boolean; imageUrl: string | null } };
+        const data = await res.json() as { post: { title: string; content: string; category: string; isNotice: boolean; imageUrl: string | null; author: { id: string } } };
+        if (data.post.author.id !== userId) {
+          router.back();
+          return;
+        }
         setTitle(data.post.title);
         setContent(data.post.content);
         setCategory((data.post.category === 'ISSUE' ? 'ISSUE' : 'GENERAL') as Category);

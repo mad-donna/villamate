@@ -94,7 +94,7 @@ export async function PATCH(
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, villaId: true, authorId: true },
+      select: { id: true, villaId: true, authorId: true, isNotice: true },
     });
 
     if (!post || post.villaId !== villaId) {
@@ -122,6 +122,15 @@ export async function PATCH(
       });
       if (!villa || villa.adminId !== user.sub) {
         return err('공지 승격은 관리자만 가능합니다.', 403);
+      }
+      // 현재 공지가 아닌 글을 공지로 승격할 때만 3개 제한 체크
+      if (!post.isNotice) {
+        const noticeCount = await prisma.post.count({
+          where: { villaId, isNotice: true },
+        });
+        if (noticeCount >= 3) {
+          return err('공지는 최대 3개까지 등록 가능합니다.', 400);
+        }
       }
     }
 

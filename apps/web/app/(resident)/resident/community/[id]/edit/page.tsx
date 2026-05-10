@@ -24,6 +24,7 @@ export default function ResidentEditPostPage({
   const router = useRouter();
 
   const [villaId, setVillaId] = useState('');
+  const [userId, setUserId] = useState('');
 
   const [category, setCategory] = useState<Category>('GENERAL');
   const [title, setTitle] = useState('');
@@ -43,8 +44,9 @@ export default function ResidentEditPostPage({
 
   useEffect(() => {
     const raw = localStorage.getItem('user') ?? '{}';
-    const user = JSON.parse(raw) as { residentVilla?: { id?: string }; villa?: { id?: string } };
+    const user = JSON.parse(raw) as { residentVilla?: { id?: string }; villa?: { id?: string }; id?: string };
     setVillaId(user.residentVilla?.id ?? user.villa?.id ?? '');
+    setUserId(user.id ?? '');
   }, []);
 
   useEffect(() => {
@@ -53,7 +55,11 @@ export default function ResidentEditPostPage({
       try {
         const res = await apiFetch(`/api/villas/${villaId}/posts/${postId}`);
         if (!res.ok) throw new Error('fetch failed');
-        const data = await res.json() as { post: { title: string; content: string; category: string; imageUrl: string | null } };
+        const data = await res.json() as { post: { title: string; content: string; category: string; imageUrl: string | null; author: { id: string } } };
+        if (data.post.author.id !== userId) {
+          router.back();
+          return;
+        }
         setTitle(data.post.title);
         setContent(data.post.content);
         setCategory((data.post.category === 'ISSUE' ? 'ISSUE' : 'GENERAL') as Category);

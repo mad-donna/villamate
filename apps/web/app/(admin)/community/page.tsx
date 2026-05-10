@@ -154,7 +154,7 @@ export default function AdminCommunityPage() {
                     )}
                     <p className="text-sm font-semibold text-neutral-900 truncate">{post.title}</p>
                   </div>
-                  <p className="line-clamp-2 text-sm text-neutral-500 mb-2">{post.content}</p>
+                  <p className="line-clamp-2 text-sm text-neutral-500 mb-2">{post.content.replace(/<[^>]*>/g, '')}</p>
                   <div className="flex items-center justify-between text-xs text-neutral-400">
                     <span>{post.author.name} · {formatDate(post.createdAt)}</span>
                     <span>💬 {post.commentCount}</span>
