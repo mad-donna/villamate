@@ -51,6 +51,13 @@ export async function POST(req: NextRequest) {
     // 초대 코드 생성 (충돌 방지)
     const inviteCode = await generateUniqueInviteCode();
 
+    // 계정당 최초 빌라만 30일 무료 체험, 이후 빌라는 즉시 만료
+    const existingCount = await prisma.villa.count({ where: { adminId: user.sub } });
+    const isFirstVilla = existingCount === 0;
+    const trialExpiry = isFirstVilla
+      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      : null;
+
     const villa = await prisma.villa.create({
       data: {
         name: name.trim(),
@@ -60,6 +67,8 @@ export async function POST(req: NextRequest) {
         roomNumbers: roomNumbers ?? [],
         accountBank: accountBank ?? null,
         accountNumber: accountNumber ?? null,
+        subscriptionStatus: isFirstVilla ? 'FREE_TRIAL' : 'EXPIRED',
+        subscriptionExpiry: trialExpiry,
         adminId: user.sub,
       },
     });
