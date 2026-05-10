@@ -38,7 +38,17 @@ export async function GET(
     });
     if (!villa) return err('빌라를 찾을 수 없습니다.', 404);
 
-    return ok({ valid: true, villaName: villa.name });
+    const residents = await prisma.residentRecord.findMany({
+      where: { villaId, status: 'APPROVED' },
+      select: { roomNumber: true },
+      distinct: ['roomNumber'],
+    });
+    const roomNumbers = residents
+      .map((r) => r.roomNumber)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'ko'));
+
+    return ok({ valid: true, villaName: villa.name, roomNumbers });
   } catch {
     return err('서버 오류가 발생했습니다.', 500);
   }

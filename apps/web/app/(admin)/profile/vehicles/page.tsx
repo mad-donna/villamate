@@ -12,6 +12,7 @@ interface Vehicle {
   modelName: string | null;
   isVisitor: boolean;
   visitorName: string | null;
+  visitingRoomNumber: string | null;
   expectedDeparture: string | null;
   ownerName: string;
   roomNumber: string | null;
@@ -245,7 +246,8 @@ export default function AdminVehiclesPage() {
                   <div>
                     <p className="text-sm font-bold text-neutral-900">{v.plateNumber}</p>
                     <p className="text-xs text-neutral-400">
-                      {v.visitorName ? `방문: ${v.visitorName}` : '방문 차량'}
+                      {v.visitingRoomNumber ? `${v.visitingRoomNumber}호 방문` : '방문 차량'}
+                      {v.visitorName ? ` · ${v.visitorName}` : ''}
                       {v.modelName ? ` · ${v.modelName}` : ''}
                       {v.expectedDeparture ? ` · 출차: ${v.expectedDeparture}` : ''}
                     </p>

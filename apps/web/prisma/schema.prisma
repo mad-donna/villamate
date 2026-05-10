@@ -380,8 +380,9 @@ model Vehicle {
   plateNumber       String
   modelName         String?
   isVisitor         Boolean  @default(false)
-  visitorName       String?  // QR 등록 방문자 이름
-  expectedDeparture String?
+  visitorName        String?  // QR 등록 방문자 이름
+  visitingRoomNumber String?  // 방문 호수
+  expectedDeparture  String?
   lastNudgedAt      DateTime?
   createdAt         DateTime @default(now())
 

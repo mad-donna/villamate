@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 function QrVehicleForm() {
@@ -9,27 +9,32 @@ function QrVehicleForm() {
   const token = searchParams.get('t') ?? '';
 
   const [villaName, setVillaName] = useState('');
+  const [roomNumbers, setRoomNumbers] = useState<string[]>([]);
   const [plate, setPlate] = useState('');
   const [model, setModel] = useState('');
   const [visitorName, setVisitorName] = useState('');
   const [expectedDeparture, setExpectedDeparture] = useState('');
+  const [roomSearch, setRoomSearch] = useState('');
+  const [selectedRoom, setSelectedRoom] = useState('');
+  const [showRoomDropdown, setShowRoomDropdown] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+  const roomInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!villaId || !token) {
       setTokenValid(false);
       return;
     }
-    // 전용 verify 엔드포인트로 토큰 유효성만 검사 (DB 기록 없음)
     fetch(`/api/villas/${villaId}/vehicles/qr-verify?token=${encodeURIComponent(token)}`)
       .then((r) => r.json())
-      .then((d: { valid?: boolean; villaName?: string }) => {
+      .then((d: { valid?: boolean; villaName?: string; roomNumbers?: string[] }) => {
         if (d.valid) {
           setTokenValid(true);
           if (d.villaName) setVillaName(d.villaName);
+          if (d.roomNumbers) setRoomNumbers(d.roomNumbers);
         } else {
           setTokenValid(false);
         }
@@ -37,9 +42,24 @@ function QrVehicleForm() {
       .catch(() => setTokenValid(false));
   }, [villaId, token]);
 
+  const filteredRooms = roomNumbers.filter((rn) =>
+    rn.includes(roomSearch.replace(/호$/, ''))
+  );
+
+  function selectRoom(rn: string) {
+    setSelectedRoom(rn);
+    setRoomSearch(`${rn}호`);
+    setShowRoomDropdown(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!plate.trim() || submitting) return;
+    if (!selectedRoom) {
+      setError('방문 호수를 선택해주세요.');
+      roomInputRef.current?.focus();
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
@@ -52,6 +72,7 @@ function QrVehicleForm() {
           modelName: model.trim() || undefined,
           visitorName: visitorName.trim() || undefined,
           expectedDeparture: expectedDeparture || undefined,
+          visitingRoomNumber: selectedRoom,
         }),
       });
       const data = await res.json() as { error?: string; villaName?: string };
@@ -127,6 +148,46 @@ function QrVehicleForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+          {/* 방문 호수 — 필수 */}
+          <div className="relative">
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">
+              방문 호수 <span className="text-red-500">*</span>
+            </label>
+            <input
+              ref={roomInputRef}
+              type="text"
+              value={roomSearch}
+              onChange={(e) => {
+                setRoomSearch(e.target.value);
+                setSelectedRoom('');
+                setShowRoomDropdown(true);
+              }}
+              onFocus={() => setShowRoomDropdown(true)}
+              onBlur={() => setTimeout(() => setShowRoomDropdown(false), 150)}
+              placeholder="호수 검색 (예: 101)"
+              className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary-400 transition-colors"
+              autoComplete="off"
+            />
+            {showRoomDropdown && filteredRooms.length > 0 && (
+              <ul className="absolute z-10 w-full bg-white border border-neutral-200 rounded-xl mt-1 shadow-lg max-h-48 overflow-y-auto">
+                {filteredRooms.map((rn) => (
+                  <li
+                    key={rn}
+                    onMouseDown={() => selectRoom(rn)}
+                    className="px-3 py-2.5 text-sm text-neutral-800 hover:bg-primary-50 cursor-pointer first:rounded-t-xl last:rounded-b-xl"
+                  >
+                    {rn}호
+                  </li>
+                ))}
+              </ul>
+            )}
+            {showRoomDropdown && roomSearch.length > 0 && filteredRooms.length === 0 && (
+              <div className="absolute z-10 w-full bg-white border border-neutral-200 rounded-xl mt-1 shadow-lg px-3 py-2.5 text-sm text-neutral-400">
+                일치하는 호수가 없습니다
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-sm font-medium text-neutral-700 mb-1 block">
               차량 번호 <span className="text-red-500">*</span>
@@ -178,7 +239,7 @@ function QrVehicleForm() {
 
           <button
             type="submit"
-            disabled={submitting || !plate.trim()}
+            disabled={submitting || !plate.trim() || !selectedRoom}
             className="w-full py-3 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-50 transition-colors active:scale-95"
           >
             {submitting ? '등록 중...' : '방문 차량 등록'}

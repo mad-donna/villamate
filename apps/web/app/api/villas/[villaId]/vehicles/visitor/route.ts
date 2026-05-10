@@ -18,6 +18,7 @@ export async function POST(
       modelName?: string;
       visitorName?: string;
       expectedDeparture?: string;
+      visitingRoomNumber?: string;
     };
 
     if (!body.token) return err('토큰이 필요합니다.', 400);
@@ -47,6 +48,20 @@ export async function POST(
       return err('올바른 번호판 형식이 아닙니다. (예: 12가3456)', 400);
     }
 
+    const visitingRoomNumber = body.visitingRoomNumber?.trim();
+    if (!visitingRoomNumber) return err('방문 호수를 선택해주세요.', 400);
+
+    // 등록된 호수 검증
+    const registeredRecords = await prisma.residentRecord.findMany({
+      where: { villaId, status: 'APPROVED' },
+      select: { roomNumber: true },
+      distinct: ['roomNumber'],
+    });
+    const validRoomNumbers = new Set(registeredRecords.map((r) => r.roomNumber));
+    if (!validRoomNumbers.has(visitingRoomNumber)) {
+      return err('등록되지 않은 호수입니다.', 400);
+    }
+
     // 이미 등록된 번호판이면 덮어쓰기 (upsert)
     const vehicle = await prisma.vehicle.upsert({
       where: { plateNumber_villaId: { plateNumber, villaId } },
@@ -57,12 +72,14 @@ export async function POST(
         modelName: body.modelName?.trim() || null,
         isVisitor: true,
         visitorName: body.visitorName?.trim() || null,
+        visitingRoomNumber,
         expectedDeparture: body.expectedDeparture?.trim() || null,
       },
       update: {
         modelName: body.modelName?.trim() || null,
         isVisitor: true,
         visitorName: body.visitorName?.trim() || null,
+        visitingRoomNumber,
         expectedDeparture: body.expectedDeparture?.trim() || null,
       },
     });
