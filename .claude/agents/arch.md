@@ -3116,3 +3116,65 @@ PM 외부 평가 기반으로 Phase 4 기능적 요구사항 3종 공식 등록:
 | prorata API 중복 방지 | Low | **완료** (QA-5: description 기반 409 체크) |
 | 미납 리마인더 regex 취약 | Low | 미완료 |
 | 본인 인증 (SMS/PASS) | 낮음 | 보류 결정 (유료) |
+
+---
+
+### 2026-05-24 — 데이터 모델 변경 및 아키텍처 결정
+
+#### 신규 데이터 모델
+
+**VendorHistory (신규)**
+```prisma
+model VendorHistory {
+  id          String   @id @default(uuid())
+  vendorId    String
+  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  workDate    DateTime
+  description String
+  cost        Int?
+  receiptUrl  String?
+  createdAt   DateTime @default(now())
+
+  @@index([vendorId, workDate(sort: Desc)])
+}
+```
+업체 삭제 시 이력 Cascade 삭제. 영수증은 URL 참조 방식(Supabase Storage 활용).
+
+**ResidentStatus enum 변경**
+- 기존: `PENDING | APPROVED | REJECTED`
+- 변경: `PENDING | APPROVED | REJECTED | MOVED_OUT` (soft-delete용 추가)
+
+**Notification 모델 변경**
+- `referenceId String?` 필드 추가 + `@@index([referenceId])` 추가
+- Cron 알림 중복 방지 표준 필드로 활용
+
+#### 아키텍처 결정 (2026-05-24)
+
+| 결정 | 내용 | 이유 |
+|------|------|------|
+| ResidentRecord 소프트 삭제 | `DELETE` API → `status: 'MOVED_OUT'` 업데이트. hard-delete 폐기. | InvoicePayment FK 제약으로 납부 이력 있는 입주민 hard-delete 불가. 이력 보존 + 운영 안정성. |
+| Cron 중복 알림 — referenceId 표준화 | `Notification.referenceId` = `{cronName}-{variant}:{id}:{subId}` | body regex 파싱은 문구 변경 시 중복 발송 위험. referenceId 배치 쿼리로 N+1 없이 안전하게 중복 체크. |
+| GET /residents MOVED_OUT 자동 필터 | `allowedStatuses` 화이트리스트 방식으로 새 status 값 자동 제외 | enum에 새 값이 추가되어도 명시적 허용 없이 필터됨. 실수로 MOVED_OUT 입주민이 목록에 노출되지 않음. |
+
+#### 신규 API 엔드포인트 (2026-05-24)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| `GET` | `/api/admin/vendors/[id]/history` | 업체 작업 이력 목록 (workDate desc) |
+| `POST` | `/api/admin/vendors/[id]/history` | 작업 이력 추가 |
+| `PATCH` | `/api/admin/vendors/[id]/history/[historyId]` | 작업 이력 수정 |
+| `DELETE` | `/api/admin/vendors/[id]/history/[historyId]` | 작업 이력 삭제 |
+
+### 기술 부채 현황 (2026-05-24)
+
+| 항목 | 위험도 | 상태 |
+|------|--------|------|
+| `BILLING_ENCRYPTION_KEY` Vercel 등록 | Critical | 미완료 |
+| 기존 평문 빌링키 마이그레이션 | High | 미완료 |
+| PortOne 운영 MID 전환 | High | 미완료 |
+| `GOOGLE_VISION_API_KEY` Vercel 등록 | Medium | 미완료 |
+| 전출 소프트 삭제 전환 | High | **완료** (2026-05-24: MOVED_OUT soft-delete) |
+| prorata API 중복 방지 | Low | **완료** (2026-05-24: PENDING/PENDING_CONFIRMATION 상태 필터 강화) |
+| 미납 리마인더 regex 취약 | Low | **완료** (2026-05-24: referenceId 방식으로 전환) |
+| auto-payment 배치 처리 | Low | 미완료 (빌라 200개 초과 시 필요) |
+| 본인 인증 (SMS/PASS) | 낮음 | 보류 결정 (유료) |

@@ -27,6 +27,7 @@
 | Sprint 15 | 2026-05-05 | F-91 AI 영수증 OCR (Google Vision, 월 900회 한도), F-92 O2O 안내문 생성 (QR+초대코드 인쇄), M-6 insights DB groupBy 최적화, L-5 장부 정책 확정 |
 | Sprint 16 | 2026-05-05 | F-94 차량 이동 요청 넛지 (1h 쿨타임), F-95 전출 정산 일할 계산기, F-96 순환형 공동 당번 + 정기 점검 스케줄러, F-99 다중 빌라 퀵스위치 드롭다운 |
 | Sprint 17 | 2026-05-10 | 전체 QA (QA-1~7) 완료 — 총 31건 버그 수정, 백오피스 빌라 상세 페이지 (설계-5), 관리자 이용 가이드 페이지 (설계-3), 무료 체험 hasUsedTrial 정책, POLICY.md 신규 |
+| Sprint 18 | 2026-05-24 | F-98 수리 수첩 (VendorHistory 모델 + API 4개 + 관리자 UI), 기술 부채 3건 해소 (전출 소프트 삭제 MOVED_OUT, 미납 리마인더 referenceId 중복 방지, prorata PENDING 상태 필터 강화) |
 
 ---
 
@@ -37,7 +38,6 @@
 | # | 기능 | 요구사항 요약 | 선행 조건 |
 |---|------|------------|---------|
 | F-97 | AI 공지사항 초안 어시스턴트 | Tiptap 에디터 내 "AI 초안" 버튼 → 주제 입력 → Claude API 호출 → 부드러운 톤 초안 삽입 | Claude API 키 필요 (유료). 빌라당 일 10회 상한 (NF-16) |
-| F-98 | 수리 수첩 (업체 이력 아카이빙) | 기존 `Vendor`에 작업 이력 첨부. 작업일·내용·비용·영수증/사진 저장 | `VendorHistory` 모델 신규 필요. Supabase Storage 기존 활용 |
 | F-100 | 반려동물 프로필 + 생활 소음 야간 넛지 | 입주민 프로필 반려동물 등록. 매일 밤 10시 전 입주민 소음 주의 넛지 푸시 | `User.petInfo` 필드 추가. opt-out 정책 필요 (NF-17) |
 
 ### 관련 비기능 요구사항
@@ -60,10 +60,7 @@
 | `GOOGLE_VISION_API_KEY` Vercel 등록 | **Medium** | F-91 OCR 기능 운영 블로커. Vercel 환경변수 미설정 시 OCR 동작 안 함 |
 | 기존 평문 빌링키 DB 마이그레이션 | High | `decryptBillingKey()` 호환을 위한 one-time 마이그레이션 스크립트 |
 | PortOne 운영 MID 전환 | High | 현재 테스트 MID(`INIpayTest`) 사용 중 — 실결제 전 교체 필요 |
-| 미납 리마인더 중복 방지 개선 | Low | `cron/invoice-reminder`: 알림 body regex 파싱으로 중복 체크 중. 문구 변경 시 중복 발송 위험. `Notification.referenceId` 컬럼 추가로 해소 가능. 문구 수정 시 regex도 반드시 함께 수정할 것 |
 | auto-payment 배치 처리 전환 | Low | `cron/auto-payment`: 빌라 수가 200개를 초과하면 순차 처리가 Vercel 300초 제한에 걸릴 수 있음. 규모 확장 시 `Promise.allSettled` + 배치 처리로 전환 필요 |
-| 전출 처리 소프트 삭제 전환 | High | `DELETE /residents/[id]`: 납부 이력 있는 입주민은 FK 제약으로 삭제 불가 → 현재 관리자에게 409 반환. `ResidentRecord.status`에 `MOVED_OUT` 값 추가하는 소프트 삭제 방식으로 전환 필요. DB migration + API + UI 전체 수정 필요 |
-| prorata 중복 생성 방지 | Low | `POST /residents/[id]/prorata`: API 레벨 중복 방지 없음. 같은 입주민에게 여러 번 호출하면 ExternalBilling이 여러 개 생성됨. UI에서 1회 제한되지만 API 직접 호출 시 우회 가능 |
 
 ---
 

@@ -931,3 +931,36 @@ flex items-center justify-between gap-3
 **위젯 배치 순서**: 요약 위젯(2열) → 최근 공지 → **넛지 카드** → 바로가기 → 수금 인사이트
 
 **설계 원칙**: 독촉(error 계열 색상)이 아닌 안내(primary 계열 색상)로 시각적으로 구분. 동대표가 "압박"이 아닌 "서비스"를 보내는 느낌을 주도록 primary-50 배경 사용.
+
+---
+
+## 2026-05-24 — 업체 연락처 페이지 개편 (수리 수첩 F-98)
+
+### 업체 카드 → 이력 뷰 전환 패턴
+
+업체 카드 탭 시 전체 페이지가 이력 뷰로 교체되는 단일 페이지 상태 전환 패턴 적용.
+
+```
+[업체 목록 뷰]
+업체 카드 (탭 가능 → 이력 뷰 전환)
+  └── 카드 전체 영역: onClick → openVendorHistory()
+  └── 수정/삭제 버튼: e.stopPropagation() 로 카드 탭 이벤트 차단
+
+[이력 뷰]
+← 뒤로가기 버튼 + 업체명/카테고리/전화번호 헤더 + [이력 추가] 버튼
+이력 카드 (작업일 · 내용 · 비용 · 영수증 링크)
+  └── 수정 / 삭제 버튼
+```
+
+**이력 카드 구조**:
+```
+bg-white rounded-2xl shadow-sm p-4
+  ├── text-xs text-neutral-400 (작업일)
+  ├── text-sm font-medium text-neutral-800 whitespace-pre-wrap (작업 내용)
+  ├── text-sm text-primary-600 font-semibold (비용, 조건부)
+  └── text-xs text-primary-500 underline (영수증/사진 보기, 조건부)
+```
+
+**이력 추가 바텀시트 필드 순서**: 작업일(date input) → 작업 내용(textarea 3행) → 비용(number, 선택) → 영수증 URL(url, 선택)
+
+**UX 원칙**: 이력이 없을 때 빈 상태 문구 "등록된 작업 이력이 없습니다." + 보조 안내 "이력 추가 버튼으로 작업 내역을 기록하세요." 표시.

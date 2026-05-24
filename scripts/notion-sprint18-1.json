@@ -1,0 +1,1 @@
+{"기능명":"F-98 수리 수첩 — 업체 작업 이력 관리","reqId":"F-98","sprint":"Phase 5","상태":"완료","구현일":"2026-05-24","요약":"VendorHistory 모델 신규, 작업일·내용·비용·영수증URL 저장, 업체 카드 탭→이력 뷰 전환 UI","수정된파일":"apps/web/prisma/schema.prisma, apps/web/app/api/admin/vendors/[id]/history/route.ts, apps/web/app/api/admin/vendors/[id]/history/[historyId]/route.ts, apps/web/app/(admin)/manage/vendors/page.tsx"}

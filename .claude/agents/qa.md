@@ -1290,3 +1290,41 @@ Sprint 12 백로그 High 3건, Medium 5건, Design 3건, Low 3건 전체 수정 
 **잠재적 리스크**:
 
 - `EditSubscriptionModal`의 `subscriptionExpiry` 입력이 `datetime-local` → KST 변환 없이 UTC로 저장. 사용 빈도 낮아 실사용 영향 미미하나 추후 KST offset 보정 검토 가능.
+
+---
+
+### 2026-05-24 — 기술 부채 3건 QA 포인트
+
+#### 전출 소프트 삭제 전환
+
+**검증 포인트**:
+- 납부 이력 있는 입주민 전출 처리 → 이전 409 → 현재 200 + MOVED_OUT 상태 확인
+- `GET /api/villas/[villaId]/residents` → MOVED_OUT 입주민 목록 미포함 확인 (`allowedStatuses` 화이트리스트)
+- InvoicePayment 레코드 보존 여부 확인 (삭제되면 안 됨)
+
+**잠재적 리스크**:
+- MOVED_OUT 입주민이 재가입할 경우 `@@unique([villaId, roomNumber, userId])` 제약에 의해 409 발생 가능. 현재 재가입 플로우 없으므로 실사용 영향 없음.
+
+#### 미납 리마인더 referenceId 방식 전환
+
+**검증 포인트**:
+- `cron/invoice-reminder` 실행 후 `Notification.referenceId` 컬럼에 `invoice-reminder-3d:{invoiceId}:{paymentId}` 형식 저장 확인
+- 동일 payment에 대해 재실행 시 중복 알림 미발송 확인
+- 알림 body에 `(payment:UUID)` 식별자 없어졌는지 사용자 알림 확인
+
+**잠재적 리스크**:
+- `referenceId` 컬럼은 `DB push`로 추가됨. Vercel 배포 시 `prisma generate`(postinstall)는 자동 실행되나 DB 컬럼은 이미 적용된 상태여야 함. 배포 전 `prisma db push` 완료 확인 필수.
+
+#### prorata 중복 방지 강화
+
+**검증 포인트**:
+- 동일 입주민 동일 월 prorata API 2회 호출 → 두 번째 호출 409 확인
+- COMPLETED 상태인 이전 정산 있을 때 새 정산 생성 가능 확인 (COMPLETED는 중복 체크 제외)
+
+#### F-98 수리 수첩
+
+**검증 포인트**:
+- 업체 카드 탭 → 이력 목록 화면 전환 확인
+- 이력 추가/수정/삭제 CRUD 정상 동작 확인
+- 업체 삭제 시 VendorHistory Cascade 삭제 확인
+- 이력 목록 workDate 내림차순 정렬 확인

@@ -1721,3 +1721,20 @@ Retention, Pain Point 해소, Community, AI WOW 4개 축 기반으로 8개 기�
 | Phase 5 | F-94/F-95/F-96/F-99 완료 / F-97(Claude API 키 필요), F-98(VendorHistory 모델 필요), F-100(petInfo 모델 필요) 미착수 |
 | 배포 | Vercel `villamate.vercel.app` 최신 반영 |
 | 신규 DB 테이블 | DutySchedule, DutyRule — Supabase 적용 완료 |
+
+### 현재 제품 상태 (2026-05-24)
+
+| 구분 | 현황 |
+|------|------|
+| Phase 5 | **F-98 완료** (수리 수첩 — 업체 작업 이력 관리). F-97(Claude API 키 필요), F-100(petInfo 모델 필요) 잔여. |
+| 기술 부채 | 전출 소프트 삭제(High) / 미납 리마인더 regex(Low) / prorata 중복방지(Low) **3건 해소** |
+| 신규 DB 테이블 | VendorHistory — Supabase 적용 완료 |
+| 신규 DB 필드 | `ResidentStatus.MOVED_OUT`, `Notification.referenceId` — Supabase 적용 완료 |
+| 배포 | Vercel `villamate.vercel.app` 최신 반영 (2026-05-24) |
+
+### Sprint 17~18 완료 현황
+
+| Sprint | 완료 기능 |
+|--------|---------|
+| Sprint 17 | QA-1~7 전수 수정 (31건), 백오피스 빌라 상세, 관리자 가이드 페이지, hasUsedTrial 정책 |
+| Sprint 18 | F-98 수리 수첩, 전출 소프트 삭제, 리마인더 referenceId 중복방지, prorata 중복방지 강화 |

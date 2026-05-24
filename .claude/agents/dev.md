@@ -2696,3 +2696,39 @@ function getTodayKST(): Date {
   return now;
 }
 ```
+
+---
+
+### 2026-05-24 — F-98 수리 수첩, 기술 부채 3건 해소
+
+#### 이 세션에서 구현/수정한 기능
+
+1. **F-98 수리 수첩 — 업체 작업 이력 관리**
+   - DB: `VendorHistory` 모델 신규 (`vendorId`, `workDate DateTime`, `description`, `cost Int?`, `receiptUrl String?`, Cascade 삭제)
+   - API: `GET/POST /api/admin/vendors/[id]/history`, `PATCH/DELETE /api/admin/vendors/[id]/history/[historyId]`
+   - UI: `(admin)/manage/vendors/page.tsx` 전면 개편 — 업체 카드 탭 → 이력 뷰 전환, 이력 CRUD 바텀시트 추가. 업체 수정/삭제 버튼에 `e.stopPropagation()` 적용.
+
+2. **전출 처리 소프트 삭제 전환** (기술 부채 High 해소)
+   - `ResidentStatus` enum에 `MOVED_OUT` 추가 (schema.prisma)
+   - `DELETE /api/villas/[villaId]/residents/[residentId]`: hard-delete → `status: 'MOVED_OUT'` soft-delete 전환
+   - FK 제약 409 에러 완전 제거, `isFkConstraintError()` 헬퍼 삭제
+   - `GET /residents`: `allowedStatuses` 화이트리스트(`PENDING/APPROVED/REJECTED`)로 `MOVED_OUT` 자동 필터
+   - UI: 전출 confirm 문구 "이 작업은 되돌릴 수 없습니다." → "납부 이력은 보존됩니다."
+
+3. **미납 리마인더 referenceId 중복 방지** (기술 부채 Low 해소)
+   - `Notification.referenceId String?` 필드 + `@@index([referenceId])` schema 추가
+   - `lib/notify.ts` `CreateNotificationInput`에 `referenceId?: string` 추가
+   - `cron/invoice-reminder`: body regex 파싱 완전 제거 → `referenceId` 배치 쿼리로 교체
+   - referenceId 형식: `invoice-reminder-3d:{invoiceId}:{paymentId}` / `invoice-reminder-7d:{invoiceId}:{paymentId}`
+   - 알림 body에서 `(payment:UUID)` 식별자 제거 — 사용자 노출 메시지 정리
+
+4. **prorata 중복 생성 방지 강화** (기술 부채 Low 해소)
+   - `prorata/route.ts` findFirst 조건에 `status: { in: ['PENDING', 'PENDING_CONFIRMATION'] }` 추가
+   - COMPLETED된 정산이 있어도 새 정산 생성 가능, 미완료 건만 중복 차단
+
+#### 이 세션에서 확립된 추가 패턴
+
+- **소프트 삭제 패턴**: FK 제약이 있는 레코드 삭제 시 hard-delete 대신 status enum 값으로 soft-delete. API `allowedStatuses` 화이트리스트로 새 상태값 자동 필터.
+- **Cron 중복 알림 — referenceId 방식**: body regex 대신 `Notification.referenceId`에 `{cron}-{variant}:{id}:{subId}` 식별자 저장. 배치 `findMany({ where: { referenceId: { in: refIds } } })`로 N+1 없이 중복 체크.
+- **Worktree 병렬 개발**: 독립적인 기술 부채 작업을 서브에이전트 + git worktree로 병렬 처리 후 main에 직접 적용. 스키마는 서로 다른 모델/필드 수정이므로 충돌 최소화.
+- **prisma db push vs migrate**: migration history drift가 있을 때 `prisma db push`로 스키마 직접 동기화. 프로덕션 배포 후 `prisma generate`는 postinstall에서 자동 실행.

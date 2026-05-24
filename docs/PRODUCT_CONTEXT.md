@@ -74,6 +74,8 @@
 | Vercel 서버리스 in-memory 상태 사용 금지 | `pay/confirm`의 rateLimitMap 제거 — PortOne 3중 검증(merchant_uid·금액·paid 상태)으로 충분 | 서버리스 인스턴스 분산으로 in-memory 상태 공유 불가 |
 | cron 구독 상태 명시적 필터 | 모든 cron 작업의 villa 조회에 `subscriptionStatus: { in: ['ACTIVE', 'FREE_TRIAL'] }` 필터 필수 | 비활성 빌라에 청구서 자동 발행 방지 |
 | `hasUsedTrial` 플래그 방식 무료 체험 중복 방지 | `User.hasUsedTrial Boolean @default(false)` — 계정당 1회 30일 체험. 빌라 이양 후에도 초기화 안 함 | 동일 계정이 빌라 재등록으로 혜택 재수령 방지. count 기반은 이양 후 count=0 우회 가능 |
+| `ResidentRecord` 소프트 삭제 (`MOVED_OUT`) | `DELETE /residents/[id]` → `status: 'MOVED_OUT'` 업데이트. hard-delete 폐기. GET은 allowedStatuses 화이트리스트로 MOVED_OUT 자동 제외 | InvoicePayment FK 제약으로 납부 이력 있는 입주민 hard-delete 불가. 이력 보존 + 운영 안정성 |
+| `Notification.referenceId` 중복 방지 표준화 | Cron 알림 중복 방지를 body regex → `referenceId` 배치 쿼리 방식으로 전환. 형식: `{cronName}-{variant}:{invoiceId}:{paymentId}` | body regex는 문구 변경 시 중복 발송 위험. referenceId 방식은 문구 독립적이고 N+1 없이 배치 처리 가능 |
 
 ## 6. 잔여 기술 부채
 
@@ -86,5 +88,4 @@
 | `BILLING_ENCRYPTION_KEY` Vercel 등록 | 64자 hex 키 Vercel 환경변수 미등록 — 자동결제 운영 블로커 | Critical |
 | 기존 평문 빌링키 마이그레이션 | `decryptBillingKey()` 호환 one-time 스크립트 미실행 | 높음 |
 | `GOOGLE_VISION_API_KEY` Vercel 등록 | F-91 OCR 기능 운영 블로커 — Vercel 환경변수 미등록 시 OCR 동작 안 함 | Medium |
-| 전출 소프트 삭제 미구현 | `DELETE /residents/[id]`: 납부 이력 있는 입주민은 FK 제약으로 삭제 불가 → `ResidentRecord.status = MOVED_OUT` 소프트 삭제 전환 필요. DB migration + API + UI 전체 수정 | 높음 |
-| 미납 리마인더 regex 취약 | `cron/invoice-reminder`가 알림 본문 regex로 중복 체크 — 문구 변경 시 중복 발송. `Notification.referenceId` 컬럼으로 해소 가능 | 낮음 |
+| auto-payment 배치 처리 | `cron/auto-payment`: 빌라 200개 초과 시 순차 처리가 Vercel 300초 제한 도달 가능. `Promise.allSettled` + 배치 처리로 전환 필요 | 낮음 |
