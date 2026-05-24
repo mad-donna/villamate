@@ -535,16 +535,30 @@ model FacilityReservation {
 }
 
 model Vendor {
-  id        String         @id @default(uuid())
+  id        String          @id @default(uuid())
   villaId   String
-  villa     Villa          @relation(fields: [villaId], references: [id])
+  villa     Villa           @relation(fields: [villaId], references: [id])
   name      String
   category  VendorCategory
   phone     String
   memo      String?
-  createdAt DateTime       @default(now())
+  createdAt DateTime        @default(now())
+  histories VendorHistory[]
 
   @@index([villaId])
+}
+
+model VendorHistory {
+  id          String   @id @default(uuid())
+  vendorId    String
+  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  workDate    DateTime
+  description String
+  cost        Int?
+  receiptUrl  String?
+  createdAt   DateTime @default(now())
+
+  @@index([vendorId, workDate(sort: Desc)])
 }
 
 model OcrUsageLog {
