@@ -203,7 +203,7 @@ export default function ResidentsPage() {
   async function handleMoveOut(resident: Resident) {
     const confirmed = await confirmMoveOut({
       title: '전출 처리',
-      description: `${resident.roomNumber}호 ${resident.user.name}님을 전출 처리하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+      description: `${resident.roomNumber}호 ${resident.user.name}님을 전출 처리하시겠습니까? 납부 이력은 보존됩니다.`,
       confirmLabel: '전출',
       variant: 'destructive',
     });

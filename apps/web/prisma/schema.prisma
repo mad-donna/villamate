@@ -29,6 +29,7 @@ enum ResidentStatus {
   PENDING
   APPROVED
   REJECTED
+  MOVED_OUT
 }
 
 enum InvoiceType {
@@ -408,19 +409,21 @@ model Ticket {
 }
 
 model Notification {
-  id        String           @id @default(uuid())
-  userId    String
-  user      User             @relation(fields: [userId], references: [id])
-  villaId   String?
-  villa     Villa?           @relation("VillaNotifications", fields: [villaId], references: [id])
-  type      NotificationType
-  title     String
-  body      String
-  isRead    Boolean          @default(false)
-  createdAt DateTime         @default(now())
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+  villaId     String?
+  villa       Villa?           @relation("VillaNotifications", fields: [villaId], references: [id])
+  type        NotificationType
+  title       String
+  body        String
+  isRead      Boolean          @default(false)
+  referenceId String?
+  createdAt   DateTime         @default(now())
 
   @@index([userId, isRead])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([referenceId])
 }
 
 model PushSubscription {

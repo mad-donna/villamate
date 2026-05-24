@@ -55,81 +55,66 @@ export async function POST(req: NextRequest) {
 
   let reminded = 0;
 
-  // 3일차: 이미 발송된 알림을 단일 쿼리로 조회 (N+1 방지)
-  const threeDayPaymentIds = threeDayTargets
+  // 3일차: referenceId 기반 중복 체크 (단일 쿼리)
+  const threeDayRefIds = threeDayTargets
     .filter((p) => p.residentRecord)
-    .map((p) => p.id);
-  const threeDayUserIds = [
-    ...new Set(threeDayTargets.filter((p) => p.residentRecord).map((p) => p.residentRecord!.userId)),
-  ];
+    .map((p) => `invoice-reminder-3d:${p.invoiceId}:${p.id}`);
 
-  const existingThreeDay = threeDayPaymentIds.length > 0
-    ? await prisma.notification.findMany({
-        where: {
-          type: 'PAYMENT_REMINDER',
-          userId: { in: threeDayUserIds },
-          OR: threeDayPaymentIds.map((id) => ({ body: { contains: id } })),
-        },
-        select: { body: true },
-      })
-    : [];
-  const sentThreeDayIds = new Set(
-    existingThreeDay.flatMap((n) => {
-      const match = n.body.match(/payment:([a-f0-9-]{36})\)/);
-      return match ? [match[1]] : [];
-    }),
+  const sentThreeDayRefs = new Set(
+    threeDayRefIds.length > 0
+      ? (
+          await prisma.notification.findMany({
+            where: { referenceId: { in: threeDayRefIds } },
+            select: { referenceId: true },
+          })
+        ).map((n) => n.referenceId!)
+      : [],
   );
 
   for (const payment of threeDayTargets) {
     if (!payment.residentRecord) continue;
-    if (sentThreeDayIds.has(payment.id)) continue;
+    const refId = `invoice-reminder-3d:${payment.invoiceId}:${payment.id}`;
+    if (sentThreeDayRefs.has(refId)) continue;
 
     await createNotification({
       userId: payment.residentRecord.userId,
       villaId: payment.residentRecord.villaId,
       type: 'PAYMENT_REMINDER',
       title: '관리비 미납 안내',
-      body: `${payment.invoice.billingMonth} 관리비가 아직 미납 상태입니다. 납부를 확인해주세요. (payment:${payment.id})`,
+      body: `${payment.invoice.billingMonth} 관리비가 아직 미납 상태입니다. 납부를 확인해주세요.`,
+      referenceId: refId,
     });
     reminded++;
   }
 
-  // 7일차: 이미 발송된 최종 알림을 단일 쿼리로 조회 (N+1 방지)
-  const sevenDayPaymentIds = sevenDayTargets
+  // 7일차: referenceId 기반 중복 체크 (단일 쿼리)
+  const sevenDayRefIds = sevenDayTargets
     .filter((p) => p.residentRecord)
-    .map((p) => p.id);
-  const sevenDayUserIds = [
-    ...new Set(sevenDayTargets.filter((p) => p.residentRecord).map((p) => p.residentRecord!.userId)),
-  ];
+    .map((p) => `invoice-reminder-7d:${p.invoiceId}:${p.id}`);
 
-  const existingSevenDay = sevenDayPaymentIds.length > 0
-    ? await prisma.notification.findMany({
-        where: {
-          type: 'PAYMENT_REMINDER',
-          title: { contains: '최종' },
-          userId: { in: sevenDayUserIds },
-          OR: sevenDayPaymentIds.map((id) => ({ body: { contains: id } })),
-        },
-        select: { body: true },
-      })
-    : [];
-  const sentSevenDayIds = new Set(
-    existingSevenDay.flatMap((n) => {
-      const match = n.body.match(/payment:([a-f0-9-]{36})\)/);
-      return match ? [match[1]] : [];
-    }),
+  const sentSevenDayRefs = new Set(
+    sevenDayRefIds.length > 0
+      ? (
+          await prisma.notification.findMany({
+            where: { referenceId: { in: sevenDayRefIds } },
+            select: { referenceId: true },
+          })
+        ).map((n) => n.referenceId!)
+      : [],
   );
 
   for (const payment of sevenDayTargets) {
     if (!payment.residentRecord) continue;
-    if (sentSevenDayIds.has(payment.id)) continue;
+    const refId = `invoice-reminder-7d:${payment.invoiceId}:${payment.id}`;
+    if (sentSevenDayRefs.has(refId)) continue;
 
     await createNotification({
       userId: payment.residentRecord.userId,
       villaId: payment.residentRecord.villaId,
       type: 'PAYMENT_REMINDER',
       title: '[최종 안내] 관리비 납부를 확인해주세요.',
-      body: `${payment.invoice.billingMonth} 관리비 납부 기한이 7일이 지났습니다. 빠른 납부 부탁드립니다. (payment:${payment.id})`,
+      body: `${payment.invoice.billingMonth} 관리비 납부 기한이 7일이 지났습니다. 빠른 납부 부탁드립니다.`,
+      referenceId: refId,
     });
     reminded++;
   }

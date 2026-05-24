@@ -8,6 +8,7 @@ interface CreateNotificationInput {
   type: NotificationType;
   title: string;
   body: string;
+  referenceId?: string;
 }
 
 export async function createNotification(input: CreateNotificationInput) {

@@ -74,9 +74,13 @@ export async function POST(
 
     const duplicateDescription = `${billingMonth} 관리비 일할 정산 (${resident.roomNumber}호, ${usedDays}/${totalDays}일)`;
     const existing = await prisma.externalBilling.findFirst({
-      where: { villaId, description: duplicateDescription },
+      where: {
+        villaId,
+        description: duplicateDescription,
+        status: { in: ['PENDING', 'PENDING_CONFIRMATION'] },
+      },
     });
-    if (existing) return err('이미 해당 월 일할 정산이 생성되어 있습니다.', 409);
+    if (existing) return err('이미 해당 월 일할 정산이 진행 중입니다.', 409);
 
     const billing = await prisma.externalBilling.create({
       data: {
